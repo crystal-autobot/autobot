@@ -1,0 +1,3 @@
+require "./autobot"
+
+Autobot.run

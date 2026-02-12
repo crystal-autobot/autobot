@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    container:
+      image: crystallang/crystal:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: shards install
+
+      - name: Check formatting
+        run: crystal tool format --check src/ spec/
+
+      - name: Run linter
+        run: bin/ameba src/
+
+      - name: Run tests
+        run: crystal spec --progress
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    container:
+      image: crystallang/crystal:latest-alpine
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install verification tools
+        run: apk add --no-cache file
+
+      - name: Install dependencies
+        run: shards install --production
+
+      - name: Build static binary
+        run: |
+          crystal build src/autobot.cr -o autobot --release --no-debug --static
+          strip autobot
+
+      - name: Verify binary
+        run: |
+          ./autobot --version
+          file autobot
+          ls -lh autobot
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: autobot-linux-amd64
+          path: autobot
+
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t autobot:test .
+
+      - name: Check image size
+        run: |
+          SIZE=$(docker images autobot:test --format "{{.Size}}")
+          echo "Image size: $SIZE"
+          # Fail if image is larger than 50MB
+          SIZE_BYTES=$(docker inspect autobot:test --format '{{.Size}}')
+          if [ "$SIZE_BYTES" -gt 52428800 ]; then
+            echo "ERROR: Docker image exceeds 50MB limit ($SIZE)"
+            exit 1
+          fi
+
+      - name: Test Docker image
+        run: docker run --rm autobot:test --version

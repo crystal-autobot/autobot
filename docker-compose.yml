@@ -1,0 +1,16 @@
+services:
+  autobot:
+    build: .
+    image: autobot:latest
+    container_name: autobot
+    restart: unless-stopped
+    volumes:
+      - autobot-data:/home/autobot/.autobot
+      - ./workspace:/home/autobot/.autobot/workspace
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-info}
+    command: ["run"]
+
+volumes:
+  autobot-data:

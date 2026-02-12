@@ -1,0 +1,35 @@
+name: autobot
+version: 0.1.0
+
+authors:
+  - Vitalii Elenhaupt
+
+crystal: ">= 1.10.0"
+
+license: MIT
+
+description: |
+  A Crystal-based AI agent framework - fast, type-safe, and extensible.
+  Alternative to nanobot with 5-10x faster startup and compiled binary distribution.
+
+dependencies:
+  # HTTP client for LLM API calls
+  crest:
+    github: mamantoha/crest
+    version: ~> 1.3
+
+development_dependencies:
+  # Code quality and linting
+  ameba:
+    github: crystal-ameba/ameba
+    version: ~> 1.5
+
+targets:
+  autobot:
+    main: src/main.cr
+
+scripts:
+  # Development helpers
+  format: crystal tool format
+  lint: bin/ameba
+  test: crystal spec

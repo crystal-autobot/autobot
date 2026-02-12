@@ -1,0 +1,224 @@
+require "yaml"
+
+module Autobot::Config
+  # Telegram channel configuration
+  class TelegramConfig
+    include YAML::Serializable
+
+    property enabled : Bool = false
+    property token : String = ""
+    property allow_from : Array(String) = [] of String
+    property? proxy : String? = nil
+
+    # Custom commands (macros and scripts)
+    @[YAML::Field(emit_null: true)]
+    property custom_commands : CustomCommandsConfig?
+  end
+
+  # Custom commands for Telegram
+  class CustomCommandsConfig
+    include YAML::Serializable
+
+    # Prompt macros: {command_name => prompt_text}
+    property macros : Hash(String, String) = {} of String => String
+
+    # Bash scripts: {command_name => script_path}
+    property scripts : Hash(String, String) = {} of String => String
+  end
+
+  # Slack channel configuration
+  class SlackConfig
+    include YAML::Serializable
+
+    property enabled : Bool = false
+    property mode : String = "socket"
+    property bot_token : String = ""
+    property app_token : String = ""
+    property group_policy : String = "mention"
+    property group_allow_from : Array(String) = [] of String
+    property dm : SlackDMConfig?
+  end
+
+  class SlackDMConfig
+    include YAML::Serializable
+
+    property enabled : Bool = true
+    property policy : String = "open"
+    property allow_from : Array(String) = [] of String
+  end
+
+  # WhatsApp channel configuration
+  class WhatsAppConfig
+    include YAML::Serializable
+
+    property enabled : Bool = false
+    property bridge_url : String = "ws://localhost:3001"
+    property allow_from : Array(String) = [] of String
+  end
+
+  # All chat channels configuration
+  class ChannelsConfig
+    include YAML::Serializable
+
+    property telegram : TelegramConfig?
+    property slack : SlackConfig?
+    property whatsapp : WhatsAppConfig?
+  end
+
+  # Agent default settings
+  class AgentDefaults
+    include YAML::Serializable
+
+    property workspace : String = "~/.config/autobot/workspace"
+    property model : String = "anthropic/claude-sonnet-4-5"
+    property max_tokens : Int32 = 8192
+    property temperature : Float64 = 0.7
+    property max_tool_iterations : Int32 = 20
+    property memory_window : Int32 = 50
+  end
+
+  # Agent configuration
+  class AgentsConfig
+    include YAML::Serializable
+
+    property defaults : AgentDefaults?
+  end
+
+  # LLM provider configuration
+  class ProviderConfig
+    include YAML::Serializable
+
+    property api_key : String = ""
+    property? api_base : String? = nil
+    property? extra_headers : Hash(String, String)? = nil
+  end
+
+  # All LLM providers configuration
+  class ProvidersConfig
+    include YAML::Serializable
+
+    property anthropic : ProviderConfig?
+    property openai : ProviderConfig?
+    property openrouter : ProviderConfig?
+    property deepseek : ProviderConfig?
+    property groq : ProviderConfig?
+    property gemini : ProviderConfig?
+    property vllm : ProviderConfig?
+  end
+
+  # Gateway/server configuration
+  class GatewayConfig
+    include YAML::Serializable
+
+    property host : String = "0.0.0.0"
+    property port : Int32 = 18790
+  end
+
+  # Web search tool configuration
+  class WebSearchConfig
+    include YAML::Serializable
+
+    property api_key : String = ""
+    property max_results : Int32 = 5
+  end
+
+  # Web tools configuration
+  class WebToolsConfig
+    include YAML::Serializable
+
+    property search : WebSearchConfig?
+  end
+
+  # Shell exec tool configuration
+  class ExecToolConfig
+    include YAML::Serializable
+
+    property timeout : Int32 = 60
+  end
+
+  # Tools configuration
+  class ToolsConfig
+    include YAML::Serializable
+
+    property web : WebToolsConfig?
+    property exec : ExecToolConfig?
+    property restrict_to_workspace : Bool = false
+  end
+
+  # Cron job storage configuration
+  class CronConfig
+    include YAML::Serializable
+
+    property enabled : Bool = true
+    property store_path : String = "~/.config/autobot/cron.json"
+  end
+
+  # Root configuration
+  class Config
+    include YAML::Serializable
+
+    property agents : AgentsConfig?
+    property channels : ChannelsConfig?
+    property providers : ProvidersConfig?
+    property gateway : GatewayConfig?
+    property tools : ToolsConfig?
+    property cron : CronConfig?
+
+    def initialize
+    end
+
+    # Get expanded workspace path
+    def workspace_path : Path
+      workspace_str = agents.try(&.defaults.try(&.workspace)) || "~/.config/autobot/workspace"
+      Path[workspace_str].expand(home: true)
+    end
+
+    # Default model from config or fallback
+    def default_model : String
+      agents.try(&.defaults.try(&.model)) || "anthropic/claude-sonnet-4-5"
+    end
+
+    # Match provider config for a given model
+    def match_provider(model : String? = nil) : Tuple(ProviderConfig?, String?)
+      model_str = (model || default_model).downcase
+
+      if p = providers
+        # Check each provider in order
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm] %}
+          if provider = p.{{ provider_name.id }}
+            if provider.api_key != "" && model_str.includes?({{ provider_name }})
+              return {provider, {{ provider_name }}}
+            end
+          end
+        {% end %}
+
+        # Fallback: return first provider with API key
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm] %}
+          if provider = p.{{ provider_name.id }}
+            if provider.api_key != ""
+              return {provider, {{ provider_name }}}
+            end
+          end
+        {% end %}
+      end
+
+      {nil, nil}
+    end
+
+    # Validate configuration
+    def validate! : Nil
+      has_provider = false
+      if p = providers
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm] %}
+          if provider = p.{{ provider_name.id }}
+            has_provider ||= provider.api_key != ""
+          end
+        {% end %}
+      end
+
+      unless has_provider
+        raise "No LLM provider configured. Please set an API key in config.yml"
+      end
+    end
+  end
+end

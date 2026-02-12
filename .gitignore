@@ -1,0 +1,46 @@
+# Crystal
+/bin/
+/lib/
+/.shards/
+/.crystal/
+
+# Build artifacts
+/build/
+*.dwarf
+*.o
+*.a
+
+# IDE
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# User data
+/workspace/
+/sessions/
+/logs/
+config.yml
+
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+
+# Documentation artifacts
+/docs/api/
+
+# Temp files
+/temp/
+/tmp/
+
+# Docker
+docker-compose.override.yml
