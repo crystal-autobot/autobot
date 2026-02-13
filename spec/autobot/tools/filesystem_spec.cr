@@ -210,3 +210,179 @@ describe Autobot::Tools::ListDirTool do
     FileUtils.rm_rf(tmp) if tmp
   end
 end
+
+describe "Relative path resolution from workspace" do
+  describe Autobot::Tools::ReadFileTool do
+    it "resolves relative paths from workspace when sandboxed" do
+      workspace = TestHelper.tmp_dir
+      Dir.mkdir(workspace / "subdir")
+      File.write(workspace / "subdir" / "file.txt", "content from subdir")
+
+      tool = Autobot::Tools::ReadFileTool.new(allowed_dir: workspace)
+      result = tool.execute({"path" => JSON::Any.new("subdir/file.txt")})
+
+      result.success?.should be_true
+      result.content.should eq("content from subdir")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "resolves relative paths with ./ prefix" do
+      workspace = TestHelper.tmp_dir
+      File.write(workspace / "file.txt", "hello")
+
+      tool = Autobot::Tools::ReadFileTool.new(allowed_dir: workspace)
+      result = tool.execute({"path" => JSON::Any.new("./file.txt")})
+
+      result.success?.should be_true
+      result.content.should eq("hello")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "still works with absolute paths" do
+      workspace = TestHelper.tmp_dir
+      File.write(workspace / "file.txt", "absolute path test")
+
+      tool = Autobot::Tools::ReadFileTool.new(allowed_dir: workspace)
+      result = tool.execute({"path" => JSON::Any.new((workspace / "file.txt").to_s)})
+
+      result.success?.should be_true
+      result.content.should eq("absolute path test")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "blocks relative paths that escape workspace" do
+      workspace = TestHelper.tmp_dir
+      outside = TestHelper.tmp_dir
+      File.write(outside / "secret.txt", "forbidden")
+
+      # Try to escape using ../
+      relative_escape = "../" + File.basename(outside.to_s) + "/secret.txt"
+
+      tool = Autobot::Tools::ReadFileTool.new(allowed_dir: workspace)
+      result = tool.execute({"path" => JSON::Any.new(relative_escape)})
+
+      result.access_denied?.should be_true
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+      FileUtils.rm_rf(outside) if outside
+    end
+  end
+
+  describe Autobot::Tools::WriteFileTool do
+    it "resolves relative paths from workspace when sandboxed" do
+      workspace = TestHelper.tmp_dir
+
+      tool = Autobot::Tools::WriteFileTool.new(allowed_dir: workspace)
+      result = tool.execute({
+        "path"    => JSON::Any.new("subdir/newfile.txt"),
+        "content" => JSON::Any.new("new content"),
+      })
+
+      result.success?.should be_true
+      File.read(workspace / "subdir" / "newfile.txt").should eq("new content")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "blocks relative paths that escape workspace" do
+      workspace = TestHelper.tmp_dir
+      outside = TestHelper.tmp_dir
+
+      relative_escape = "../" + File.basename(outside.to_s) + "/hack.txt"
+
+      tool = Autobot::Tools::WriteFileTool.new(allowed_dir: workspace)
+      result = tool.execute({
+        "path"    => JSON::Any.new(relative_escape),
+        "content" => JSON::Any.new("exploit"),
+      })
+
+      result.access_denied?.should be_true
+      File.exists?(outside / "hack.txt").should be_false
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+      FileUtils.rm_rf(outside) if outside
+    end
+  end
+
+  describe Autobot::Tools::EditFileTool do
+    it "resolves relative paths from workspace when sandboxed" do
+      workspace = TestHelper.tmp_dir
+      Dir.mkdir(workspace / "docs")
+      File.write(workspace / "docs" / "readme.txt", "Hello World")
+
+      tool = Autobot::Tools::EditFileTool.new(allowed_dir: workspace)
+      result = tool.execute({
+        "path"     => JSON::Any.new("docs/readme.txt"),
+        "old_text" => JSON::Any.new("World"),
+        "new_text" => JSON::Any.new("Crystal"),
+      })
+
+      result.success?.should be_true
+      File.read(workspace / "docs" / "readme.txt").should eq("Hello Crystal")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+  end
+
+  describe Autobot::Tools::ListDirTool do
+    it "resolves relative paths from workspace when sandboxed" do
+      workspace = TestHelper.tmp_dir
+      Dir.mkdir(workspace / "memory")
+      File.write(workspace / "memory" / "MEMORY.md", "notes")
+      File.write(workspace / "memory" / "HISTORY.md", "history")
+
+      tool = Autobot::Tools::ListDirTool.new(allowed_dir: workspace)
+      result = tool.execute({"path" => JSON::Any.new("memory")})
+
+      result.success?.should be_true
+      result.content.should contain("MEMORY.md")
+      result.content.should contain("HISTORY.md")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "resolves nested relative paths" do
+      workspace = TestHelper.tmp_dir
+      Dir.mkdir_p(workspace / "a" / "b" / "c")
+      File.write(workspace / "a" / "b" / "c" / "deep.txt", "")
+
+      tool = Autobot::Tools::ListDirTool.new(allowed_dir: workspace)
+      result = tool.execute({"path" => JSON::Any.new("a/b/c")})
+
+      result.success?.should be_true
+      result.content.should contain("deep.txt")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "blocks relative paths that escape workspace" do
+      workspace = TestHelper.tmp_dir
+      outside = TestHelper.tmp_dir
+
+      relative_escape = "../" + File.basename(outside.to_s)
+
+      tool = Autobot::Tools::ListDirTool.new(allowed_dir: workspace)
+      result = tool.execute({"path" => JSON::Any.new(relative_escape)})
+
+      result.access_denied?.should be_true
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+      FileUtils.rm_rf(outside) if outside
+    end
+  end
+
+  describe "Unsandboxed behavior" do
+    it "resolves relative paths from current directory when not sandboxed" do
+      tool = Autobot::Tools::ReadFileTool.new(allowed_dir: nil)
+
+      # Relative paths should expand from process cwd
+      result = tool.execute({"path" => JSON::Any.new("README.md")})
+
+      # Should try to read from current directory (will succeed if README.md exists)
+      (result.success? || result.error?).should be_true
+    end
+  end
+end
