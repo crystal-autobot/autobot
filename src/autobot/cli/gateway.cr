@@ -5,6 +5,9 @@ module Autobot
     module Gateway
       def self.run(config_path : String?, port : Int32, verbose : Bool) : Nil
         config = Config::Loader.load(config_path)
+
+        # Run security and configuration validation
+        validate_security(config, config_path)
         validate_provider_config(config)
 
         puts LOGO.strip
@@ -41,6 +44,32 @@ module Autobot
 
         # Block main fiber
         sleep
+      end
+
+      private def self.validate_security(config : Config::Config, config_path : String?) : Nil
+        resolved_path = Config::Loader.resolve_display_path(config_path)
+        issues = Config::Validator.validate(config, Path[resolved_path])
+
+        # Show warnings (but continue)
+        warnings = issues.select { |i| i.severity == Config::Validator::Severity::Warning }
+        unless warnings.empty?
+          STDERR.puts "\n⚠️  Configuration warnings:"
+          warnings.each do |warning|
+            STDERR.puts "  • #{warning.message}"
+          end
+          STDERR.puts ""
+        end
+
+        # Fail on errors
+        errors = issues.select { |i| i.severity == Config::Validator::Severity::Error }
+        unless errors.empty?
+          STDERR.puts "\n❌ Configuration errors:"
+          errors.each do |e|
+            STDERR.puts "  • #{e.message}"
+          end
+          STDERR.puts "\nRun 'autobot doctor' for detailed diagnostics."
+          exit 1
+        end
       end
 
       private def self.validate_provider_config(config : Config::Config) : Nil

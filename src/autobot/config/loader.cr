@@ -17,6 +17,8 @@ module Autobot::Config
       path = resolve_config_path(config_path)
 
       if path && File.exists?(path)
+        # Load .env file first (if exists)
+        load_env_file(path.parent)
         load_from_file(path)
       else
         Log.info { "No config file found, using defaults" }
@@ -84,6 +86,47 @@ module Autobot::Config
       end
     end
 
+    # Strip surrounding quotes from a value string
+    # Handles both double and single quotes
+    private def self.strip_quotes(value : String) : String
+      QUOTE_CHARS.each do |quote|
+        if value.starts_with?(quote) && value.ends_with?(quote) && value.size >= 2
+          return value[1..-2]
+        end
+      end
+      value
+    end
+
+    # Quote characters used in .env files
+    QUOTE_CHARS = ['"', '\'']
+
+    # Load environment variables from .env file in config directory
+    private def self.load_env_file(config_dir : Path) : Nil
+      env_path = config_dir / ".env"
+      return unless File.exists?(env_path)
+
+      Log.debug { "Loading .env from #{env_path}" }
+
+      File.each_line(env_path) do |line|
+        line = line.strip
+        # Skip empty lines and comments
+        next if line.empty? || line.starts_with?("#")
+
+        # Parse KEY=VALUE format
+        parts = line.split("=", 2)
+        next unless parts.size == 2
+
+        key = parts[0].strip
+        value = strip_quotes(parts[1].strip)
+
+        ENV[key] = value unless key.empty?
+      end
+
+      Log.info { "Loaded environment variables from .env" }
+    rescue ex
+      Log.warn { "Failed to load .env file: #{ex.message}" }
+    end
+
     # Resolve config file path with precedence
     private def self.resolve_config_path(explicit_path : String?) : Path?
       # 1. Explicit path from CLI
@@ -109,7 +152,9 @@ module Autobot::Config
     # Load configuration from YAML file
     private def self.load_from_file(path : Path) : Config
       content = File.read(path)
-      config = Config.from_yaml(content)
+      # Expand environment variables in format ${VAR} or $VAR
+      expanded = expand_env_vars(content)
+      config = Config.from_yaml(expanded)
       config.validate!
       config
     rescue ex : YAML::ParseException
@@ -118,6 +163,22 @@ module Autobot::Config
     rescue ex : Exception
       Log.error { "Failed to load config from #{path}: #{ex.message}" }
       raise "Failed to load configuration: #{ex.message}"
+    end
+
+    # Expand environment variables in content
+    # Supports ${VAR_NAME} and $VAR_NAME formats
+    private def self.expand_env_vars(content : String) : String
+      # First expand ${VAR_NAME} format
+      result = content.gsub(/\$\{([A-Z_][A-Z0-9_]*)\}/) do |match, matcher|
+        var_name = matcher[1]
+        ENV[var_name]? || match
+      end
+
+      # Then expand $VAR_NAME format (but not ${ which we already handled)
+      result.gsub(/\$([A-Z_][A-Z0-9_]*)(?!\{)/) do |match, matcher|
+        var_name = matcher[1]
+        ENV[var_name]? || match
+      end
     end
   end
 

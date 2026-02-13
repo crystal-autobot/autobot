@@ -1,9 +1,15 @@
 require "./result"
+require "../config/env"
 
 module Autobot
   module Tools
     def self.resolve_path(path : String, allowed_dir : Path? = nil) : Path
       resolved = Path[path].expand(home: true)
+
+      # Always block .env files for security
+      if Config::Env.file?(resolved)
+        raise PermissionError.new("Access to .env files is always denied for security")
+      end
 
       if dir = allowed_dir
         canonical_dir = dir.expand(home: true)
@@ -233,6 +239,7 @@ module Autobot
 
         entries = Dir.entries(dir_path.to_s)
           .reject { |e| e == "." || e == ".." }
+          .reject { |e| Config::Env.file?(e) } # Hide .env files
           .sort!
 
         if entries.empty?

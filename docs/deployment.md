@@ -1,204 +1,56 @@
 # Deployment Guide
 
-Secure deployment patterns for running Autobot in production.
-
-## Quick Start (Development)
-
-```bash
-# Run as your current user (development only)
-./bin/autobot gateway
-```
-
-⚠️ **Not recommended for production** - uses your user account with full permissions.
+Security-first deployment for Autobot with production-ready examples.
 
 ---
 
-## Production: Dedicated User (Recommended)
+## Quick Start (Local)
 
-### 1. Create Dedicated User
-
-```bash
-# Linux
-sudo useradd -r -m -d /var/lib/autobot -s /bin/bash autobot
-
-# macOS
-sudo dscl . -create /Users/autobot
-sudo dscl . -create /Users/autobot UserShell /bin/bash
-sudo dscl . -create /Users/autobot RealName "Autobot Service"
-sudo dscl . -create /Users/autobot UniqueID 501
-sudo dscl . -create /Users/autobot PrimaryGroupID 20
-sudo dscl . -create /Users/autobot NFSHomeDirectory /var/lib/autobot
-sudo mkdir -p /var/lib/autobot
-sudo chown autobot:staff /var/lib/autobot
-```
-
-### 2. Setup Directories
+Create a new bot in seconds:
 
 ```bash
-sudo -u autobot mkdir -p /var/lib/autobot/{.config/autobot,workspace,logs}
-sudo chmod 700 /var/lib/autobot/.config/autobot
-sudo chmod 700 /var/lib/autobot/workspace
+autobot new optimus
+cd optimus
 ```
 
-### 3. Install Binary
-
+Edit `.env` and add your API keys:
 ```bash
-# Copy binary
-sudo cp bin/autobot /usr/local/bin/autobot
-sudo chown autobot:autobot /usr/local/bin/autobot
-sudo chmod 755 /usr/local/bin/autobot
+vi .env  # Add ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### 4. Create Config
-
+Validate and start:
 ```bash
-# Create config as autobot user
-sudo -u autobot vi /var/lib/autobot/.config/autobot/config.yml
+autobot doctor    # Check for issues
+autobot gateway   # Start gateway
 ```
 
-**Minimal production config:**
-```yaml
-providers:
-  anthropic:
-    api_key: "${ANTHROPIC_API_KEY}"
-
-agents:
-  defaults:
-    workspace: "/var/lib/autobot/workspace"
-
-channels:
-  telegram:
-    enabled: true
-    token: "${TELEGRAM_BOT_TOKEN}"
-    allow_from: ["@your_username"]  # Allowlist only
-
-tools:
-  restrict_to_workspace: true  # Required for security
-  exec:
-    timeout: 60
-    full_shell_access: false   # Required for workspace sandbox
-
-gateway:
-  host: "127.0.0.1"  # Localhost only
-  port: 18790
-```
-
-### 5. Set Environment Variables
-
-```bash
-# Create environment file (readable only by autobot user)
-sudo -u autobot tee /var/lib/autobot/.env << 'EOF'
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-TELEGRAM_BOT_TOKEN=your-bot-token-here
-EOF
-
-sudo chmod 600 /var/lib/autobot/.env
-```
-
-### 6. Test as Autobot User
-
-```bash
-# Load env and test
-sudo -u autobot bash -c 'source /var/lib/autobot/.env && /usr/local/bin/autobot gateway'
-```
+✓ **Secure by default**: Workspace restrictions, localhost binding, .env protection, shell safety.
 
 ---
 
-## Production: Systemd Service (Linux)
+## Multiple Bots (One Machine)
 
-### 1. Create Service File
-
-`/etc/systemd/system/autobot.service`:
-
-```ini
-[Unit]
-Description=Autobot AI Agent
-After=network.target
-
-[Service]
-Type=simple
-User=autobot
-Group=autobot
-WorkingDirectory=/var/lib/autobot
-
-# Load environment
-EnvironmentFile=/var/lib/autobot/.env
-
-# Run gateway
-ExecStart=/usr/local/bin/autobot gateway --config /var/lib/autobot/.config/autobot/config.yml
-
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/autobot
-CapabilityBoundingSet=
-
-# Restart on failure
-Restart=on-failure
-RestartSec=10
-
-# Logging
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 2. Enable and Start
+Run multiple isolated bots:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable autobot
-sudo systemctl start autobot
+# Personal bot
+autobot new personal-bot
+cd personal-bot && autobot gateway --port 18790
 
-# Check status
-sudo systemctl status autobot
-
-# View logs
-sudo journalctl -u autobot -f
+# Work bot
+cd .. && autobot new work-bot
+cd work-bot && autobot gateway --port 18791
 ```
+
+Each bot has isolated config, workspace, sessions, and logs.
 
 ---
 
-## Production: Docker (Recommended)
+## Production Deployment
 
-### 1. Build Image
+### Docker (Recommended)
 
-```bash
-docker build -t autobot:latest .
-```
-
-### 2. Run Container
-
-```bash
-docker run -d \
-  --name autobot \
-  --user 1000:1000 \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e TELEGRAM_BOT_TOKEN=... \
-  -v $(pwd)/config.yml:/app/config.yml:ro \
-  -v autobot-workspace:/app/workspace \
-  -v autobot-sessions:/app/sessions \
-  --read-only \
-  --tmpfs /tmp \
-  --security-opt=no-new-privileges \
-  -p 127.0.0.1:18790:18790 \
-  autobot:latest gateway
-```
-
-**Security features:**
-- `--user 1000:1000` - Non-root user
-- `--read-only` - Immutable filesystem
-- `--tmpfs /tmp` - Temporary storage
-- `-p 127.0.0.1:18790` - Localhost only
-- `--security-opt=no-new-privileges` - Prevent privilege escalation
-
-### 3. Docker Compose
-
-`docker-compose.yml`:
+Create `docker-compose.yml`:
 
 ```yaml
 version: '3.8'
@@ -206,107 +58,337 @@ version: '3.8'
 services:
   autobot:
     image: autobot:latest
-    container_name: autobot
+    container_name: autobot-prod
     user: "1000:1000"
     read_only: true
     security_opt:
       - no-new-privileges:true
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    env_file:
+      - .env
     volumes:
       - ./config.yml:/app/config.yml:ro
       - autobot-workspace:/app/workspace
-      - autobot-sessions:/app/.config/autobot/sessions
+      - autobot-sessions:/app/sessions
     tmpfs:
       - /tmp
     ports:
       - "127.0.0.1:18790:18790"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
 volumes:
   autobot-workspace:
   autobot-sessions:
 ```
 
-Run with:
+Start:
 ```bash
 docker-compose up -d
-docker-compose logs -f
+docker-compose logs -f autobot
 ```
 
+**Security enabled**: Non-root user, read-only filesystem, no new privileges, localhost binding, resource limits.
+
 ---
 
-## Production: External Access (Advanced)
+### Systemd (Linux)
 
-If you need external access to the gateway, use a reverse proxy:
+Use the provided service template:
 
-### Nginx + TLS
+```bash
+# Copy service file
+sudo cp docs/templates/autobot.service /etc/systemd/system/
 
-```nginx
-upstream autobot {
-    server 127.0.0.1:18790;
-}
+# Build and install binary
+make release
+sudo cp bin/autobot /usr/local/bin/
+sudo chmod 755 /usr/local/bin/autobot
 
-server {
-    listen 443 ssl http2;
-    server_name autobot.yourdomain.com;
-
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    location / {
-        proxy_pass http://autobot;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-
-        # Add authentication here if needed
-        auth_basic "Autobot Gateway";
-        auth_basic_user_file /etc/nginx/.htpasswd;
-    }
-}
+# Enable service
+sudo systemctl daemon-reload
+sudo systemctl enable --now autobot
 ```
 
-**Never expose the gateway port directly to the internet!**
+Check status:
+```bash
+sudo systemctl status autobot
+sudo journalctl -u autobot -f
+```
+
+**Service includes**: Security hardening (NoNewPrivileges, ProtectSystem), resource limits, automatic restarts.
 
 ---
 
-## Security Checklist
+## Configuration Validation
 
-Before production deployment:
+Always validate before deploying:
 
-- [ ] Dedicated user account (not root, not your personal account)
-- [ ] Config/workspace directories: 0700 permissions
-- [ ] Environment variables for secrets (not in config files)
-- [ ] `restrict_to_workspace: true`
-- [ ] `full_shell_access: false`
-- [ ] Channel `allow_from` configured (not empty, not ["*"])
-- [ ] Gateway bound to localhost (`host: 127.0.0.1`)
-- [ ] TLS if external access needed (via reverse proxy)
-- [ ] Systemd security hardening or Docker isolation
-- [ ] Log monitoring enabled
-- [ ] Regular security updates
+```bash
+autobot doctor          # Check for errors/warnings
+autobot doctor --strict # Fail on any warning (CI/CD)
+```
+
+### What It Checks
+
+**❌ Errors** (blocks deployment):
+- Mutually exclusive settings (`restrict_to_workspace` + `full_shell_access`)
+- Plaintext secrets in `config.yml`
+- `.env` permissions (must be 0600)
+- `.env` inside workspace (exposes secrets)
+- No LLM provider configured
+
+**⚠️ Warnings** (review recommended):
+- Gateway bound to 0.0.0.0 (network exposure)
+- Empty channel allowlists
+- Missing `.env` file
+- Workspace restrictions disabled
 
 ---
 
-## Permissions Reference
+## External Access (Optional)
+
+### Reverse Proxy (Nginx)
+
+For external access with TLS, use a reverse proxy. Example configuration in `docs/templates/nginx.conf`:
+
+```bash
+# Install nginx
+sudo apt install nginx  # Ubuntu/Debian
+
+# Configure proxy (see docs/templates/nginx.conf)
+sudo cp docs/templates/nginx.conf /etc/nginx/sites-available/autobot
+sudo ln -s /etc/nginx/sites-available/autobot /etc/nginx/sites-enabled/
+
+# Get TLS certificate
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d autobot.example.com
+
+# Enable
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+**Key features** (from template):
+- TLS 1.2+ with strong ciphers
+- Security headers (HSTS, X-Frame-Options, CSP)
+- WebSocket support
+- Request buffering disabled for streaming
+- Optional basic auth
+
+---
+
+## Security Best Practices
+
+### 1. Secrets Management
+
+```bash
+# .gitignore (auto-created by autobot new)
+.env
+.env.*
+sessions/
+logs/
+workspace/memory/
+
+# Verify .env permissions
+ls -l .env
+# Should show: -rw------- (0600)
+```
+
+### 2. Workspace Restrictions
+
+```yaml
+tools:
+  restrict_to_workspace: true  # ✓ Default
+  exec:
+    full_shell_access: false   # ✓ Default
+```
+
+**NEVER** enable both `restrict_to_workspace` and `full_shell_access` (mutually exclusive). `autobot doctor` will catch this.
+
+### 3. Channel Authorization
+
+```yaml
+channels:
+  telegram:
+    enabled: true
+    allow_from: ["123456789"]  # Specific user IDs
+    # NEVER: ["*"]             # Allows anyone!
+```
+
+### 4. Network Binding
+
+```yaml
+gateway:
+  host: "127.0.0.1"  # ✓ Default (localhost only)
+  # AVOID: "0.0.0.0" # Exposes to all interfaces
+```
+
+Use a reverse proxy (nginx) for external access.
+
+### 5. File Permissions
 
 ```bash
 # Recommended permissions
-/var/lib/autobot/                       0700 (autobot:autobot)
-/var/lib/autobot/.config/autobot/       0700 (autobot:autobot)
-/var/lib/autobot/.config/autobot/*.yml  0600 (autobot:autobot)
-/var/lib/autobot/.env                   0600 (autobot:autobot)
-/var/lib/autobot/workspace/             0700 (autobot:autobot)
-/var/lib/autobot/sessions/              0700 (autobot:autobot)
-/usr/local/bin/autobot                  0755 (autobot:autobot)
+/var/lib/autobot/         0700 (autobot:autobot)
+/var/lib/autobot/.env     0600 (autobot:autobot)
+/var/lib/autobot/config.yml 0600 (autobot:autobot)
 ```
 
-**Verify permissions:**
+---
+
+## Advanced Setup
+
+### Dedicated User Account (Production)
+
+Create a system user for Autobot:
+
 ```bash
-sudo ls -la /var/lib/autobot/.config/autobot/
-# Should show: drwx------ (700) for directories, -rw------- (600) for files
+# Linux
+sudo useradd -r -m -d /var/lib/autobot -s /bin/bash autobot
+sudo -u autobot autobot onboard
+
+# macOS
+sudo dscl . -create /Users/autobot
+sudo dscl . -create /Users/autobot NFSHomeDirectory /var/lib/autobot
+sudo mkdir -p /var/lib/autobot
+sudo chown autobot:staff /var/lib/autobot
 ```
+
+### Resource Limits (Systemd)
+
+Add to `autobot.service`:
+
+```ini
+[Service]
+CPUQuota=200%      # Max 2 cores
+MemoryMax=2G       # Hard limit
+MemoryHigh=1.5G    # Soft limit
+LimitNOFILE=65536  # File descriptors
+TasksMax=512       # Max processes
+```
+
+### Backup
+
+Essential files to backup:
+```bash
+/var/lib/autobot/.env
+/var/lib/autobot/config.yml
+/var/lib/autobot/sessions/
+```
+
+Simple backup script:
+```bash
+#!/bin/bash
+BACKUP_DIR="/backup/autobot/$(date +%Y%m%d)"
+mkdir -p "$BACKUP_DIR"
+tar czf "$BACKUP_DIR/autobot-backup.tar.gz" \
+  -C /var/lib/autobot \
+  .env config.yml sessions/
+```
+
+---
+
+## Troubleshooting
+
+### Config validation fails
+```bash
+autobot doctor  # Shows specific errors and fixes
+```
+
+### Gateway won't start
+```bash
+autobot doctor --strict  # Check for warnings
+sudo systemctl status autobot  # If using systemd
+sudo journalctl -u autobot -f  # View logs
+```
+
+### Secrets not loading
+```bash
+# Verify .env exists and has correct permissions
+ls -la .env
+chmod 600 .env
+
+# Check environment variable syntax in config.yml
+grep ANTHROPIC_API_KEY config.yml
+# Should show: api_key: "${ANTHROPIC_API_KEY}"
+```
+
+### Permission denied
+```bash
+# Verify ownership (if using dedicated user)
+ls -la /var/lib/autobot/
+sudo chown -R autobot:autobot /var/lib/autobot
+```
+
+### Nginx 502 Bad Gateway
+```bash
+# Check if autobot is running
+sudo systemctl status autobot
+curl http://127.0.0.1:18790/health
+
+# Check nginx logs
+sudo tail -f /var/log/nginx/autobot_error.log
+```
+
+---
+
+## Quick Reference
+
+### Commands
+```bash
+autobot new optimus              # Create new bot
+autobot onboard                  # Initialize current dir
+autobot doctor                   # Validate config
+autobot doctor --strict          # Strict validation
+autobot gateway                  # Start gateway
+autobot gateway --port 8080      # Custom port
+```
+
+### Files
+- `.env` - Secrets (never commit, 0600)
+- `config.yml` - Configuration (uses ${ENV_VARS})
+- `workspace/` - Sandboxed LLM workspace
+- `sessions/` - Conversation history
+- `docs/templates/` - Production templates (systemd, nginx, docker)
+
+### Security Defaults
+- ✓ Workspace sandbox enabled
+- ✓ .env files blocked from LLM
+- ✓ Symlink operations blocked
+- ✓ Localhost-only binding
+- ✓ Shell features disabled
+- ✓ File permissions enforced
+- ✓ Validation on startup
+
+---
+
+## Production Checklist
+
+Before deploying to production:
+
+- [ ] `autobot doctor --strict` passes
+- [ ] Dedicated user account (not root)
+- [ ] .env file permissions (0600)
+- [ ] .env not in workspace directory
+- [ ] TLS configured (Let's Encrypt)
+- [ ] Gateway bound to localhost
+- [ ] Nginx reverse proxy (if external access)
+- [ ] Resource limits configured
+- [ ] Backup script setup
+- [ ] Log monitoring enabled
+- [ ] Firewall rules configured
+
+---
+
+## Learn More
+
+- [Security](./security.md) - Security model and threat mitigations
+- [Configuration](./configuration.md) - Full configuration reference
+- [Architecture](./architecture.md) - System design and components

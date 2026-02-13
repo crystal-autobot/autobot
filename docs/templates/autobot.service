@@ -1,0 +1,57 @@
+[Unit]
+Description=Autobot AI Agent
+Documentation=https://github.com/your-org/autobot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/var/lib/autobot
+
+# Environment variables from .env file
+EnvironmentFile=/var/lib/autobot/.env
+
+# Main process
+ExecStart=/usr/local/bin/autobot gateway
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/autobot
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+PrivateMounts=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+TasksMax=512
+MemoryMax=2G
+MemoryHigh=1.5G
+CPUQuota=200%
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot
+
+[Install]
+WantedBy=multi-user.target

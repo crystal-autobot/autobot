@@ -28,8 +28,11 @@ tools:
 ```
 
 **What it protects against:**
-- ✅ Absolute paths outside workspace (`cat /etc/passwd`)
+- ✅ Absolute paths outside workspace (`cat /etc/passwd`, `ls /`)
 - ✅ Quoted path bypass (`cat "/etc/hosts"`)
+- ✅ Symlink escape attacks (`ln -s / rootlink; cat rootlink/etc/passwd`)
+- ✅ Hardlink creation (`ln /etc/passwd localfile`, `cp -l /etc/passwd file`)
+- ✅ Plain relative paths (`cat symlink/etc/passwd`)
 - ✅ working_dir parameter override
 - ✅ Directory change commands (`cd /etc && ls`)
 - ✅ Relative traversal (`cat ../../../etc`)
@@ -44,10 +47,25 @@ tools:
 | `full_shell_access: false` | ❌ Blocked | 🔒 Maximum | Production (default) |
 | `full_shell_access: true` | ✅ Allowed | ⚠️ Reduced | Trusted environments |
 
+**Symlink Protection (v0.2.0+):**
+
+Autobot prevents workspace escape via symlinks and hardlinks:
+- `ln -s / rootlink` → **BLOCKED** (symlink creation)
+- `ln /etc/passwd file` → **BLOCKED** (hardlink creation)
+- `cp -l /etc/passwd file` → **BLOCKED** (hardlink via cp)
+- `cat rootlink/etc/passwd` → **BLOCKED** (access via plain relative path)
+- All path validation follows symlinks to verify real paths
+
+**Path Resolution:**
+- Every path argument is resolved to its real path (follows symlinks)
+- Real path must be within workspace boundaries
+- Validation occurs even for non-existent files (checks parent directories)
+
 **Best practice:**
 - Keep workspace scoped to a dedicated directory, not your home folder
 - Use `full_shell_access: false` unless you specifically need pipes/redirects
 - Only enable `full_shell_access: true` when you fully trust command sources
+- Never place `.env` files inside workspace (blocks LLM access)
 
 ---
 
@@ -69,13 +87,38 @@ Built-in protection against Server-Side Request Forgery:
 
 ## 4. Keep Secrets Out of Files
 
-Use environment variables for sensitive data:
+### .env File Protection (v0.2.0+)
 
+Autobot enforces strict `.env` file protection:
+
+**Automatic blocks (LLM cannot access):**
+- `.env` files blocked in ReadFileTool (read, list directory)
+- `.env` files blocked in ExecTool (commands like `cat .env`)
+- Pattern matching: `.env`, `.env.local`, `.env.production`, `secrets.env`, etc.
+
+**Configuration validation (`autobot doctor`):**
+- ❌ Error: Plaintext secrets in `config.yml`
+- ❌ Error: `.env` permissions not 0600
+- ❌ Error: `.env` inside workspace (exposes to LLM)
+- ⚠️ Warning: Missing `.env` file
+
+**Example secure config:**
 ```yaml
+# config.yml (safe for LLM to read)
 providers:
   anthropic:
-    api_key: "${ANTHROPIC_API_KEY}"
+    api_key: "${ANTHROPIC_API_KEY}"  # References .env
+
+# .env (NEVER accessible to LLM)
+ANTHROPIC_API_KEY=sk-ant-your-secret-key
 ```
+
+**File locations:**
+- ✅ `./autobot/.env` (outside workspace)
+- ✅ `~/.config/autobot/.env` (outside workspace)
+- ❌ `./workspace/.env` (inside workspace - BLOCKED by validation)
+
+### Log Sanitization
 
 **Automatic log sanitization** redacts:
 - API keys (sk-ant-, sk-, AKIA, etc.)
@@ -86,7 +129,50 @@ providers:
 
 ---
 
-## 5. Review Logs & Monitor Access
+## 5. Configuration Validation (`autobot doctor`)
+
+Use `autobot doctor` to verify security configuration before deployment:
+
+```bash
+autobot doctor          # Check for errors and warnings
+autobot doctor --strict # Fail on any warning (CI/CD)
+```
+
+**Security checks performed:**
+
+**❌ Errors (blocks deployment):**
+- Mutually exclusive settings (`restrict_to_workspace` + `full_shell_access`)
+- Plaintext secrets detected in `config.yml`
+- `.env` file permissions not 0600
+- `.env` file inside workspace directory
+- No LLM provider configured
+
+**⚠️ Warnings (review recommended):**
+- Gateway bound to 0.0.0.0 (network exposure)
+- Channel authorization not configured (empty `allow_from`)
+- Missing `.env` file
+- Workspace restrictions disabled
+- Channels enabled without tokens
+
+**Example output:**
+```
+❌ ERRORS (1):
+  • CRITICAL: .env file has insecure permissions (644). Run: chmod 600 /path/.env
+
+⚠️  WARNINGS (1):
+  • Gateway is bound to 0.0.0.0 (all network interfaces). Use '127.0.0.1' for localhost-only access.
+
+Summary: 1 errors, 1 warnings, 0 info
+```
+
+**Integration:**
+- Run automatically on `autobot gateway` startup
+- Exit code 1 on errors (stops deployment)
+- Use `--strict` in CI/CD pipelines to catch warnings
+
+---
+
+## 6. Review Logs & Monitor Access
 
 ```bash
 # Check for ACCESS DENIED (security blocks)
@@ -106,7 +192,7 @@ grep "Tokens:" ~/.config/autobot/logs/autobot.log
 
 ---
 
-## 6. File Permissions (AUTOMATIC)
+## 7. File Permissions (AUTOMATIC)
 
 Autobot automatically sets restrictive permissions on sensitive files:
 - **Config files:** `0600` (user read/write only)
@@ -114,9 +200,13 @@ Autobot automatically sets restrictive permissions on sensitive files:
 - **Cron store:** `0600` (user read/write only)
 - **Directories:** `0700` (user access only)
 
+**Validation:**
+- `autobot doctor` checks `.env` permissions (must be 0600)
+- Automatic enforcement on file creation
+
 ---
 
-## 7. Cron Job Isolation (AUTOMATIC)
+## 8. Cron Job Isolation (AUTOMATIC)
 
 Jobs are automatically isolated by owner (channel:chat_id):
 - Users can only list/remove their own jobs
@@ -124,7 +214,7 @@ Jobs are automatically isolated by owner (channel:chat_id):
 
 ---
 
-## 8. Rate Limiting (PER-SESSION)
+## 9. Rate Limiting (PER-SESSION)
 
 Rate limits are enforced per-session to prevent:
 - One user exhausting limits for others
@@ -132,7 +222,7 @@ Rate limits are enforced per-session to prevent:
 
 ---
 
-## 9. Isolate Runtime
+## 10. Isolate Runtime
 
 **Recommended deployment:**
 - Run with least-privileged user account
@@ -140,9 +230,20 @@ Rate limits are enforced per-session to prevent:
 - Bind gateway to localhost only (`host: 127.0.0.1`) unless external access needed
 - Use reverse proxy with TLS for external access
 
+**Production security checklist:**
+- [ ] `autobot doctor --strict` passes
+- [ ] Dedicated user account (not root)
+- [ ] `.env` permissions (0600)
+- [ ] `.env` outside workspace
+- [ ] TLS configured (Let's Encrypt)
+- [ ] Gateway bound to localhost
+- [ ] Reverse proxy for external access
+- [ ] Resource limits configured
+- [ ] Log monitoring enabled
+
 ---
 
-## 10. Known Limitations
+## 11. Known Limitations
 
 **WhatsApp Bridge:** WebSocket connection has no authentication (ws://).
 - **Mitigation:** Only run bridge on localhost

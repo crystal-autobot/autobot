@@ -44,8 +44,12 @@ module Autobot
         case options[:command]
         when "help", "-h", "--help"
           print_help
+        when "new"
+          handle_new_command(options)
         when "onboard"
           Onboard.run(options[:config_path])
+        when "doctor"
+          Doctor.run(options[:config_path], options[:strict])
         when "agent"
           Agent.run(options[:config_path], options[:message], options[:session_id], options[:markdown], options[:show_logs])
         when "gateway"
@@ -61,6 +65,16 @@ module Autobot
           STDERR.puts "Run 'autobot help' for usage."
           exit 1
         end
+      end
+
+      private def self.handle_new_command(options) : Nil
+        name = options[:args].shift?
+        unless name
+          STDERR.puts "Error: Bot name required"
+          STDERR.puts "Usage: autobot new <name>"
+          exit 1
+        end
+        New.run(name)
       end
 
       private def self.handle_cron_subcommand(options) : Nil
@@ -105,6 +119,7 @@ module Autobot
         config_path : String? = nil
         verbose = false
         show_version = false
+        strict = false
 
         # Agent flags
         message : String? = nil
@@ -140,6 +155,7 @@ module Autobot
           option_parser.on("-v", "--verbose", "Verbose output") { verbose = true }
           option_parser.on("--version", "Show version") { show_version = true }
           option_parser.on("-h", "--help", "Show help") { show_version = false }
+          option_parser.on("--strict", "Strict mode (warnings as errors)") { strict = true }
 
           # Agent-specific
           option_parser.on("-m MSG", "--message MSG", "Message to send to agent") { |v| message = v }
@@ -174,6 +190,7 @@ module Autobot
           config_path:  config_path,
           verbose:      verbose,
           show_version: show_version,
+          strict:       strict,
           message:      message,
           session_id:   session_id,
           markdown:     markdown,
@@ -213,7 +230,9 @@ module Autobot
         puts "autobot v#{VERSION} — AI agent framework\n\n"
         puts "Usage: autobot <command> [options]\n\n"
         puts "Commands:"
-        puts "  onboard   Initialize configuration and workspace"
+        puts "  new       Create a new bot in a directory (e.g., autobot new optimus)"
+        puts "  onboard   Initialize configuration in current directory"
+        puts "  doctor    Check configuration and security (use --strict for warnings as errors)"
         puts "  agent     Interact with the agent (single message or interactive)"
         puts "  gateway   Start the gateway server"
         puts "  cron      Manage scheduled tasks (list|add|remove|enable|run)"
@@ -243,9 +262,12 @@ module Autobot
         puts "  --channel CH         Channel for delivery"
         puts "  -f, --force          Force run (even if disabled)\n\n"
         puts "Examples:"
-        puts "  autobot onboard"
+        puts "  autobot new optimus      # create new bot"
+        puts "  autobot onboard          # initialize current dir"
+        puts "  autobot doctor           # check configuration"
+        puts "  autobot doctor --strict  # fail on warnings"
         puts "  autobot agent -m \"Hello!\""
-        puts "  autobot agent  # starts interactive mode"
+        puts "  autobot agent            # interactive mode"
         puts "  autobot gateway -p 8080"
         puts "  autobot cron list"
         puts "  autobot cron add -n daily_check -m \"Check system\" --cron \"0 9 * * *\""

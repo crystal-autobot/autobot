@@ -47,7 +47,17 @@ module Autobot
       }
 
       def self.run(config_path : String?) : Nil
-        config_file = config_path || Config::Loader::GLOBAL_CONFIG_PATH.to_s
+        # Determine config directory (use explicit path or check ./config.yml vs global)
+        base_dir = if config_path
+                     Path[config_path].parent
+                   elsif File.exists?(Config::Loader::PROJECT_CONFIG_PATH)
+                     Config::Loader::PROJECT_CONFIG_PATH.parent
+                   else
+                     Config::Loader::GLOBAL_CONFIG_PATH.parent
+                   end
+
+        config_file = base_dir / "config.yml"
+        env_file = base_dir / ".env"
 
         if File.exists?(config_file)
           print "Config already exists at #{config_file}. Overwrite? [y/N] "
@@ -58,28 +68,85 @@ module Autobot
           end
         end
 
-        # Create default config with YAML
+        # Create directory if needed
+        unless Dir.exists?(base_dir)
+          Dir.mkdir_p(base_dir)
+          File.chmod(base_dir, 0o700)
+        end
+
+        # Create .env file with template
+        env_template = <<-ENV
+        # API Keys (required - add at least one)
+        ANTHROPIC_API_KEY=
+        # OPENAI_API_KEY=
+        # OPENROUTER_API_KEY=
+
+        # Channel tokens (optional)
+        # TELEGRAM_BOT_TOKEN=
+        # SLACK_BOT_TOKEN=
+        # SLACK_APP_TOKEN=
+
+        # Web search (optional)
+        # BRAVE_API_KEY=
+        ENV
+
+        File.write(env_file, env_template)
+        File.chmod(env_file, 0o600)
+        puts "✓ Created .env at #{env_file}"
+
+        # Determine workspace path (relative to config dir if local, absolute if global)
+        workspace_path = if base_dir == Config::Loader::GLOBAL_CONFIG_PATH.parent
+                           "~/.config/autobot/workspace"
+                         else
+                           "./workspace"
+                         end
+
+        # Create config.yml with environment variable references
         defaults = Config::AgentDefaults.new
         config_yaml = <<-YAML
         agents:
           defaults:
-            workspace: "#{defaults.workspace}"
+            workspace: "#{workspace_path}"
             model: "#{defaults.model}"
+            max_tokens: #{defaults.max_tokens}
+            temperature: #{defaults.temperature}
+
         providers:
           anthropic:
-            api_key: ""
+            api_key: "${ANTHROPIC_API_KEY}"
+          # openai:
+          #   api_key: "${OPENAI_API_KEY}"
+
+        channels:
+          telegram:
+            enabled: false
+            token: "${TELEGRAM_BOT_TOKEN}"
+            allow_from: []  # Add Telegram user IDs to enable
+
+        tools:
+          restrict_to_workspace: true
+          exec:
+            timeout: 60
+            full_shell_access: false
+
+        gateway:
+          host: "127.0.0.1"
+          port: 18790
         YAML
-        config = Config::Config.from_yaml(config_yaml)
-        Config::Loader.save(config, config_file)
+
+        File.write(config_file, config_yaml)
+        File.chmod(config_file, 0o600)
         puts "✓ Created config at #{config_file}"
 
         # Initialize directories
         Config::Loader.init_dirs
         puts "✓ Created data directories"
 
-        # Create workspace
+        # Parse config to get workspace path
+        config = Config::Config.from_yaml(config_yaml)
         workspace = config.workspace_path
         Dir.mkdir_p(workspace) unless Dir.exists?(workspace)
+        File.chmod(workspace, 0o700)
         puts "✓ Created workspace at #{workspace}"
 
         # Create workspace templates
@@ -117,11 +184,36 @@ module Autobot
         skills_dir = workspace / "skills"
         Dir.mkdir_p(skills_dir) unless Dir.exists?(skills_dir)
 
+        # Create .gitignore if in a local directory
+        if base_dir != Config::Loader::GLOBAL_CONFIG_PATH.parent
+          gitignore_file = base_dir / ".gitignore"
+          unless File.exists?(gitignore_file)
+            gitignore_content = <<-GITIGNORE
+            # Secrets
+            .env
+            .env.*
+
+            # Session data
+            sessions/
+
+            # Logs
+            logs/
+
+            # Memory (optional - comment out if you want to commit)
+            workspace/memory/
+            GITIGNORE
+            File.write(gitignore_file, gitignore_content)
+            puts "✓ Created .gitignore"
+          end
+        end
+
         puts "\n#{LOGO.strip}"
         puts "\nautobot is ready!\n"
         puts "Next steps:"
-        puts "  1. Add your API key to #{config_file}"
-        puts "  2. Chat: autobot agent -m \"Hello!\""
+        puts "  1. Edit #{env_file} and add your API keys"
+        puts "  2. Run: autobot doctor (check configuration)"
+        puts "  3. Start: autobot gateway"
+        puts "  4. Or chat: autobot agent -m \"Hello!\""
       end
 
       private def self.create_templates(workspace : Path) : Nil

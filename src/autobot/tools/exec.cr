@@ -1,5 +1,6 @@
 require "log"
 require "../constants"
+require "../config/env"
 
 module Autobot
   module Tools
@@ -15,12 +16,14 @@ module Autobot
       DIR_CHANGE_PATTERN          = /\b(cd|chdir|pushd|popd)\b/
       BARE_DOTDOT_PATTERN         = /(?:^|[\s|>&<;])\.\.(?:[\s|>&<;]|$)/
       UNQUOTED_TILDE_PATTERN      = /(?:^|[\s|>])~/
-      UNQUOTED_ABSOLUTE_PATH      = /(?:^|[\s|><&;])([~\/][^\s"'|>&<;]+)/
+      UNQUOTED_ABSOLUTE_PATH      = /(?:^|[\s|><&;])([~\/][^\s"'|>&<;]*)/
       DOUBLE_QUOTED_ABSOLUTE_PATH = /"([~\/][^"]+)"/
       SINGLE_QUOTED_ABSOLUTE_PATH = /'([~\/][^']+)'/
       UNQUOTED_RELATIVE_PATH      = /(?:^|[\s|>])([^\s"'|>&]*\.\.\/[^\s"'|>&]*)/
       DOUBLE_QUOTED_RELATIVE_PATH = /"([^"]*\.\.\/[^"]*)"/
       SINGLE_QUOTED_RELATIVE_PATH = /'([^']*\.\.\/[^']*)'/
+      # Pattern to match any path-like argument (contains /)
+      PATH_LIKE_ARGUMENT = /(?:^|[\s|>])([^\s"'|>&<;-][^\s"'|>&<;]*\/[^\s"'|>&<;]*)/
 
       # Shell feature patterns (for restricted mode without full_shell_access)
       OUTPUT_REDIRECT_PATTERN     = />\s*\S/
@@ -28,6 +31,11 @@ module Autobot
       VARIABLE_ASSIGNMENT_PATTERN = /[A-Z_]\w*=/
 
       DEFAULT_DENY_PATTERNS = [
+        # Link operations (symlinks and hardlinks can escape workspace)
+        /\bln\s+/i,           # ln command (symlinks and hardlinks)
+        /\bcp\s+.*-[a-z]*l/i, # cp with -l flag (hardlinks)
+        /\bcp\s+--link/i,     # cp --link (hardlinks)
+
         # Destructive file operations
         /\brm\s+-[rf]{1,2}\b/i, # rm -r, rm -rf, rm -fr
         /\brm\s+-r\s+-f\b/i,    # rm -r -f (spaces between flags)
@@ -252,6 +260,11 @@ module Autobot
       private def guard_command(command : String, cwd : String) : String?
         cmd = command.strip
 
+        # Always block .env file access
+        if Config::Env.command_references_file?(cmd)
+          return "Error: Access to .env files is blocked for security"
+        end
+
         @deny_patterns.each do |pattern|
           if pattern.matches?(cmd)
             return "Error: Command blocked by safety guard (dangerous pattern detected)"
@@ -424,6 +437,17 @@ module Autobot
           end
         end
 
+        # SECURITY: Catch-all for any path-like arguments (containing /)
+        # This prevents bypasses via plain relative paths like "symlink/etc/passwd"
+        command.scan(PATH_LIKE_ARGUMENT) do |match|
+          path_str = match[1].strip
+          next if path_str.empty?
+          # Validate as relative path (will resolve and check workspace boundaries)
+          if error = validate_relative_path(path_str, workspace_real)
+            return error
+          end
+        end
+
         nil
       end
 
@@ -455,17 +479,29 @@ module Autobot
       end
 
       private def resolve_real_path(expanded : String) : String
-        if File.exists?(expanded) || Dir.exists?(expanded)
-          File.realpath(expanded)
-        else
-          parent = File.dirname(expanded)
-          if File.exists?(parent)
+        # If the full path exists, resolve it (follows symlinks)
+        return File.realpath(expanded) if File.exists?(expanded) || Dir.exists?(expanded)
+
+        # Path doesn't exist - walk up directory tree to find existing parent
+        # and resolve it (to catch symlinks in parent directories)
+        current_path = expanded
+        loop do
+          parent = File.dirname(current_path)
+          break if parent == current_path || parent == "/" || parent == "."
+
+          if File.exists?(parent) || Dir.exists?(parent)
+            # Found existing parent - resolve it (follows symlinks!)
             real_parent = File.realpath(parent)
-            File.join(real_parent, File.basename(expanded))
-          else
-            expanded
+            # Append the non-existing suffix
+            suffix = expanded[parent.size..-1].lstrip('/')
+            return File.join(real_parent, suffix)
           end
+
+          current_path = parent
         end
+
+        # No existing parent found - return as-is
+        expanded
       end
     end
   end

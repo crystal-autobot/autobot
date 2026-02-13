@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  autobot:
+    image: autobot:latest
+    container_name: autobot-prod
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+    # Load environment variables from .env file
+    env_file:
+      - .env
+
+    volumes:
+      # Config file (read-only)
+      - ./config.yml:/app/config.yml:ro
+
+      # Persistent data
+      - autobot-workspace:/app/workspace
+      - autobot-sessions:/app/sessions
+      - autobot-logs:/app/logs
+
+    # Temporary filesystem
+    tmpfs:
+      - /tmp:size=100M,noexec,nosuid,nodev
+
+    # Bind to localhost only
+    ports:
+      - "127.0.0.1:18790:18790"
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18790/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  autobot-workspace:
+    driver: local
+  autobot-sessions:
+    driver: local
+  autobot-logs:
+    driver: local
