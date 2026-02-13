@@ -2,7 +2,26 @@
 
 ## 1. Install
 
-### Option A: Build from source
+### Option A: Homebrew (macOS)
+
+```bash
+brew tap crystal-autobot/tap
+brew install autobot
+```
+
+### Option B: Download binary
+
+```bash
+# Automatic detection (Linux/macOS)
+curl -L https://github.com/crystal-autobot/autobot/releases/latest/download/autobot-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m) -o autobot
+chmod +x autobot
+sudo mv autobot /usr/local/bin/
+
+# Or manually download from releases page:
+# https://github.com/crystal-autobot/autobot/releases
+```
+
+### Option C: Build from source
 
 ```bash
 git clone https://github.com/crystal-autobot/autobot.git
@@ -11,14 +30,14 @@ make release
 sudo install -m 0755 bin/autobot /usr/local/bin/autobot
 ```
 
-### Option B: Docker
+### Option D: Docker
 
 ```bash
-docker build -t autobot:latest .
+docker pull ghcr.io/crystal-autobot/autobot:latest
 docker run --rm -it \
   -v ~/.config/autobot:/root/.config/autobot \
   -e ANTHROPIC_API_KEY=sk-ant-... \
-  autobot:latest gateway
+  ghcr.io/crystal-autobot/autobot:latest gateway
 ```
 
 ## 2. Create a new bot

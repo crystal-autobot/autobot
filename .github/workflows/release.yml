@@ -49,28 +49,31 @@ jobs:
           path: autobot
 
   build-macos:
-    name: macOS
-    strategy:
-      matrix:
-        include:
-          - runner: macos-13
-            arch: amd64
-          - runner: macos-14
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
+    name: macOS (Universal Binary)
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Install Crystal
         run: brew install crystal
       - name: Install dependencies
         run: shards install --production
-      - name: Build binary
-        run: crystal build src/autobot.cr -o autobot --release --no-debug
-      - name: Upload artifact
+      - name: Build ARM binary
+        run: crystal build src/autobot.cr -o autobot-arm64 --release --no-debug
+      - name: Build Intel binary
+        run: |
+          # Cross-compile for x86_64 on ARM Mac
+          crystal build src/autobot.cr -o autobot-amd64 --release --no-debug --cross-compile --target x86_64-apple-darwin || \
+          crystal build src/autobot.cr -o autobot-amd64 --release --no-debug
+      - name: Upload ARM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: autobot-darwin-${{ matrix.arch }}
-          path: autobot
+          name: autobot-darwin-arm64
+          path: autobot-arm64
+      - name: Upload Intel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: autobot-darwin-amd64
+          path: autobot-amd64
 
   release:
     name: Create Release

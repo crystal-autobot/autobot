@@ -55,12 +55,22 @@ Autobot uses **kernel-enforced sandboxing** via Docker or bubblewrap — not app
 ### 1. Install
 
 ```bash
-# From source
+# macOS (Homebrew)
+brew tap crystal-autobot/tap
+brew install autobot
+
+# Linux/macOS - Download binary
+curl -L https://github.com/crystal-autobot/autobot/releases/latest/download/autobot-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m) -o autobot
+chmod +x autobot
+sudo mv autobot /usr/local/bin/
+
+# Or build from source
 git clone https://github.com/crystal-autobot/autobot.git
 cd autobot
-sudo make install
+make release
+sudo install -m 0755 bin/autobot /usr/local/bin/autobot
 
-# Or with Docker (multi-arch: amd64, arm64)
+# Or use Docker (multi-arch: amd64, arm64)
 docker pull ghcr.io/crystal-autobot/autobot:latest
 ```
 
