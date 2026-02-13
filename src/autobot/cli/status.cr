@@ -72,7 +72,7 @@ module Autobot
             end
           end
         else
-          puts "\nRun 'autobot onboard' to initialize."
+          puts "\nRun 'autobot new <name>' to create a bot."
         end
       end
     end

@@ -46,8 +46,6 @@ module Autobot
           print_help
         when "new"
           handle_new_command(options)
-        when "onboard"
-          Onboard.run(options[:config_path])
         when "doctor"
           Doctor.run(options[:config_path], options[:strict])
         when "agent"
@@ -231,7 +229,6 @@ module Autobot
         puts "Usage: autobot <command> [options]\n\n"
         puts "Commands:"
         puts "  new       Create a new bot in a directory (e.g., autobot new optimus)"
-        puts "  onboard   Initialize configuration in current directory"
         puts "  doctor    Check configuration and security (use --strict for warnings as errors)"
         puts "  agent     Interact with the agent (single message or interactive)"
         puts "  gateway   Start the gateway server"
@@ -263,7 +260,6 @@ module Autobot
         puts "  -f, --force          Force run (even if disabled)\n\n"
         puts "Examples:"
         puts "  autobot new optimus      # create new bot"
-        puts "  autobot onboard          # initialize current dir"
         puts "  autobot doctor           # check configuration"
         puts "  autobot doctor --strict  # fail on warnings"
         puts "  autobot agent -m \"Hello!\""

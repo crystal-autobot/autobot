@@ -45,7 +45,7 @@ module Autobot
         # Config file exists
         unless File.exists?(config_file)
           report(Status::Fail, "Config file not found")
-          hint("Run 'autobot onboard' to create one")
+          hint("Run 'autobot new <name>' to create a bot")
           print_summary(1, 0, strict)
           exit 1
         end
@@ -98,7 +98,7 @@ module Autobot
       def self.check_env_file(env_file : Path, errors : Int32, warnings : Int32) : Tuple(Int32, Int32)
         unless File.exists?(env_file)
           report(Status::Warn, ".env file not found")
-          hint("Run 'autobot onboard' to create one")
+          hint("Run 'autobot new <name>' to create a bot")
           return {errors, warnings + 1}
         end
         report(Status::Pass, ".env file found")

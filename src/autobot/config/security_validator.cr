@@ -83,7 +83,7 @@ module Autobot::Config
         issues << Issue.new(
           severity: Severity::Warning,
           message: ".env file not found at #{env_path}. " \
-                   "Create one to store API keys securely (use 'autobot onboard' to generate)."
+                   "Create one to store API keys securely (use 'autobot new <name>' to generate)."
         )
         return issues
       end

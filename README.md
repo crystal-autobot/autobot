@@ -64,45 +64,54 @@ sudo make install
 docker pull ghcr.io/crystal-autobot/autobot:latest
 ```
 
-### 2. Initialize
+### 2. Create a new bot
 
 ```bash
-autobot onboard
+autobot new optimus
+cd optimus
 ```
 
-Creates `~/.config/autobot/` with config, workspace, sessions, skills, and logs.
+This creates an `optimus/` directory with everything you need:
+
+```
+optimus/
+├── .env              # API keys (add yours here)
+├── .gitignore        # Excludes secrets, sessions, logs
+├── config.yml        # Configuration (references .env vars)
+├── sessions/         # Conversation history
+├── logs/             # Application logs
+└── workspace/        # Sandboxed LLM workspace
+    ├── AGENTS.md     # Agent instructions
+    ├── SOUL.md       # Personality definition
+    ├── USER.md       # User preferences
+    ├── memory/       # Long-term memory
+    └── skills/       # Custom skills
+```
 
 ### 3. Configure
 
-Edit `~/.config/autobot/config.yml`:
+Edit `.env` and add your API keys:
 
-```yaml
-providers:
-  anthropic:
-    api_key: "${ANTHROPIC_API_KEY}"
-
-channels:
-  telegram:
-    enabled: true
-    token: "YOUR_BOT_TOKEN"
-    allow_from: ["your_username"]
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+The generated `config.yml` references these via `${ENV_VAR}` — no secrets in config files.
 
 ### 4. Run
 
 ```bash
+# Validate configuration
+autobot doctor
+
 # Interactive mode
 autobot agent
 
-# Gateway (all channels)
-autobot gateway
-# ✓ Plugins: 5 loaded
-# ✓ Tools: 12 registered
-# ✓ Sandbox: docker (container isolation)
-# ✓ Gateway ready
-
 # Single command
 autobot agent -m "Summarize this project"
+
+# Gateway (all channels)
+autobot gateway
 ```
 
 Autobot automatically detects and logs the sandbox method on startup — Docker on macOS/production, bubblewrap on Linux.
@@ -117,10 +126,8 @@ Autobot automatically detects and logs the sandbox method on startup — Docker 
 | [Configuration](docs/configuration.md) | Complete config reference |
 | [Security](docs/security.md) | Security model and best practices |
 | [Deployment](docs/deployment.md) | Production deployment with proper user/permissions |
-| [CLI Reference](docs/cli.md) | All commands and options |
 | [Architecture](docs/architecture.md) | System design and components |
 | [Plugins](docs/plugins.md) | Building and using plugins |
-| [Examples](docs/examples.md) | Use cases and code samples |
 | [Development](docs/development.md) | Contributing and local setup |
 
 ## 💡 Examples
@@ -192,8 +199,6 @@ agents:
 ```
 
 </details>
-
-**→ [More Examples](docs/examples.md)**
 
 ## 🔧 Development
 

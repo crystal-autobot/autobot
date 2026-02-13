@@ -292,7 +292,7 @@ Create a system user for Autobot:
 ```bash
 # Linux
 sudo useradd -r -m -d /var/lib/autobot -s /bin/bash autobot
-sudo -u autobot autobot onboard
+sudo -u autobot autobot new optimus
 
 # macOS
 sudo dscl . -create /Users/autobot
@@ -384,7 +384,6 @@ sudo tail -f /var/log/nginx/autobot_error.log
 ### Commands
 ```bash
 autobot new optimus              # Create new bot
-autobot onboard                  # Initialize current dir
 autobot doctor                   # Validate config
 autobot doctor --strict          # Strict validation
 autobot gateway                  # Start gateway
