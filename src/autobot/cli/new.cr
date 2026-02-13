@@ -148,8 +148,11 @@ module Autobot
 
       # Prints success message with next steps
       private def self.print_success_message(name : String, interactive : Bool)
-        puts "\n✅ Bot '#{name}' created successfully!"
-        puts "\nNext steps:"
+        puts ""
+        puts "━" * 50
+        puts "✅ Bot '#{name}' created successfully!"
+        puts ""
+        puts "Next steps:"
         puts "  cd #{name}"
 
         unless interactive
@@ -158,6 +161,7 @@ module Autobot
 
         puts "  autobot doctor    # Verify configuration"
         puts "  autobot gateway   # Start the bot"
+        puts ""
       end
     end
   end

@@ -60,27 +60,22 @@ module Autobot
         config
       end
 
-      # Prints fancy setup header
+      # Prints setup header
       private def self.print_header
+        puts CLI::LOGO
         puts ""
-        puts "  ╔═══════════════════════════════════════════════╗"
-        puts "  ║                                               ║"
-        puts "  ║         🤖  Autobot Interactive Setup         ║"
-        puts "  ║                                               ║"
-        puts "  ╚═══════════════════════════════════════════════╝"
       end
 
       # Prompts user to select an LLM provider
       private def self.prompt_provider : String
-        puts "\n┌─ Step 1/3: LLM Provider"
-        puts "│"
+        puts "\n[1/3] LLM Provider"
+        puts ""
         PROVIDERS.each_with_index do |(key, name), index|
-          puts "│  #{index + 1}. #{name}"
+          puts "  #{index + 1}. #{name}"
         end
-        puts "└─"
 
         loop do
-          print "\n  → Choice (1-#{PROVIDERS.size}): "
+          print "\n→ Choice (1-#{PROVIDERS.size}): "
           input = STDIN.gets.try(&.strip)
           next unless input
 
@@ -88,24 +83,22 @@ module Autobot
             if choice >= 1 && choice <= PROVIDERS.size
               provider_key = PROVIDERS.keys[choice - 1]
               provider_name = PROVIDERS[provider_key]
-              puts "  ✓ Selected: #{provider_name}\n"
+              puts "✓ #{provider_name}\n"
               return provider_key
             end
           end
 
-          puts "  ✗ Invalid choice. Please enter 1-#{PROVIDERS.size}."
+          puts "✗ Invalid choice. Please enter 1-#{PROVIDERS.size}."
         end
       end
 
       # Prompts user for API key with hidden input
       private def self.prompt_api_key(provider : String) : String
         provider_name = PROVIDERS[provider]
-        puts "┌─ Step 2/3: API Key"
-        puts "│"
-        puts "│  Enter your #{provider_name} API key"
-        puts "│  (input will be hidden)"
-        puts "└─"
-        print "\n  → API Key: "
+        puts "[2/3] API Key"
+        puts ""
+        puts "Enter your #{provider_name} API key (input hidden):"
+        print "→ "
 
         # Hide input for security
         system("stty -echo") rescue nil
@@ -115,26 +108,25 @@ module Autobot
         puts # Newline after hidden input
 
         if api_key.empty?
-          puts "  ⚠  Warning: No API key provided. You'll need to add it to .env later.\n"
+          puts "⚠  No API key provided. Add it to .env later.\n"
           return ""
         end
 
-        puts "  ✓ API key saved\n"
+        puts "✓ API key saved\n"
         api_key
       end
 
       # Prompts user to select chat channels
       private def self.prompt_channels : Array(String)
-        puts "┌─ Step 3/3: Chat Channels (optional)"
-        puts "│"
-        puts "│  0. None (CLI only)"
+        puts "[3/3] Chat Channels (optional)"
+        puts ""
+        puts "  0. None (CLI only)"
         CHANNELS.each_with_index do |(key, name), index|
-          puts "│  #{index + 1}. #{name}"
+          puts "  #{index + 1}. #{name}"
         end
-        puts "│"
-        puts "│  Enter numbers separated by spaces (e.g., '1 2' for multiple)"
-        puts "└─"
-        print "\n  → Channels [0]: "
+        puts ""
+        puts "Enter numbers separated by spaces (e.g., '1 2' for multiple):"
+        print "→ "
 
         input = STDIN.gets.try(&.strip) || "0"
         selected = [] of String
@@ -149,9 +141,9 @@ module Autobot
         end
 
         if selected.empty?
-          puts "  ✓ CLI only mode\n"
+          puts "✓ CLI only\n"
         else
-          puts "  ✓ Selected: #{selected.map { |channel_key| CHANNELS[channel_key] }.join(", ")}\n"
+          puts "✓ #{selected.map { |channel_key| CHANNELS[channel_key] }.join(", ")}\n"
         end
 
         selected
@@ -161,29 +153,29 @@ module Autobot
       private def self.prompt_channel_config(channel : String, config : Configuration)
         case channel
         when "telegram"
-          puts "┌─ Telegram Configuration"
-          puts "│"
-          print "│  Bot Token: "
+          puts "━" * 50
+          puts "Telegram Configuration"
+          puts ""
+          print "  Bot Token: "
           config.telegram_token = STDIN.gets.try(&.strip) || ""
-          puts "└─"
-          puts "  ✓ Telegram configured\n"
+          puts "  ✓ Configured\n"
         when "slack"
-          puts "┌─ Slack Configuration"
-          puts "│"
-          print "│  Bot Token (xoxb-...): "
+          puts "━" * 50
+          puts "Slack Configuration"
+          puts ""
+          print "  Bot Token (xoxb-...): "
           config.slack_bot_token = STDIN.gets.try(&.strip) || ""
-          print "│  App Token (xapp-...): "
+          print "  App Token (xapp-...): "
           config.slack_app_token = STDIN.gets.try(&.strip) || ""
-          puts "└─"
-          puts "  ✓ Slack configured\n"
+          puts "  ✓ Configured\n"
         when "whatsapp"
-          puts "┌─ WhatsApp Configuration"
-          puts "│"
-          print "│  Bridge URL [ws://localhost:3001]: "
+          puts "━" * 50
+          puts "WhatsApp Configuration"
+          puts ""
+          print "  Bridge URL [ws://localhost:3001]: "
           url = STDIN.gets.try(&.strip) || ""
           config.whatsapp_bridge_url = url.empty? ? "ws://localhost:3001" : url
-          puts "└─"
-          puts "  ✓ WhatsApp configured\n"
+          puts "  ✓ Configured\n"
         end
       end
     end

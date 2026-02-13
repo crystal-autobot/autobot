@@ -24,17 +24,8 @@ module Autobot
         Log.info { "Using provider: #{provider_name}, model: #{config.default_model}" }
 
         bus = Bus::MessageBus.new
-        tool_registry = Tools::Registry.new
         session_manager = Session::Manager.new(config.workspace_path)
-
-        # Load plugins
-        plugin_registry = Plugins::Registry.new
-        plugin_context = Plugins::PluginContext.new(
-          config: config,
-          tool_registry: tool_registry,
-          workspace: config.workspace_path
-        )
-        Plugins::Loader.load_all(plugin_registry, plugin_context)
+        tool_registry, plugin_registry = SetupHelper.setup_tools(config)
 
         if message
           run_single(config, bus, tool_registry, session_manager, session_id, message, markdown)
