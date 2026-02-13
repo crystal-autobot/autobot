@@ -86,8 +86,9 @@ jobs:
             ls -la "$dir" || echo "Directory empty or missing"
             platform=$(basename "$dir")
             if [ -f "$dir/autobot" ]; then
+              # Ensure binary is executable before copying/tarball
+              chmod +x "$dir/autobot"
               cp "$dir/autobot" "release/$platform"
-              chmod +x "release/$platform"
               # Create tarball for Homebrew
               tar czf "release/$platform.tar.gz" -C "$dir" autobot
             else
