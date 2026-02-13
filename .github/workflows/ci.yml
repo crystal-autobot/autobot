@@ -43,7 +43,7 @@ jobs:
 
       - name: Build static binary
         run: |
-          crystal build src/autobot.cr -o autobot --release --no-debug --static
+          crystal build src/main.cr -o autobot --release --no-debug --static
           strip autobot
 
       - name: Verify binary

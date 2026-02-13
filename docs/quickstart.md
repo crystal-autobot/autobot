@@ -13,7 +13,7 @@ brew install autobot
 
 ```bash
 # Automatic detection (Linux/macOS)
-curl -L https://github.com/crystal-autobot/autobot/releases/latest/download/autobot-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m) -o autobot
+curl -L "https://github.com/crystal-autobot/autobot/releases/latest/download/autobot-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)" -o autobot
 chmod +x autobot
 sudo mv autobot /usr/local/bin/
 

@@ -21,7 +21,7 @@ jobs:
         run: shards install --production
       - name: Build static binary
         run: |
-          crystal build src/autobot.cr -o autobot --release --no-debug --static
+          crystal build src/main.cr -o autobot --release --no-debug --static
           strip autobot
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -41,7 +41,7 @@ jobs:
           docker run --rm --platform linux/arm64 \
             -v $PWD:/src -w /src \
             crystallang/crystal:latest-alpine \
-            sh -c "shards install --production && crystal build src/autobot.cr -o autobot --release --no-debug --static && strip autobot"
+            sh -c "shards install --production && crystal build src/main.cr -o autobot --release --no-debug --static && strip autobot"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -59,7 +59,7 @@ jobs:
         run: shards install --production
       - name: Build binary
         run: |
-          crystal build src/autobot.cr -o autobot --release --no-debug
+          crystal build src/main.cr -o autobot --release --no-debug
           strip autobot
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -139,13 +139,13 @@ jobs:
           echo "Updating formula to version $VERSION with SHA256 $ARM64_SHA256"
 
           # 1. Update version line: version "X.Y.Z" -> version "$VERSION"
-          sed -i '' "s/version \".*\"/version \"$VERSION\"/" autobot.rb
+          sed -i "s/version \".*\"/version \"$VERSION\"/" autobot.rb
 
           # 2. Update download URL: vX.Y.Z/autobot-darwin-arm64.tar.gz -> v$VERSION/autobot-darwin-arm64.tar.gz
-          sed -i '' "s|download/v[0-9.]*/autobot-darwin-arm64.tar.gz|download/v$VERSION/autobot-darwin-arm64.tar.gz|" autobot.rb
+          sed -i "s|download/v[0-9.]*/autobot-darwin-arm64.tar.gz|download/v$VERSION/autobot-darwin-arm64.tar.gz|" autobot.rb
 
           # 3. Update SHA256 checksum in the on_arm block
-          sed -i '' "/on_arm/,/end/ s/sha256 \"[^\"]*\"/sha256 \"$ARM64_SHA256\"/" autobot.rb
+          sed -i "/on_arm/,/end/ s/sha256 \"[^\"]*\"/sha256 \"$ARM64_SHA256\"/" autobot.rb
 
           echo "Formula updated:"
           git diff autobot.rb
