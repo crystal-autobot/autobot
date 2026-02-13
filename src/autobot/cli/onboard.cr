@@ -124,7 +124,7 @@ module Autobot
             allow_from: []  # Add Telegram user IDs to enable
 
         tools:
-          restrict_to_workspace: true
+          sandbox: "auto"  # auto|bubblewrap|docker|none
           exec:
             timeout: 60
             full_shell_access: false
@@ -138,8 +138,16 @@ module Autobot
         File.chmod(config_file, 0o600)
         puts "✓ Created config at #{config_file}"
 
-        # Initialize directories
-        Config::Loader.init_dirs
+        # Initialize data directories relative to base_dir
+        is_local = base_dir != Config::Loader::GLOBAL_CONFIG_PATH.parent
+        if is_local
+          {"sessions", "logs"}.each do |dir|
+            dir_path = base_dir / dir
+            Dir.mkdir_p(dir_path) unless Dir.exists?(dir_path)
+          end
+        else
+          Config::Loader.init_dirs
+        end
         puts "✓ Created data directories"
 
         # Parse config to get workspace path

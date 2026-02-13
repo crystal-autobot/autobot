@@ -13,13 +13,13 @@ module Autobot::Config
     PROJECT_CONFIG_PATH = Path["config.yml"]
 
     # Load configuration with proper precedence
-    def self.load(config_path : String? = nil) : Config
+    def self.load(config_path : String? = nil, *, validate : Bool = true) : Config
       path = resolve_config_path(config_path)
 
       if path && File.exists?(path)
         # Load .env file first (if exists)
         load_env_file(path.parent)
-        load_from_file(path)
+        load_from_file(path, validate: validate)
       else
         Log.info { "No config file found, using defaults" }
         # Return minimal default config
@@ -150,12 +150,12 @@ module Autobot::Config
     end
 
     # Load configuration from YAML file
-    private def self.load_from_file(path : Path) : Config
+    private def self.load_from_file(path : Path, *, validate : Bool = true) : Config
       content = File.read(path)
       # Expand environment variables in format ${VAR} or $VAR
       expanded = expand_env_vars(content)
       config = Config.from_yaml(expanded)
-      config.validate!
+      config.validate! if validate
       config
     rescue ex : YAML::ParseException
       Log.error { "Failed to parse config file #{path}: #{ex.message}" }

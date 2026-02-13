@@ -1,6 +1,7 @@
 require "log"
 require "../constants"
 require "../config/env"
+require "./sandbox"
 
 module Autobot
   module Tools
@@ -12,24 +13,7 @@ module Autobot
       MAX_OUTPUT_SIZE     = 10_000
       SIGNAL_GRACE_PERIOD = 0.5.seconds
 
-      # Path validation patterns
-      DIR_CHANGE_PATTERN          = /\b(cd|chdir|pushd|popd)\b/
-      BARE_DOTDOT_PATTERN         = /(?:^|[\s|>&<;])\.\.(?:[\s|>&<;]|$)/
-      UNQUOTED_TILDE_PATTERN      = /(?:^|[\s|>])~/
-      UNQUOTED_ABSOLUTE_PATH      = /(?:^|[\s|><&;])([~\/][^\s"'|>&<;]*)/
-      DOUBLE_QUOTED_ABSOLUTE_PATH = /"([~\/][^"]+)"/
-      SINGLE_QUOTED_ABSOLUTE_PATH = /'([~\/][^']+)'/
-      UNQUOTED_RELATIVE_PATH      = /(?:^|[\s|>])([^\s"'|>&]*\.\.\/[^\s"'|>&]*)/
-      DOUBLE_QUOTED_RELATIVE_PATH = /"([^"]*\.\.\/[^"]*)"/
-      SINGLE_QUOTED_RELATIVE_PATH = /'([^']*\.\.\/[^']*)'/
-      # Pattern to match any path-like argument (contains /)
-      PATH_LIKE_ARGUMENT = /(?:^|[\s|>])([^\s"'|>&<;-][^\s"'|>&<;]*\/[^\s"'|>&<;]*)/
-
-      # Shell feature patterns (for restricted mode without full_shell_access)
-      OUTPUT_REDIRECT_PATTERN     = />\s*\S/
-      INPUT_REDIRECT_PATTERN      = /<\s*\S/
-      VARIABLE_ASSIGNMENT_PATTERN = /[A-Z_]\w*=/
-
+      # Deny patterns for dangerous operations (defense-in-depth)
       DEFAULT_DENY_PATTERNS = [
         # Link operations (symlinks and hardlinks can escape workspace)
         /\bln\s+/i,           # ln command (symlinks and hardlinks)
@@ -89,29 +73,29 @@ module Autobot
         /\bltrace\s+/i, # library call tracer
       ]
 
+      # Shell feature patterns (for restricted mode without full_shell_access)
+      OUTPUT_REDIRECT_PATTERN = />\s*\S/
+      INPUT_REDIRECT_PATTERN  = /<\s*\S/
+      DIR_CHANGE_PATTERN      = /\b(cd|chdir|pushd|popd)\b/
+
       getter timeout : Int32
       getter working_dir : String?
       getter deny_patterns : Array(Regex)
       getter allow_patterns : Array(Regex)
-      getter? restrict_to_workspace : Bool
       getter? full_shell_access : Bool
+      getter sandbox_type : Sandbox::Type
 
       def initialize(
         @timeout = DEFAULT_TIMEOUT,
         @working_dir : String? = nil,
         @deny_patterns = DEFAULT_DENY_PATTERNS,
         @allow_patterns = [] of Regex,
-        @restrict_to_workspace = false,
         @full_shell_access = false,
+        sandbox_config : String = "auto",
       )
-        # Validate incompatible security settings
-        if @restrict_to_workspace && @full_shell_access
-          raise ArgumentError.new(
-            "Invalid configuration: restrict_to_workspace and full_shell_access are mutually exclusive. " \
-            "Workspace restrictions require simple commands (no shell features). " \
-            "For full shell access (pipes, redirects), disable workspace restrictions."
-          )
-        end
+        validate_config!(sandbox_config)
+        @sandbox_type = resolve_sandbox_type(sandbox_config)
+        ensure_sandbox_available!
       end
 
       def name : String
@@ -136,22 +120,22 @@ module Autobot
         command = params["command"].as_s
         user_cwd = params["working_dir"]?.try(&.as_s)
 
-        Log.debug { "ExecTool: restrict=#{@restrict_to_workspace}, working_dir=#{@working_dir.inspect}" }
+        Log.debug { "ExecTool: sandbox=#{@sandbox_type}, working_dir=#{@working_dir.inspect}" }
 
-        # Validate working directory when workspace restrictions are enabled
-        if @restrict_to_workspace && user_cwd
+        cwd = user_cwd || @working_dir || Dir.current
+
+        # Validate working directory is within workspace when sandboxed
+        if sandboxed? && user_cwd
           if error = validate_working_dir(user_cwd)
             return ToolResult.access_denied(error)
           end
         end
 
-        cwd = user_cwd || @working_dir || Dir.current
-
-        if error = guard_command(command, cwd)
+        if error = guard_command(command)
           return ToolResult.access_denied(error)
         end
 
-        Log.info { "Executing: #{command} (cwd: #{cwd})" }
+        Log.info { "Executing: #{command} (cwd: #{cwd}, sandbox: #{@sandbox_type})" }
 
         output = run_command(command, cwd)
         ToolResult.success(output)
@@ -160,6 +144,18 @@ module Autobot
       end
 
       private def run_command(command : String, cwd : String) : String
+        # Use sandbox when enabled
+        if sandboxed?
+          status, stdout_text, stderr_text = Sandbox.exec(command, Path[cwd], @timeout, MAX_OUTPUT_SIZE)
+          timed_out = status.exit_code == Sandbox::TIMEOUT_EXIT_CODE
+          build_command_result(stdout_text, stderr_text, status, timed_out)
+        else
+          # Direct execution (no sandbox) for dev/testing
+          run_command_direct(command, cwd)
+        end
+      end
+
+      private def run_command_direct(command : String, cwd : String) : String
         # Use pipes to prevent unbounded memory allocation
         stdout_read, stdout_write = IO.pipe
         stderr_read, stderr_write = IO.pipe
@@ -257,7 +253,7 @@ module Autobot
         end
       end
 
-      private def guard_command(command : String, cwd : String) : String?
+      private def guard_command(command : String) : String?
         cmd = command.strip
 
         # Always block .env file access
@@ -277,9 +273,15 @@ module Autobot
           end
         end
 
-        if @restrict_to_workspace
+        if sandboxed?
           # Block cd commands entirely - they change execution context
-          if error = check_directory_change(cmd)
+          if cmd.match(DIR_CHANGE_PATTERN)
+            return "Error: Directory change commands are blocked when sandboxed"
+          end
+
+          # Always block shell expansion when sandboxed
+          # Variables can be used to construct paths and commands dynamically
+          if error = check_shell_expansion(cmd)
             return error
           end
 
@@ -289,12 +291,22 @@ module Autobot
               return error
             end
           end
-
-          if error = check_path_traversal(cmd, cwd)
-            return error
-          end
         end
 
+        nil
+      end
+
+      private def check_shell_expansion(command : String) : String?
+        # Block dangerous shell expansion that could bypass sandbox
+        return "Error: Shell expansion detected - $HOME not allowed" if command.includes?("$HOME")
+        return "Error: Shell expansion detected - ${} not allowed" if command.includes?("${")
+        return "Error: Shell expansion detected - $USER not allowed" if command.includes?("$USER")
+        return "Error: Shell expansion detected - $PATH not allowed" if command.includes?("$PATH")
+        return "Error: Shell expansion detected - backticks not allowed" if command.includes?("`")
+        return "Error: Shell expansion detected - $() not allowed" if command.includes?("$(")
+
+        # Block ALL variables when workspace restricted (they can bypass validation)
+        return "Error: Shell variables not allowed in restricted mode" if command.includes?("$")
         nil
       end
 
@@ -307,201 +319,66 @@ module Autobot
         nil
       end
 
+      private def validate_config!(sandbox_config : String) : Nil
+        # Check for mutually exclusive settings based on CONFIG, not detected availability
+        sandbox_requested = sandbox_config.downcase != "none"
+
+        if sandbox_requested && @full_shell_access
+          raise ArgumentError.new(
+            "Invalid configuration: sandbox and full_shell_access are mutually exclusive. " \
+            "Sandboxing requires simple commands (no shell features). " \
+            "For full shell access (pipes, redirects), use sandbox: none."
+          )
+        end
+      end
+
+      private def resolve_sandbox_type(sandbox_config : String) : Sandbox::Type
+        case sandbox_config.downcase
+        when "bubblewrap"
+          Sandbox::Type::Bubblewrap
+        when "docker"
+          Sandbox::Type::Docker
+        when "none"
+          Sandbox::Type::None
+        when "auto"
+          Sandbox.detect
+        else
+          raise ArgumentError.new("Invalid sandbox config: #{sandbox_config}. Use 'auto', 'bubblewrap', 'docker', or 'none'")
+        end
+      end
+
+      private def ensure_sandbox_available! : Nil
+        # When sandbox is required (not none), verify it's actually available
+        if sandboxed? && @sandbox_type == Sandbox::Type::None
+          Sandbox.require_sandbox!
+        end
+      end
+
+      def sandboxed? : Bool
+        @sandbox_type != Sandbox::Type::None
+      end
+
       private def validate_working_dir(user_cwd : String) : String?
         working_dir = @working_dir
         return nil unless working_dir
 
-        workspace_real = resolve_workspace_path(working_dir)
-        return workspace_real if workspace_real.starts_with?("Error:")
+        workspace_real = begin
+          File.realpath(working_dir)
+        rescue
+          return "Error: Cannot resolve workspace path"
+        end
 
-        cwd_real = resolve_workspace_path(user_cwd)
-        return cwd_real if cwd_real.starts_with?("Error:")
+        cwd_real = begin
+          File.realpath(user_cwd)
+        rescue
+          return "Error: Cannot resolve working directory path"
+        end
 
         unless cwd_real.starts_with?(workspace_real + "/") || cwd_real == workspace_real
           return "SECURITY_ERROR: Working directory '#{user_cwd}' is outside workspace. Access denied."
         end
 
         nil
-      end
-
-      private def check_directory_change(command : String) : String?
-        if command.match(DIR_CHANGE_PATTERN)
-          return "Error: Directory change commands are blocked when workspace restrictions are enabled"
-        end
-        nil
-      end
-
-      private def check_path_traversal(command : String, cwd : String) : String?
-        workspace_real = resolve_workspace_path(cwd)
-        return workspace_real if workspace_real.starts_with?("Error:")
-
-        # Check for basic traversal patterns first
-        if has_traversal_pattern?(command)
-          return "SECURITY_ERROR: Path traversal detected - ../ sequences are blocked"
-        end
-
-        if has_encoded_traversal?(command)
-          return "SECURITY_ERROR: Encoded path traversal detected"
-        end
-
-        # Check shell expansion (but allow ~ in quoted strings as those are validated separately)
-        if has_unquoted_shell_expansion?(command)
-          return "SECURITY_ERROR: Shell expansion detected - use literal paths only"
-        end
-
-        validate_command_paths(command, workspace_real)
-      end
-
-      private def resolve_workspace_path(cwd : String) : String
-        File.realpath(cwd)
-      rescue
-        "Error: Cannot resolve workspace path"
-      end
-
-      private def has_traversal_pattern?(command : String) : Bool
-        return true if command.includes?("../")
-        return true if command.includes?("..\\")
-        return true if command.match(BARE_DOTDOT_PATTERN)
-        false
-      end
-
-      private def has_encoded_traversal?(command : String) : Bool
-        command.includes?("%2e%2e") || command.includes?("%2E%2E")
-      end
-
-      private def has_unquoted_shell_expansion?(command : String) : Bool
-        # Always block these dangerous patterns
-        return true if command.includes?("$HOME")
-        return true if command.includes?("${")
-        return true if command.includes?("$USER")
-        return true if command.includes?("$PATH")
-        return true if command.includes?("`")
-        return true if command.includes?("$(")
-        return true if command.match(UNQUOTED_TILDE_PATTERN)
-
-        # When workspace restricted, ALWAYS block variables (they bypass path validation)
-        # full_shell_access only controls pipes/redirects, NOT variables
-        return true if command.includes?("$")
-        return true if command.match(VARIABLE_ASSIGNMENT_PATTERN)
-
-        false
-      end
-
-      private def validate_command_paths(command : String, workspace_real : String) : String?
-        # Check unquoted absolute/home paths
-        command.scan(UNQUOTED_ABSOLUTE_PATH) do |match|
-          path_str = match[1].strip
-          if error = validate_single_path(path_str, workspace_real)
-            return error
-          end
-        end
-
-        # Check double-quoted absolute/home paths
-        command.scan(DOUBLE_QUOTED_ABSOLUTE_PATH) do |match|
-          path_str = match[1].strip
-          if error = validate_single_path(path_str, workspace_real)
-            return error
-          end
-        end
-
-        # Check single-quoted absolute/home paths
-        command.scan(SINGLE_QUOTED_ABSOLUTE_PATH) do |match|
-          path_str = match[1].strip
-          if error = validate_single_path(path_str, workspace_real)
-            return error
-          end
-        end
-
-        # Check unquoted relative paths with ../
-        command.scan(UNQUOTED_RELATIVE_PATH) do |match|
-          path_str = match[1].strip
-          next if path_str.empty?
-          if error = validate_relative_path(path_str, workspace_real)
-            return error
-          end
-        end
-
-        # Check double-quoted relative paths
-        command.scan(DOUBLE_QUOTED_RELATIVE_PATH) do |match|
-          path_str = match[1].strip
-          if error = validate_relative_path(path_str, workspace_real)
-            return error
-          end
-        end
-
-        # Check single-quoted relative paths
-        command.scan(SINGLE_QUOTED_RELATIVE_PATH) do |match|
-          path_str = match[1].strip
-          if error = validate_relative_path(path_str, workspace_real)
-            return error
-          end
-        end
-
-        # SECURITY: Catch-all for any path-like arguments (containing /)
-        # This prevents bypasses via plain relative paths like "symlink/etc/passwd"
-        command.scan(PATH_LIKE_ARGUMENT) do |match|
-          path_str = match[1].strip
-          next if path_str.empty?
-          # Validate as relative path (will resolve and check workspace boundaries)
-          if error = validate_relative_path(path_str, workspace_real)
-            return error
-          end
-        end
-
-        nil
-      end
-
-      private def validate_relative_path(path_str : String, workspace_real : String) : String?
-        # Resolve relative path against workspace and validate
-        full_path = File.join(workspace_real, path_str)
-        real_path = resolve_real_path(full_path)
-
-        unless real_path.starts_with?(workspace_real + "/") || real_path == workspace_real
-          return "Error: Path '#{path_str}' resolves outside workspace"
-        end
-
-        nil
-      rescue
-        "Error: Cannot validate path '#{path_str}'"
-      end
-
-      private def validate_single_path(path_str : String, workspace_real : String) : String?
-        expanded = Path[path_str].expand(home: true).to_s
-        real_path = resolve_real_path(expanded)
-
-        unless real_path.starts_with?(workspace_real + "/") || real_path == workspace_real
-          return "SECURITY_ERROR: Access denied - path '#{path_str}' is outside workspace. Workspace restrictions are enabled. Only files within workspace are accessible."
-        end
-
-        nil
-      rescue
-        "SECURITY_ERROR: Cannot validate path '#{path_str}' - access denied for security"
-      end
-
-      private def resolve_real_path(expanded : String) : String
-        # If the full path exists, resolve it (follows symlinks)
-        return File.realpath(expanded) if File.exists?(expanded) || Dir.exists?(expanded)
-
-        # Path doesn't exist - walk up directory tree to find existing parent
-        # and resolve it (to catch symlinks in parent directories)
-        current_path = expanded
-        loop do
-          parent = File.dirname(current_path)
-          break if parent == current_path || parent == "/" || parent == "."
-
-          if File.exists?(parent) || Dir.exists?(parent)
-            # Found existing parent - resolve it (follows symlinks!)
-            real_parent = File.realpath(parent)
-            # Append the non-existing suffix
-            suffix = expanded[parent.size..-1].lstrip('/')
-            return File.join(real_parent, suffix)
-          end
-
-          current_path = parent
-        end
-
-        # No existing parent found - return as-is
-        expanded
       end
     end
   end

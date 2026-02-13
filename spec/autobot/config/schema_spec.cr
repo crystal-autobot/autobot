@@ -88,12 +88,12 @@ describe Autobot::Config::Config do
       tools:
         exec:
           timeout: 120
-        restrict_to_workspace: true
+        sandbox: "bubblewrap"
       YAML
 
       config = Autobot::Config::Config.from_yaml(yaml)
       config.tools.try(&.exec.try(&.timeout)).should eq(120)
-      config.tools.try(&.restrict_to_workspace?).should be_true
+      config.tools.try(&.sandbox).should eq("bubblewrap")
     end
   end
 

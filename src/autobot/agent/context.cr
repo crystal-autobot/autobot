@@ -17,9 +17,9 @@ module Autobot::Agent
       @workspace : Path
       @memory : MemoryStore
       @skills : SkillsLoader
-      @restrict_to_workspace : Bool
+      @sandboxed : Bool
 
-      def initialize(@workspace : Path, @restrict_to_workspace : Bool = false)
+      def initialize(@workspace : Path, @sandboxed : Bool = false)
         @memory = MemoryStore.new(@workspace)
         @skills = SkillsLoader.new(@workspace)
       end
@@ -154,17 +154,17 @@ module Autobot::Agent
       end
 
       private def build_security_policy(workspace_path : String) : String
-        return "" unless @restrict_to_workspace
+        return "" unless @sandboxed
 
         <<-POLICY
 
 
         ## Security Policy
-        Workspace restrictions are ENABLED. All file and command operations are restricted to: #{workspace_path}
+        Sandboxing is ENABLED. All file and command operations are restricted to: #{workspace_path}
 
         When a tool returns "ACCESS DENIED" or mentions paths "outside workspace":
         1. The system blocked the operation for security reasons
-        2. Inform the user clearly: "I cannot access that resource - workspace security restricts me to #{workspace_path}"
+        2. Inform the user clearly: "I cannot access that resource - sandboxing restricts me to #{workspace_path}"
         3. Explain what restriction was triggered (file outside workspace, dangerous command, etc.)
         4. These blocks are FINAL - do not attempt workarounds or suggest alternatives that bypass restrictions
 

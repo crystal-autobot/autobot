@@ -37,7 +37,7 @@ describe Autobot::Tools::ExecTool do
   end
 
   it "captures stderr" do
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     result = tool.execute({"command" => JSON::Any.new("echo err >&2")})
     result.success?.should be_true
     result.content.should contain("STDERR")
@@ -65,12 +65,14 @@ describe Autobot::Tools::ExecTool do
     FileUtils.rm_rf(tmp) if tmp
   end
 
-  it "restricts path traversal in workspace mode" do
-    tool = Autobot::Tools::ExecTool.new(restrict_to_workspace: true, working_dir: "/tmp")
-    result = tool.execute({"command" => JSON::Any.new("cat ../../etc/passwd")})
-    result.access_denied?.should be_true
-    lower = result.content.downcase
-    (lower.includes?("path traversal") || lower.includes?("blocked")).should be_true
+  it "rejects sandbox with full_shell_access" do
+    # When sandboxed with full_shell_access, should raise error
+    expect_raises(ArgumentError, /sandbox and full_shell_access are mutually exclusive/) do
+      Autobot::Tools::ExecTool.new(
+        full_shell_access: true,
+        sandbox_config: "auto"
+      )
+    end
   end
 
   it "has correct tool metadata" do
@@ -80,71 +82,46 @@ describe Autobot::Tools::ExecTool do
     tool.parameters.required.should eq(["command"])
   end
 
-  describe "symlink attack prevention" do
+  describe "deny patterns (defense-in-depth)" do
     it "blocks ln -s (symlink creation)" do
-      tool = Autobot::Tools::ExecTool.new(restrict_to_workspace: true)
+      tool = Autobot::Tools::ExecTool.new
       result = tool.execute({"command" => JSON::Any.new("ln -s / rootlink")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks ln (hardlink creation)" do
-      tool = Autobot::Tools::ExecTool.new(restrict_to_workspace: true)
+      tool = Autobot::Tools::ExecTool.new
       result = tool.execute({"command" => JSON::Any.new("ln /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks cp -l (hardlink via cp)" do
-      tool = Autobot::Tools::ExecTool.new(restrict_to_workspace: true)
+      tool = Autobot::Tools::ExecTool.new
       result = tool.execute({"command" => JSON::Any.new("cp -l /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks cp --link" do
-      tool = Autobot::Tools::ExecTool.new(restrict_to_workspace: true)
+      tool = Autobot::Tools::ExecTool.new
       result = tool.execute({"command" => JSON::Any.new("cp --link /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
   end
 
-  describe "path validation security" do
-    it "blocks bare root path /" do
-      tool = Autobot::Tools::ExecTool.new(restrict_to_workspace: true, working_dir: "/tmp")
-      result = tool.execute({"command" => JSON::Any.new("ls /")})
-      result.access_denied?.should be_true
-      result.content.should contain("outside workspace")
+  describe "sandbox integration" do
+    it "allows none sandbox" do
+      tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
+      tool.sandbox_type.should eq(Autobot::Tools::Sandbox::Type::None)
     end
 
-    it "blocks plain relative paths pointing outside workspace" do
-      tmp = TestHelper.tmp_dir
-      # Create a subdirectory to test from
-      subdir = File.join(tmp, "subdir")
-      Dir.mkdir(subdir)
-
-      tool = Autobot::Tools::ExecTool.new(restrict_to_workspace: true, working_dir: subdir)
-
-      # Try to access parent directory via relative path
-      # This is blocked by BARE_DOTDOT_PATTERN check
-      result = tool.execute({"command" => JSON::Any.new("cat ../test.txt")})
-      result.access_denied?.should be_true
-      result.content.downcase.should contain("path traversal")
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
-    end
-
-    it "blocks absolute paths outside workspace" do
-      tmp = TestHelper.tmp_dir
-      tool = Autobot::Tools::ExecTool.new(restrict_to_workspace: true, working_dir: tmp.to_s)
-
-      # Test absolute paths outside workspace
-      result = tool.execute({"command" => JSON::Any.new("cat /etc/passwd")})
-      result.access_denied?.should be_true
-      result.content.downcase.should contain("security")
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
+    it "detects available sandbox type with auto config" do
+      tool = Autobot::Tools::ExecTool.new(sandbox_config: "auto")
+      # Should detect bubblewrap, docker, or none based on system
+      tool.sandbox_type.should_not be_nil
     end
   end
 end

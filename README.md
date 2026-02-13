@@ -16,8 +16,22 @@ Compiled binary • Multi-provider LLM • Chat integrations • Plugin system
 |------|-----|
 | **🎯 Token Efficient** | Structured tool results • Memory consolidation • Minimal context overhead • Session management |
 | **📊 Observable** | Status-based logging • Credential sanitization • Token tracking • Operation audit trails |
-| **🔒 Secure by Default** | Workspace sandboxing • SSRF protection • Command guards • Rate limiting • 0600 file permissions |
+| **🔒 Secure** | Docker/bubblewrap isolation • OS-level workspace restrictions • No manual path validation • SSRF protection • Command guards |
 | **⚡ Lightweight** | 2MB binary • <50MB Docker • Zero runtime deps • <100ms startup • Streaming I/O |
+
+### 🛡️ Production-Grade Security
+
+Autobot uses **kernel-enforced sandboxing** via Docker or bubblewrap — not application-level validation. When the LLM executes commands:
+
+- ✅ **Only workspace directory is accessible** (enforced by Linux mount namespaces)
+- ✅ **Everything else is invisible** to the LLM — your `/home`, `/etc`, system files simply don't exist in the sandbox
+- ✅ **No symlink exploits, TOCTOU, or path traversal** — kernel guarantees workspace isolation
+- ✅ **Process isolation** — LLM can't see or interact with host processes
+- ✅ **Auto-detected** — Uses Docker (macOS/production) or bubblewrap (Linux/dev)
+
+**Example:** When LLM tries `ls ../`, it fails at the OS level because parent directories aren't mounted. No regex patterns, no validation bypasses — just kernel namespaces.
+
+**→ [Security Architecture](docs/security.md)**
 
 ## ✨ Features
 
@@ -44,12 +58,12 @@ Compiled binary • Multi-provider LLM • Chat integrations • Plugin system
 
 ```bash
 # From source
-git clone https://github.com/veelenga/autobot.git
+git clone https://github.com/crystal-autobot/autobot.git
 cd autobot
-make install
+sudo make install
 
-# Or with Docker
-docker pull ghcr.io/veelenga/autobot:latest
+# Or with Docker (multi-arch: amd64, arm64)
+docker pull ghcr.io/crystal-autobot/autobot:latest
 ```
 
 ### 2. Initialize
@@ -84,10 +98,16 @@ autobot agent
 
 # Gateway (all channels)
 autobot gateway
+# ✓ Plugins: 5 loaded
+# ✓ Tools: 12 registered
+# ✓ Sandbox: docker (container isolation)
+# ✓ Gateway ready
 
 # Single command
 autobot agent -m "Summarize this project"
 ```
+
+Autobot automatically detects and logs the sandbox method on startup — Docker on macOS/production, bubblewrap on Linux.
 
 **→ [Full Quick Start Guide](docs/quickstart.md)**
 

@@ -4,6 +4,33 @@ Security-first deployment for Autobot with production-ready examples.
 
 ---
 
+## System Requirements
+
+**Sandboxing (required for workspace restrictions):**
+- **bubblewrap** (recommended for development/Pi):
+  ```bash
+  # Ubuntu/Debian
+  sudo apt install bubblewrap
+
+  # Fedora
+  sudo dnf install bubblewrap
+
+  # Arch
+  sudo pacman -S bubblewrap
+  ```
+
+- **Docker** (recommended for production):
+  ```bash
+  # Ubuntu/Debian
+  sudo apt install docker.io
+
+  # Others: https://docs.docker.com/engine/install/
+  ```
+
+**Note:** Autobot will fail to start if sandboxing is enabled (`tools.sandbox: auto/bubblewrap/docker`) but no sandbox tool is available.
+
+---
+
 ## Quick Start (Local)
 
 Create a new bot in seconds:
@@ -13,6 +40,11 @@ autobot new optimus
 cd optimus
 ```
 
+Install bubblewrap (required for workspace restrictions):
+```bash
+sudo apt install bubblewrap  # Ubuntu/Debian
+```
+
 Edit `.env` and add your API keys:
 ```bash
 vi .env  # Add ANTHROPIC_API_KEY=sk-ant-...
@@ -20,11 +52,11 @@ vi .env  # Add ANTHROPIC_API_KEY=sk-ant-...
 
 Validate and start:
 ```bash
-autobot doctor    # Check for issues
+autobot doctor    # Check for issues (validates sandbox availability)
 autobot gateway   # Start gateway
 ```
 
-✓ **Secure by default**: Workspace restrictions, localhost binding, .env protection, shell safety.
+✓ **Secure by default**: Kernel-enforced workspace sandbox, localhost binding, .env protection, shell safety.
 
 ---
 
@@ -69,6 +101,8 @@ services:
       - ./config.yml:/app/config.yml:ro
       - autobot-workspace:/app/workspace
       - autobot-sessions:/app/sessions
+      # Docker socket (for Docker-in-Docker sandbox)
+      - /var/run/docker.sock:/var/run/docker.sock
     tmpfs:
       - /tmp
     ports:
@@ -88,13 +122,19 @@ volumes:
   autobot-sessions:
 ```
 
+**Configuration for Docker deployment:**
+```yaml
+tools:
+  sandbox: "docker"  # Use Docker for sandboxing (auto-detects if not specified)
+```
+
 Start:
 ```bash
 docker-compose up -d
 docker-compose logs -f autobot
 ```
 
-**Security enabled**: Non-root user, read-only filesystem, no new privileges, localhost binding, resource limits.
+**Security enabled**: Non-root user, read-only filesystem, no new privileges, localhost binding, resource limits, Docker-based sandboxing.
 
 ---
 

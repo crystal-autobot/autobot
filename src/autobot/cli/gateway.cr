@@ -1,4 +1,5 @@
 require "../agent/loop"
+require "../tools/sandbox"
 
 module Autobot
   module CLI
@@ -82,10 +83,12 @@ module Autobot
       end
 
       private def self.setup_tools(config : Config::Config)
+        sandbox_config = config.tools.try(&.sandbox) || "auto"
+
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
-          restrict_exec_to_workspace: config.tools.try(&.restrict_to_workspace?) || true,
+          sandbox_config: sandbox_config,
           full_shell_access: config.tools.try(&.exec.try(&.full_shell_access?)) || false,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           skills_dirs: [
@@ -105,6 +108,7 @@ module Autobot
 
         puts "✓ Plugins: #{plugin_registry.size} loaded"
         puts "✓ Tools: #{tool_registry.size} registered"
+        log_sandbox_info(sandbox_config)
 
         {tool_registry, plugin_registry}
       end
@@ -158,7 +162,7 @@ module Autobot
         session_manager : Session::Manager,
         cron_service : Cron::Service,
       )
-        restrict_to_workspace = config.tools.try(&.restrict_to_workspace?) || true
+        sandbox_config = config.tools.try(&.sandbox) || "auto"
 
         Autobot::Agent::Loop.new(
           bus: bus,
@@ -172,8 +176,25 @@ module Autobot
           cron_service: cron_service,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
-          restrict_to_workspace: restrict_to_workspace
+          sandbox_config: sandbox_config
         )
+      end
+
+      private def self.log_sandbox_info(sandbox_config : String) : Nil
+        detected_type = Tools::Sandbox.detect
+
+        case detected_type
+        when Tools::Sandbox::Type::Bubblewrap
+          puts "✓ Sandbox: bubblewrap (kernel-enforced isolation)"
+        when Tools::Sandbox::Type::Docker
+          puts "✓ Sandbox: docker (container isolation)"
+        when Tools::Sandbox::Type::None
+          if sandbox_config.downcase == "none"
+            puts "⚠ Sandbox: disabled (direct execution, dev only)"
+          else
+            STDERR.puts "⚠️  Sandbox: unavailable (install bubblewrap or docker)"
+          end
+        end
       end
     end
   end
