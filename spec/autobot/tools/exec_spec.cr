@@ -2,35 +2,35 @@ require "../../spec_helper"
 
 describe Autobot::Tools::ExecTool do
   it "executes a simple command" do
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     result = tool.execute({"command" => JSON::Any.new("echo hello")})
     result.success?.should be_true
     result.content.strip.should eq("hello")
   end
 
   it "blocks dangerous rm -rf command" do
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     result = tool.execute({"command" => JSON::Any.new("rm -rf /")})
     result.access_denied?.should be_true
     result.content.should contain("Command blocked")
   end
 
   it "blocks fork bomb" do
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     result = tool.execute({"command" => JSON::Any.new(":(){ :|:& };:")})
     result.access_denied?.should be_true
     result.content.should contain("Command blocked")
   end
 
   it "blocks shutdown command" do
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     result = tool.execute({"command" => JSON::Any.new("shutdown now")})
     result.access_denied?.should be_true
     result.content.should contain("Command blocked")
   end
 
   it "blocks dd command" do
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     result = tool.execute({"command" => JSON::Any.new("dd if=/dev/zero of=/dev/sda")})
     result.access_denied?.should be_true
     result.content.should contain("Command blocked")
@@ -45,7 +45,7 @@ describe Autobot::Tools::ExecTool do
   end
 
   it "reports exit code for failed commands" do
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     result = tool.execute({"command" => JSON::Any.new("false")})
     result.success?.should be_true
     result.content.should contain("Exit code:")
@@ -53,7 +53,7 @@ describe Autobot::Tools::ExecTool do
 
   it "uses specified working directory" do
     tmp = TestHelper.tmp_dir
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     result = tool.execute({
       "command"     => JSON::Any.new("pwd"),
       "working_dir" => JSON::Any.new(tmp.to_s),
@@ -76,7 +76,7 @@ describe Autobot::Tools::ExecTool do
   end
 
   it "has correct tool metadata" do
-    tool = Autobot::Tools::ExecTool.new
+    tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
     tool.name.should eq("exec")
     tool.description.should_not be_empty
     tool.parameters.required.should eq(["command"])
@@ -84,28 +84,28 @@ describe Autobot::Tools::ExecTool do
 
   describe "deny patterns (defense-in-depth)" do
     it "blocks ln -s (symlink creation)" do
-      tool = Autobot::Tools::ExecTool.new
+      tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
       result = tool.execute({"command" => JSON::Any.new("ln -s / rootlink")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks ln (hardlink creation)" do
-      tool = Autobot::Tools::ExecTool.new
+      tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
       result = tool.execute({"command" => JSON::Any.new("ln /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks cp -l (hardlink via cp)" do
-      tool = Autobot::Tools::ExecTool.new
+      tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
       result = tool.execute({"command" => JSON::Any.new("cp -l /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks cp --link" do
-      tool = Autobot::Tools::ExecTool.new
+      tool = Autobot::Tools::ExecTool.new(sandbox_config: "none")
       result = tool.execute({"command" => JSON::Any.new("cp --link /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")

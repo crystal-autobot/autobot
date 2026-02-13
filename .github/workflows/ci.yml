@@ -15,11 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install bubblewrap for sandbox tests
-        run: |
-          apt-get update
-          apt-get install -y bubblewrap
-
       - name: Install dependencies
         run: shards install
 
