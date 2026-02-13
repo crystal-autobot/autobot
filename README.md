@@ -1,16 +1,12 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Autobot logo" width="800">
+  <img src="assets/banner-circuit-hex.svg" alt="crystal-autobot" width="100%">
 </p>
 
-# Autobot
+<p align="center"><b>Ultra-efficient personal AI assistant powered by Crystal</b></p>
 
-**Ultra-efficient personal AI assistant powered by Crystal**
-
-Compiled binary • Multi-provider LLM • Chat integrations • Plugin system
+<p align="center">Fast • Secure • Efficient</p>
 
 ## Why Autobot?
-
-**Production-grade AI automation** built with [Crystal](https://crystal-lang.org) — engineered for token efficiency, security, and reliability.
 
 | What | How |
 |------|-----|

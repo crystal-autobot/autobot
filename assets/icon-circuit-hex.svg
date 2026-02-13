@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="hbg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </radialGradient>
+    <radialGradient id="hexGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#06B6D4" stop-opacity="0.15"/>
+      <stop offset="60%" stop-color="#06B6D4" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#0F172A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hexStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="50%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="innerHex" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06B6D4" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="circuitLine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.4"/>
+    </linearGradient>
+    <filter id="hGlow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="nodeGlow">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="256" cy="256" r="256" fill="url(#hbg)"/>
+  <circle cx="256" cy="256" r="256" fill="url(#hexGlow)"/>
+
+  <!-- Outer hex (large, subtle) -->
+  <polygon points="256,66 421,162 421,350 256,446 91,350 91,162"
+           fill="none" stroke="#334155" stroke-width="1" opacity="0.3"/>
+
+  <!-- Middle hex -->
+  <polygon points="256,106 386,182 386,330 256,406 126,330 126,182"
+           fill="url(#innerHex)" stroke="url(#hexStroke)" stroke-width="2" opacity="0.8"/>
+
+  <!-- Inner hex (core) -->
+  <g filter="url(#hGlow)">
+    <polygon points="256,166 331,210 331,302 256,346 181,302 181,210"
+             fill="#06B6D4" fill-opacity="0.08" stroke="#22D3EE" stroke-width="2.5"/>
+  </g>
+
+  <!-- Innermost hex (bright core) -->
+  <polygon points="256,206 291,226 291,286 256,306 221,286 221,226"
+           fill="#06B6D4" fill-opacity="0.15" stroke="#67E8F9" stroke-width="1.5" opacity="0.9"/>
+
+  <!-- Center point -->
+  <g filter="url(#softGlow)">
+    <circle cx="256" cy="256" r="8" fill="#22D3EE" opacity="0.9"/>
+  </g>
+  <circle cx="256" cy="256" r="4" fill="#ECFEFF"/>
+
+  <!-- Circuit traces radiating from vertices -->
+  <g stroke="url(#circuitLine)" stroke-width="1.5" fill="none" stroke-linecap="round">
+    <!-- Top vertex outward -->
+    <path d="M256,166 L256,106 L256,80"/>
+    <path d="M256,106 L290,90"/>
+    <path d="M256,106 L222,90"/>
+
+    <!-- Top-right -->
+    <path d="M331,210 L386,182 L420,170"/>
+    <path d="M386,182 L400,150"/>
+
+    <!-- Bottom-right -->
+    <path d="M331,302 L386,330 L420,342"/>
+    <path d="M386,330 L400,362"/>
+
+    <!-- Bottom -->
+    <path d="M256,346 L256,406 L256,432"/>
+    <path d="M256,406 L290,422"/>
+    <path d="M256,406 L222,422"/>
+
+    <!-- Bottom-left -->
+    <path d="M181,302 L126,330 L92,342"/>
+    <path d="M126,330 L112,362"/>
+
+    <!-- Top-left -->
+    <path d="M181,210 L126,182 L92,170"/>
+    <path d="M126,182 L112,150"/>
+  </g>
+
+  <!-- Circuit nodes (endpoints) -->
+  <g filter="url(#nodeGlow)" opacity="0.5">
+    <circle cx="256" cy="80" r="5" fill="#22D3EE"/>
+    <circle cx="290" cy="90" r="4" fill="#3B82F6"/>
+    <circle cx="222" cy="90" r="4" fill="#3B82F6"/>
+    <circle cx="420" cy="170" r="5" fill="#22D3EE"/>
+    <circle cx="400" cy="150" r="4" fill="#8B5CF6"/>
+    <circle cx="420" cy="342" r="5" fill="#22D3EE"/>
+    <circle cx="400" cy="362" r="4" fill="#8B5CF6"/>
+    <circle cx="256" cy="432" r="5" fill="#22D3EE"/>
+    <circle cx="290" cy="422" r="4" fill="#3B82F6"/>
+    <circle cx="222" cy="422" r="4" fill="#3B82F6"/>
+    <circle cx="92" cy="342" r="5" fill="#22D3EE"/>
+    <circle cx="112" cy="362" r="4" fill="#8B5CF6"/>
+    <circle cx="92" cy="170" r="5" fill="#22D3EE"/>
+    <circle cx="112" cy="150" r="4" fill="#8B5CF6"/>
+  </g>
+  <!-- Sharp nodes on top -->
+  <g fill="#67E8F9">
+    <circle cx="256" cy="80" r="2.5"/>
+    <circle cx="420" cy="170" r="2.5"/>
+    <circle cx="420" cy="342" r="2.5"/>
+    <circle cx="256" cy="432" r="2.5"/>
+    <circle cx="92" cy="342" r="2.5"/>
+    <circle cx="92" cy="170" r="2.5"/>
+  </g>
+  <g fill="#93C5FD">
+    <circle cx="290" cy="90" r="2"/>
+    <circle cx="222" cy="90" r="2"/>
+    <circle cx="400" cy="150" r="2"/>
+    <circle cx="400" cy="362" r="2"/>
+    <circle cx="290" cy="422" r="2"/>
+    <circle cx="222" cy="422" r="2"/>
+    <circle cx="112" cy="362" r="2"/>
+    <circle cx="112" cy="150" r="2"/>
+  </g>
+
+  <!-- Hex vertex dots (on middle hex) -->
+  <g fill="#22D3EE" opacity="0.9">
+    <circle cx="256" cy="106" r="3.5"/>
+    <circle cx="386" cy="182" r="3.5"/>
+    <circle cx="386" cy="330" r="3.5"/>
+    <circle cx="256" cy="406" r="3.5"/>
+    <circle cx="126" cy="330" r="3.5"/>
+    <circle cx="126" cy="182" r="3.5"/>
+  </g>
+</svg>

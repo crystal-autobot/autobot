@@ -38,6 +38,13 @@ describe "Security Tests" do
   end
 
   describe "ExecTool sandbox enforcement" do
+    around_each do |example|
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      example.run
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
     it "allows sandbox: none without validation" do
       tool = Autobot::Tools::ExecTool.new(
         working_dir: "/tmp",
@@ -50,7 +57,6 @@ describe "Security Tests" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
 
-      # Use auto sandbox (will use Docker if available)
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
         sandbox_config: "auto"
@@ -269,6 +275,13 @@ describe "Security Tests" do
   end
 
   describe "Shell expansion protection" do
+    around_each do |example|
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      example.run
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
     it "blocks variable expansion when sandboxed" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
@@ -298,6 +311,13 @@ describe "Security Tests" do
   end
 
   describe "Shell features blocking (full_shell_access: false)" do
+    around_each do |example|
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      example.run
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
     it "blocks arbitrary variable usage and assignments" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
@@ -356,13 +376,15 @@ describe "Security Tests" do
     end
 
     it "allows simple commands in sandboxed mode" do
+      Autobot::Tools::Sandbox.detect_override = nil
+
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
       File.write("#{workspace}/test.txt", "content")
 
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
-        sandbox_config: "auto",
+        sandbox_config: "none",
         full_shell_access: false
       )
 

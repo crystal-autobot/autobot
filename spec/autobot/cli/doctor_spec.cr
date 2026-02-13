@@ -153,12 +153,15 @@ describe Autobot::CLI::Doctor do
       YAML
       )
 
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
       with_doctor_io do |io|
         errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
 
         errors.should eq(0)
         io.to_s.should contain("✓ Security settings consistent")
       end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
     end
 
     it "fails when sandbox and full_shell_access are both enabled" do

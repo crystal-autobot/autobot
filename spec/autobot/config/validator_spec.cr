@@ -45,6 +45,7 @@ describe Autobot::Config::Validator do
           full_shell_access: false
       YAML
 
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
       ValidatorSpecHelpers.with_temp_config(config_yaml) do |path|
         ValidatorSpecHelpers.with_temp_env(path, "ANTHROPIC_API_KEY=test") do
           # Set ENV for validation
@@ -60,6 +61,8 @@ describe Autobot::Config::Validator do
           errors.size.should be <= 1
         end
       end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
     end
 
     it "detects mutually exclusive settings" do

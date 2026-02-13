@@ -21,8 +21,15 @@ module Autobot
         None
       end
 
+      # Test override for sandbox detection (set to nil to use real detection)
+      class_property detect_override : Type? = nil
+
       # Detect available sandbox tool
       def self.detect : Type
+        if override = @@detect_override
+          return override
+        end
+
         if command_exists?("bwrap")
           Type::Bubblewrap
         elsif command_exists?("docker")
