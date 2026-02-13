@@ -30,7 +30,7 @@ module Autobot
         begin
           Dir.cd(name) do
             # Run onboard in the current directory (will create ./config.yml)
-            Onboard.run(nil)
+            Onboard.run("./config.yml")
           end
         rescue ex
           STDERR.puts "Error: Failed to initialize bot: #{ex.message}"

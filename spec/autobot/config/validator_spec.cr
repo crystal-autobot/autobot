@@ -40,7 +40,7 @@ describe Autobot::Config::Validator do
         anthropic:
           api_key: "${ANTHROPIC_API_KEY}"
       tools:
-        restrict_to_workspace: true
+        sandbox: "auto"
         exec:
           full_shell_access: false
       YAML
@@ -68,7 +68,7 @@ describe Autobot::Config::Validator do
         anthropic:
           api_key: "${ANTHROPIC_API_KEY}"
       tools:
-        restrict_to_workspace: true
+        sandbox: "auto"
         exec:
           full_shell_access: true
       YAML

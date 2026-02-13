@@ -27,7 +27,7 @@ module Autobot
       @model : String?
       @brave_api_key : String?
       @exec_timeout : Int32
-      @restrict_to_workspace : Bool
+      @sandbox_config : String
       @running_tasks : Hash(String, Bool) = {} of String => Bool
 
       def initialize(
@@ -37,7 +37,7 @@ module Autobot
         @model : String? = nil,
         @brave_api_key : String? = nil,
         @exec_timeout : Int32 = 60,
-        @restrict_to_workspace : Bool = false,
+        @sandbox_config : String = "auto",
       )
       end
 
@@ -80,7 +80,8 @@ module Autobot
         begin
           # Build isolated tool registry (no message or spawn tools)
           tools = Tools::Registry.new
-          allowed_dir = @restrict_to_workspace ? @workspace : nil
+          sandboxed = @sandbox_config.downcase != "none"
+          allowed_dir = sandboxed ? @workspace : nil
           tools.register(Tools::ReadFileTool.new(allowed_dir: allowed_dir))
           tools.register(Tools::WriteFileTool.new(allowed_dir: allowed_dir))
           tools.register(Tools::EditFileTool.new(allowed_dir: allowed_dir))
@@ -88,7 +89,7 @@ module Autobot
           tools.register(Tools::ExecTool.new(
             working_dir: @workspace.to_s,
             timeout: @exec_timeout,
-            restrict_to_workspace: @restrict_to_workspace
+            sandbox_config: @sandbox_config
           ))
           tools.register(Tools::WebSearchTool.new(api_key: @brave_api_key))
           tools.register(Tools::WebFetchTool.new)

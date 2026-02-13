@@ -58,14 +58,26 @@ static: deps ## Build static binary (requires musl on Linux)
 
 ## —— Installation ————————————————————————————————————
 
-install: release ## Install to /usr/local/bin
+install: release ## Install to /usr/local/bin (requires sudo)
 	@echo "Installing to $(INSTALL_DIR)..."
-	install -m 0755 $(BIN_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
-	@echo "Installed $(INSTALL_DIR)/$(BINARY_NAME)"
+	@if [ -w "$(INSTALL_DIR)" ]; then \
+		install -m 0755 $(BIN_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME); \
+		echo "Installed $(INSTALL_DIR)/$(BINARY_NAME)"; \
+	else \
+		echo "Error: $(INSTALL_DIR) is not writable."; \
+		echo "Run: sudo make install"; \
+		exit 1; \
+	fi
 
-uninstall: ## Remove from /usr/local/bin
-	rm -f $(INSTALL_DIR)/$(BINARY_NAME)
-	@echo "Uninstalled $(INSTALL_DIR)/$(BINARY_NAME)"
+uninstall: ## Remove from /usr/local/bin (requires sudo)
+	@if [ -w "$(INSTALL_DIR)" ] || [ -w "$(INSTALL_DIR)/$(BINARY_NAME)" ]; then \
+		rm -f $(INSTALL_DIR)/$(BINARY_NAME); \
+		echo "Uninstalled $(INSTALL_DIR)/$(BINARY_NAME)"; \
+	else \
+		echo "Error: Cannot remove $(INSTALL_DIR)/$(BINARY_NAME)"; \
+		echo "Run: sudo make uninstall"; \
+		exit 1; \
+	fi
 
 ## —— Testing —————————————————————————————————————————
 
@@ -164,6 +176,7 @@ help: ## Show this help
 	@echo "Examples:"
 	@echo "  make build            Build debug binary"
 	@echo "  make release          Build optimized binary"
+	@echo "  sudo make install     Install to /usr/local/bin"
 	@echo "  make test             Run test suite"
 	@echo "  make docker           Build Docker image (<50MB)"
 	@echo "  make release-all      Cross-compile for all platforms"

@@ -150,7 +150,7 @@ module Autobot::Config
     include YAML::Serializable
     property web : WebToolsConfig?
     property exec : ExecToolConfig?
-    property? restrict_to_workspace : Bool = true
+    property sandbox : String = "auto" # "auto", "bubblewrap", "docker", "none"
 
     def initialize
     end

@@ -1,5 +1,6 @@
 require "./schema"
 require "./validator_common"
+require "../tools/sandbox"
 
 module Autobot::Config
   # Security-focused configuration validator
@@ -26,7 +27,7 @@ module Autobot::Config
       issues.concat(check_mutually_exclusive_settings(config))
       issues.concat(check_plaintext_secrets(config_path))
       issues.concat(check_env_file_security(config_path))
-      issues.concat(check_workspace_security(config, config_path))
+      issues.concat(check_sandbox_availability(config))
 
       issues
     end
@@ -35,12 +36,15 @@ module Autobot::Config
     private def self.check_mutually_exclusive_settings(config : Config) : Array(Issue)
       issues = [] of Issue
 
-      if config.tools.try(&.restrict_to_workspace?) && config.tools.try(&.exec.try(&.full_shell_access?))
+      sandbox_config = config.tools.try(&.sandbox) || "auto"
+      sandboxed = sandbox_config.downcase != "none"
+
+      if sandboxed && config.tools.try(&.exec.try(&.full_shell_access?))
         issues << Issue.new(
           severity: Severity::Error,
-          message: "CRITICAL: restrict_to_workspace and full_shell_access are mutually exclusive. " \
-                   "Workspace restrictions require simple commands (no shell features). " \
-                   "Disable one of these settings."
+          message: "CRITICAL: sandbox and full_shell_access are mutually exclusive. " \
+                   "Sandboxing requires simple commands (no shell features). " \
+                   "Use sandbox: none for full shell access."
         )
       end
 
@@ -99,37 +103,31 @@ module Autobot::Config
       issues
     end
 
-    # Check workspace security configuration
-    private def self.check_workspace_security(config : Config, config_path : Path) : Array(Issue)
+    # Check sandbox availability
+    private def self.check_sandbox_availability(config : Config) : Array(Issue)
       issues = [] of Issue
 
-      # Check if workspace restrictions are enabled (should be true in production)
-      unless config.tools.try(&.restrict_to_workspace?)
+      sandbox_config = config.tools.try(&.sandbox) || "auto"
+
+      # Warn if sandbox is disabled
+      if sandbox_config.downcase == "none"
         issues << Issue.new(
           severity: Severity::Warning,
-          message: "Workspace restrictions are disabled. " \
-                   "Enable 'tools.restrict_to_workspace: true' for better security. " \
+          message: "Sandbox disabled (sandbox: none). " \
+                   "Enable sandboxing for better security ('auto', 'bubblewrap', or 'docker'). " \
                    "This prevents the LLM from accessing files outside the workspace."
         )
+        return issues
       end
 
-      # Check if .env is inside workspace (security risk!)
-      workspace = config.workspace_path
-      config_dir = config_path.parent
-      env_path = config_dir / ".env"
-
-      if File.exists?(env_path.to_s)
-        env_real = File.realpath(env_path.to_s)
-        workspace_real = File.realpath(workspace.to_s) rescue workspace.to_s
-
-        if env_real.starts_with?(workspace_real)
-          issues << Issue.new(
-            severity: Severity::Error,
-            message: "CRITICAL: .env file is inside workspace directory! " \
-                     "This exposes secrets to the LLM. " \
-                     "Move .env outside workspace (to config directory)."
-          )
-        end
+      # Check if sandbox tools are available when enabled
+      unless Tools::Sandbox.available?
+        issues << Issue.new(
+          severity: Severity::Error,
+          message: "CRITICAL: Sandbox enabled but no sandbox tool found. " \
+                   "Install bubblewrap (sudo apt install bubblewrap) or Docker. " \
+                   "See docs/security.md for installation instructions."
+        )
       end
 
       issues

@@ -38,7 +38,7 @@ module Autobot::Agent
     @subagents : SubagentManager?
     @cron_service : Cron::Service?
     @memory_manager : MemoryManager
-    @restrict_to_workspace : Bool
+    @sandbox_config : String
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -52,10 +52,11 @@ module Autobot::Agent
       @cron_service : Cron::Service? = nil,
       brave_api_key : String? = nil,
       exec_timeout : Int32 = 60,
-      @restrict_to_workspace : Bool = false,
+      @sandbox_config : String = "auto",
     )
       @model = @model || @provider.default_model
-      @context = Context::Builder.new(@workspace, @restrict_to_workspace)
+      sandboxed = @sandbox_config.downcase != "none"
+      @context = Context::Builder.new(@workspace, sandboxed)
 
       # Setup memory manager
       active_model_str = @model || @provider.default_model
@@ -75,7 +76,7 @@ module Autobot::Agent
         model: @model,
         brave_api_key: brave_api_key,
         exec_timeout: exec_timeout,
-        restrict_to_workspace: restrict_to_workspace
+        sandbox_config: @sandbox_config
       )
 
       # Register spawn tool

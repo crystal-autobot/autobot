@@ -25,6 +25,7 @@ Thumbs.db
 *.log
 
 # User data
+/optimus
 /workspace/
 /sessions/
 /logs/

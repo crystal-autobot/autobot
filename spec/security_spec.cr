@@ -37,65 +37,23 @@ describe "Security Tests" do
     end
   end
 
-  describe "ExecTool path traversal protection" do
-    it "blocks path traversal attempts" do
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-
+  describe "ExecTool sandbox enforcement" do
+    it "allows sandbox: none without validation" do
       tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        restrict_to_workspace: true
+        working_dir: "/tmp",
+        sandbox_config: "none"
       )
-
-      # Test traversal attempts - using actual file paths that would escape workspace
-      traversal_attempts = [
-        "ls /etc",             # Absolute path outside workspace
-        "cat /etc/hostname",   # Try to read system file
-        "ls #{workspace}/../", # Explicit parent navigation
-      ]
-
-      traversal_attempts.each do |cmd|
-        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
-        result.access_denied?.should be_true
-        lower = result.content.downcase
-        (lower.includes?("outside workspace") || lower.includes?("path traversal")).should be_true
-      end
-
-      Dir.delete(workspace) if Dir.exists?(workspace)
+      tool.sandboxed?.should be_false
     end
 
-    it "blocks quoted absolute paths" do
+    it "blocks working_dir bypass attempts when sandboxed" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
 
+      # Use auto sandbox (will use Docker if available)
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
-        restrict_to_workspace: true
-      )
-
-      quoted_path_attempts = [
-        "cat \"/etc/hosts\"",    # Double-quoted
-        "cat '/etc/passwd'",     # Single-quoted
-        "ls \"/usr/bin\"",       # Double-quoted directory
-        "cat \"~/.ssh/id_rsa\"", # Double-quoted home expansion
-      ]
-
-      quoted_path_attempts.each do |cmd|
-        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
-        result.access_denied?.should be_true
-        result.content.downcase.should contain("outside workspace")
-      end
-
-      Dir.delete(workspace) if Dir.exists?(workspace)
-    end
-
-    it "blocks working_dir bypass attempts" do
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        restrict_to_workspace: true
+        sandbox_config: "auto"
       )
 
       # Try to override working_dir to escape workspace
@@ -110,13 +68,13 @@ describe "Security Tests" do
       Dir.delete(workspace) if Dir.exists?(workspace)
     end
 
-    it "blocks directory change commands" do
+    it "blocks directory change commands when sandboxed" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
-        restrict_to_workspace: true
+        sandbox_config: "auto"
       )
 
       cd_attempts = [
@@ -130,31 +88,6 @@ describe "Security Tests" do
         result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
         result.access_denied?.should be_true
         result.content.should contain("Directory change commands are blocked")
-      end
-
-      Dir.delete(workspace) if Dir.exists?(workspace)
-    end
-
-    it "blocks relative path traversal" do
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        restrict_to_workspace: true
-      )
-
-      relative_attempts = [
-        "cat ../../../etc/hosts",
-        "ls \"../../usr/bin\"",
-        "cat '../../../etc/passwd'",
-      ]
-
-      relative_attempts.each do |cmd|
-        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
-        result.access_denied?.should be_true
-        lower = result.content.downcase
-        (lower.includes?("outside workspace") || lower.includes?("path traversal")).should be_true
       end
 
       Dir.delete(workspace) if Dir.exists?(workspace)
@@ -336,13 +269,13 @@ describe "Security Tests" do
   end
 
   describe "Shell expansion protection" do
-    it "blocks variable expansion in workspace mode" do
+    it "blocks variable expansion when sandboxed" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
-        restrict_to_workspace: true
+        sandbox_config: "auto"
       )
 
       shell_expansion_attempts = [
@@ -371,7 +304,7 @@ describe "Security Tests" do
 
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
-        restrict_to_workspace: true,
+        sandbox_config: "auto",
         full_shell_access: false
       )
 
@@ -398,7 +331,7 @@ describe "Security Tests" do
 
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
-        restrict_to_workspace: true,
+        sandbox_config: "auto",
         full_shell_access: false
       )
 
@@ -422,14 +355,14 @@ describe "Security Tests" do
       Dir.delete(workspace) if Dir.exists?(workspace)
     end
 
-    it "allows simple commands in restricted mode" do
+    it "allows simple commands in sandboxed mode" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
       File.write("#{workspace}/test.txt", "content")
 
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
-        restrict_to_workspace: true,
+        sandbox_config: "auto",
         full_shell_access: false
       )
 
@@ -448,14 +381,14 @@ describe "Security Tests" do
       Dir.delete(workspace) if Dir.exists?(workspace)
     end
 
-    it "allows shell features when full_shell_access is enabled (without restrictions)" do
+    it "allows shell features when full_shell_access is enabled (without sandbox)" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
       File.write("#{workspace}/test.txt", "line1\nline2")
 
       tool = Autobot::Tools::ExecTool.new(
         working_dir: workspace,
-        restrict_to_workspace: false,
+        sandbox_config: "none",
         full_shell_access: true
       )
 
@@ -471,7 +404,7 @@ describe "Security Tests" do
 
   describe "Command timeout enforcement" do
     it "kills long-running commands" do
-      tool = Autobot::Tools::ExecTool.new(timeout: 2)
+      tool = Autobot::Tools::ExecTool.new(timeout: 2, sandbox_config: "none")
 
       # Command that would run forever
       result = tool.execute({"command" => JSON::Any.new("sleep 100")} of String => JSON::Any)
@@ -482,26 +415,26 @@ describe "Security Tests" do
   end
 
   describe "Configuration validation" do
-    it "rejects incompatible restrict_to_workspace + full_shell_access" do
+    it "rejects incompatible sandbox + full_shell_access" do
       expect_raises(ArgumentError, /mutually exclusive/) do
         Autobot::Tools::ExecTool.new(
-          restrict_to_workspace: true,
+          sandbox_config: "auto",
           full_shell_access: true
         )
       end
     end
 
-    it "allows restrict_to_workspace without full_shell_access" do
+    it "allows sandbox without full_shell_access" do
       tool = Autobot::Tools::ExecTool.new(
-        restrict_to_workspace: true,
+        sandbox_config: "auto",
         full_shell_access: false
       )
       tool.should_not be_nil
     end
 
-    it "allows full_shell_access without workspace restrictions" do
+    it "allows full_shell_access without sandbox" do
       tool = Autobot::Tools::ExecTool.new(
-        restrict_to_workspace: false,
+        sandbox_config: "none",
         full_shell_access: true
       )
       tool.should_not be_nil

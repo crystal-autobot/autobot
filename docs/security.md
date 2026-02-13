@@ -18,27 +18,81 @@ channels:
 
 ---
 
-## 2. Enable Workspace Sandbox (ENABLED BY DEFAULT)
+## 2. Kernel-Enforced Workspace Sandbox (REQUIRED FOR PRODUCTION)
+
+**System Requirements:**
+- **bubblewrap** (recommended) OR **Docker**
+- Workspace restrictions enforced at kernel level (mount namespaces)
+- No manual validation - guaranteed by operating system
+
+### Installation
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install bubblewrap
+```
+
+**Fedora:**
+```bash
+sudo dnf install bubblewrap
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S bubblewrap
+```
+
+**Or use Docker** (already provides sandboxing)
+
+### Configuration
 
 ```yaml
 tools:
-  restrict_to_workspace: true  # Default: true (recommended)
+  sandbox: "auto"  # auto|bubblewrap|docker|none (default: auto)
   exec:
-    full_shell_access: false   # Default: false (SECURE - blocks shell features)
+    full_shell_access: false  # Default: false (SECURE - blocks shell features)
 ```
 
-**What it protects against:**
-- ✅ Absolute paths outside workspace (`cat /etc/passwd`, `ls /`)
-- ✅ Quoted path bypass (`cat "/etc/hosts"`)
-- ✅ Symlink escape attacks (`ln -s / rootlink; cat rootlink/etc/passwd`)
-- ✅ Hardlink creation (`ln /etc/passwd localfile`, `cp -l /etc/passwd file`)
-- ✅ Plain relative paths (`cat symlink/etc/passwd`)
-- ✅ working_dir parameter override
-- ✅ Directory change commands (`cd /etc && ls`)
-- ✅ Relative traversal (`cat ../../../etc`)
-- ✅ Bare dotdot (`ls ..`)
-- ✅ Variable bypass (`X=/etc/hosts; cat $X`)
-- ✅ Shell features (pipes, redirects, chaining) when `full_shell_access: false`
+**Sandbox Options:**
+- `auto` - Automatically detect bubblewrap or Docker (default, recommended)
+- `bubblewrap` - Use bubblewrap explicitly (lightweight, ~100KB, works on Raspberry Pi)
+- `docker` - Use Docker containers explicitly
+- `none` - No sandbox, no workspace restrictions (development only, NOT for production)
+
+### How It Works
+
+**Kernel-level isolation** via Linux namespaces:
+
+```bash
+# Bubblewrap execution:
+bwrap \
+  --ro-bind /usr /usr          # System binaries (read-only)
+  --ro-bind /lib /lib          # System libraries (read-only)
+  --bind /workspace /workspace # YOUR workspace (read-write)
+  # Everything else: /etc, /home, /var - NOT MOUNTED
+  --unshare-all --share-net    # Isolated namespaces
+  -- sh -c "command"
+```
+
+**What this means:**
+- **Only workspace directory is visible** to commands
+- `/etc/passwd`, `/home`, system files **do not exist** inside sandbox
+- No symlink/hardlink/TOCTOU vulnerabilities - files outside workspace are invisible
+- Guaranteed protection by kernel, not application logic
+
+### What It Protects Against
+
+✅ **Kernel-enforced protection** (workspace is the only writable mount):
+- Absolute paths outside workspace (`cat /etc/passwd` → file not found)
+- Relative traversal (`cd ../../../etc` → directory doesn't exist)
+- Symlinks pointing outside (`ln -s /etc/passwd link` → blocked by deny patterns)
+- All access attempts to files outside workspace
+
+✅ **Defense-in-depth** (application-level blocks):
+- Directory change commands (`cd /etc && ls`)
+- Link creation (`ln -s`, `ln`, `cp -l`, `cp --link`)
+- Shell features (pipes, redirects, chaining) when `full_shell_access: false`
+- Dangerous commands (rm -rf, dd, curl | bash, etc.)
 
 **Shell Access Modes:**
 
@@ -47,25 +101,15 @@ tools:
 | `full_shell_access: false` | ❌ Blocked | 🔒 Maximum | Production (default) |
 | `full_shell_access: true` | ✅ Allowed | ⚠️ Reduced | Trusted environments |
 
-**Symlink Protection (v0.2.0+):**
+### Best Practices
 
-Autobot prevents workspace escape via symlinks and hardlinks:
-- `ln -s / rootlink` → **BLOCKED** (symlink creation)
-- `ln /etc/passwd file` → **BLOCKED** (hardlink creation)
-- `cp -l /etc/passwd file` → **BLOCKED** (hardlink via cp)
-- `cat rootlink/etc/passwd` → **BLOCKED** (access via plain relative path)
-- All path validation follows symlinks to verify real paths
-
-**Path Resolution:**
-- Every path argument is resolved to its real path (follows symlinks)
-- Real path must be within workspace boundaries
-- Validation occurs even for non-existent files (checks parent directories)
-
-**Best practice:**
-- Keep workspace scoped to a dedicated directory, not your home folder
-- Use `full_shell_access: false` unless you specifically need pipes/redirects
-- Only enable `full_shell_access: true` when you fully trust command sources
-- Never place `.env` files inside workspace (blocks LLM access)
+- ✅ Always use sandboxing in production (`sandbox: auto` or specific type)
+- ✅ Use `full_shell_access: false` (blocks pipes, redirects, command chaining)
+- ✅ Install bubblewrap for development (lightweight, fast)
+- ✅ Use Docker for production deployments
+- ✅ Keep workspace scoped to a dedicated directory, not your home folder
+- ⚠️ Never use `sandbox: none` in production (development-only)
+- ⚠️ Never place `.env` files inside workspace (blocked automatically)
 
 ---
 
