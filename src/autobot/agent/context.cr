@@ -17,8 +17,9 @@ module Autobot::Agent
       @workspace : Path
       @memory : MemoryStore
       @skills : SkillsLoader
+      @restrict_to_workspace : Bool
 
-      def initialize(@workspace : Path)
+      def initialize(@workspace : Path, @restrict_to_workspace : Bool = false)
         @memory = MemoryStore.new(@workspace)
         @skills = SkillsLoader.new(@workspace)
       end
@@ -152,6 +153,29 @@ module Autobot::Agent
         parts.join("\n\n---\n\n")
       end
 
+      private def build_security_policy(workspace_path : String) : String
+        return "" unless @restrict_to_workspace
+
+        <<-POLICY
+
+
+        ## Security Policy
+        Workspace restrictions are ENABLED. All file and command operations are restricted to: #{workspace_path}
+
+        When a tool returns "ACCESS DENIED" or mentions paths "outside workspace":
+        1. The system blocked the operation for security reasons
+        2. Inform the user clearly: "I cannot access that resource - workspace security restricts me to #{workspace_path}"
+        3. Explain what restriction was triggered (file outside workspace, dangerous command, etc.)
+        4. These blocks are FINAL - do not attempt workarounds or suggest alternatives that bypass restrictions
+
+        Access Denied errors indicate:
+        - File/directory outside workspace
+        - Dangerous command patterns (rm -rf, curl | bash, etc.)
+        - SSRF attempts (private IPs, cloud metadata)
+        - Rate limit exceeded
+        POLICY
+      end
+
       private def identity_section : String
         now = Time.utc.to_s(TIMESTAMP_FORMAT)
         workspace_path = @workspace.expand(home: true).to_s
@@ -177,7 +201,7 @@ module Autobot::Agent
         - Long-term memory: #{workspace_path}/memory/MEMORY.md
         - History log: #{workspace_path}/memory/HISTORY.md (grep-searchable)
         - Custom skills: #{workspace_path}/skills/{skill-name}/SKILL.md
-
+        #{build_security_policy(workspace_path)}
         IMPORTANT: When responding to direct questions or conversations, reply directly with your text response.
         Only use the 'message' tool when you need to send a message to a specific chat channel.
         For normal conversation, just respond with text - do not call the message tool.

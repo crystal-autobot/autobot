@@ -1,4 +1,5 @@
 require "../plugin"
+require "../../tools/result"
 
 module Autobot
   module Plugins
@@ -54,12 +55,12 @@ module Autobot
           )
         end
 
-        def execute(params : Hash(String, JSON::Any)) : String
+        def execute(params : Hash(String, JSON::Any)) : Tools::ToolResult
           args = params["command"].as_s.strip.split(/\s+/)
           subcommand = args.first?
 
           unless subcommand && ALLOWED_SUBCOMMANDS.includes?(subcommand)
-            return "Error: Only these gh subcommands are allowed: #{ALLOWED_SUBCOMMANDS.join(", ")}"
+            return Tools::ToolResult.error("Only these gh subcommands are allowed: #{ALLOWED_SUBCOMMANDS.join(", ")}")
           end
 
           output = IO::Memory.new
@@ -76,16 +77,18 @@ module Autobot
           err = error.to_s.strip
 
           unless status.success?
-            return "Error running gh #{subcommand}: #{err.empty? ? "unknown error" : err}"
+            return Tools::ToolResult.error("Error running gh #{subcommand}: #{err.empty? ? "unknown error" : err}")
           end
 
-          if result.size > MAX_OUTPUT_CHARS
-            result[0, MAX_OUTPUT_CHARS] + "\n... (output truncated)"
-          elsif result.empty?
-            "Command completed successfully (no output)."
-          else
-            result
-          end
+          content = if result.size > MAX_OUTPUT_CHARS
+                      result[0, MAX_OUTPUT_CHARS] + "\n... (output truncated)"
+                    elsif result.empty?
+                      "Command completed successfully (no output)."
+                    else
+                      result
+                    end
+
+          Tools::ToolResult.success(content)
         end
       end
     end

@@ -62,7 +62,7 @@ tools:
       max_results: 5
   exec:
     timeout: 60
-  restrict_to_workspace: false
+  restrict_to_workspace: true
 
 # Cron scheduler
 cron:

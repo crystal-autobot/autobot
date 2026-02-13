@@ -1,5 +1,6 @@
 require "./base"
 require "../agent/subagent"
+require "./result"
 
 module Autobot
   module Tools
@@ -47,16 +48,18 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         task = params["task"].as_s
         label = params["label"]?.try(&.as_s)
 
-        @manager.spawn(
+        result = @manager.spawn(
           task: task,
           label: label,
           origin_channel: @origin_channel,
           origin_chat_id: @origin_chat_id
         )
+
+        ToolResult.success(result)
       end
     end
   end

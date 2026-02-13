@@ -1,3 +1,5 @@
+require "./result"
+
 module Autobot
   module Tools
     def self.resolve_path(path : String, allowed_dir : Path? = nil) : Path
@@ -41,9 +43,12 @@ module Autobot
 
     # Tool to read file contents.
     class ReadFileTool < Tool
+      Log = ::Log.for("tools.read_file")
+
       MAX_FILE_SIZE = 1_048_576 # 1 MB
 
       def initialize(@allowed_dir : Path? = nil)
+        Log.debug { "ReadFileTool initialized with allowed_dir: #{@allowed_dir.inspect}" }
       end
 
       def name : String
@@ -63,27 +68,31 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         path = params["path"].as_s
+        Log.debug { "Reading file: #{path} (allowed_dir: #{@allowed_dir.inspect})" }
+
         file_path = Tools.resolve_path(path, @allowed_dir)
 
         unless File.exists?(file_path.to_s)
-          return "Error: File not found"
+          return ToolResult.error("File not found: #{path}")
         end
         unless File.file?(file_path.to_s)
-          return "Error: Path is not a file"
+          return ToolResult.error("Path is not a file: #{path}")
         end
 
         size = File.size(file_path.to_s)
         if size > MAX_FILE_SIZE
-          return "Error: File too large (max #{MAX_FILE_SIZE} bytes)"
+          return ToolResult.error("File too large (max #{MAX_FILE_SIZE} bytes)")
         end
 
-        File.read(file_path.to_s)
+        Log.info { "Reading: #{file_path}" }
+        content = File.read(file_path.to_s)
+        ToolResult.success(content)
       rescue ex : PermissionError
-        "Error: Access denied"
+        ToolResult.access_denied("Access denied - file '#{path}' is outside workspace")
       rescue ex
-        "Error: Cannot read file"
+        ToolResult.error("Cannot read file: #{ex.message}")
       end
     end
 
@@ -110,7 +119,7 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         path = params["path"].as_s
         content = params["content"].as_s
         file_path = Tools.resolve_path(path, @allowed_dir)
@@ -118,11 +127,11 @@ module Autobot
         Dir.mkdir_p(File.dirname(file_path.to_s))
         File.write(file_path.to_s, content)
 
-        "Successfully wrote #{content.bytesize} bytes"
+        ToolResult.success("Successfully wrote #{content.bytesize} bytes")
       rescue ex : PermissionError
-        "Error: Access denied"
+        ToolResult.access_denied("Access denied - file '#{path}' is outside workspace")
       rescue ex
-        "Error: Cannot write file"
+        ToolResult.error("Cannot write file: #{ex.message}")
       end
     end
 
@@ -150,35 +159,35 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         path = params["path"].as_s
         old_text = params["old_text"].as_s
         new_text = params["new_text"].as_s
         file_path = Tools.resolve_path(path, @allowed_dir)
 
         unless File.exists?(file_path.to_s)
-          return "Error: File not found"
+          return ToolResult.error("File not found: #{path}")
         end
 
         content = File.read(file_path.to_s)
 
         unless content.includes?(old_text)
-          return "Error: Text not found in file"
+          return ToolResult.error("Text not found in file")
         end
 
         count = count_occurrences(content, old_text)
         if count > 1
-          return "Error: Text appears #{count} times. Provide more context"
+          return ToolResult.error("Text appears #{count} times. Provide more context")
         end
 
         new_content = content.sub(old_text, new_text)
         File.write(file_path.to_s, new_content)
 
-        "Successfully edited file"
+        ToolResult.success("Successfully edited file")
       rescue ex : PermissionError
-        "Error: Access denied"
+        ToolResult.access_denied("Access denied - file '#{path}' is outside workspace")
       rescue ex
-        "Error: Cannot edit file"
+        ToolResult.error("Cannot edit file: #{ex.message}")
       end
 
       private def count_occurrences(haystack : String, needle : String) : Int32
@@ -214,12 +223,12 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         path = params["path"].as_s
         dir_path = Tools.resolve_path(path, @allowed_dir)
 
         unless Dir.exists?(dir_path.to_s)
-          return "Error: Directory not found"
+          return ToolResult.error("Directory not found: #{path}")
         end
 
         entries = Dir.entries(dir_path.to_s)
@@ -227,7 +236,7 @@ module Autobot
           .sort!
 
         if entries.empty?
-          return "Directory is empty"
+          return ToolResult.success("Directory is empty")
         end
 
         items = entries.map do |entry|
@@ -236,11 +245,11 @@ module Autobot
           "#{prefix}#{entry}"
         end
 
-        items.join("\n")
+        ToolResult.success(items.join("\n"))
       rescue ex : PermissionError
-        "Error: Access denied"
+        ToolResult.access_denied("Access denied - directory '#{path}' is outside workspace")
       rescue ex
-        "Error: Cannot list directory"
+        ToolResult.error("Cannot list directory: #{ex.message}")
       end
     end
   end

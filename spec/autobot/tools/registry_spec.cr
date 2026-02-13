@@ -19,8 +19,8 @@ class DummyTool < Autobot::Tools::Tool
     )
   end
 
-  def execute(params : Hash(String, JSON::Any)) : String
-    "echo: #{params["input"].as_s}"
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.success("echo: #{params["input"].as_s}")
   end
 end
 
@@ -37,7 +37,7 @@ class FailingTool < Autobot::Tools::Tool
     Autobot::Tools::ToolSchema.new
   end
 
-  def execute(params : Hash(String, JSON::Any)) : String
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
     raise "intentional failure"
   end
 end

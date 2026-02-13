@@ -28,6 +28,10 @@ module Autobot
       def save(session : Session) : Nil
         path = session_path(session.key)
 
+        # Ensure sessions directory exists with restrictive permissions
+        Dir.mkdir_p(@sessions_dir) unless Dir.exists?(@sessions_dir)
+        File.chmod(@sessions_dir, 0o700)
+
         File.open(path, "w") do |session_file|
           meta = Metadata.new(
             created_at: session.created_at.to_rfc3339,
@@ -40,6 +44,9 @@ module Autobot
             session_file.puts(msg.to_json)
           end
         end
+
+        # Set restrictive permissions on session file (user read/write only)
+        File.chmod(path, 0o600)
 
         @cache[session.key] = session
       end

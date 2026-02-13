@@ -8,8 +8,6 @@
 
 Compiled binary • Multi-provider LLM • Chat integrations • Plugin system
 
----
-
 ## Why Autobot?
 
 Built with [Crystal](https://crystal-lang.org), Autobot delivers native performance with a developer-friendly experience. Alternative to [nanobot](https://github.com/HKUDS/nanobot) with faster startup and compiled distribution.
@@ -20,8 +18,6 @@ Built with [Crystal](https://crystal-lang.org), Autobot delivers native performa
 | **Docker image** | <50MB |
 | **Runtime** | Zero dependencies |
 | **Startup** | Instant (<100ms) |
-
----
 
 ## ✨ Features
 
@@ -42,8 +38,6 @@ Built with [Crystal](https://crystal-lang.org), Autobot delivers native performa
 - **Custom commands** - Telegram slash commands backed by prompt macros or bash scripts
 - **Subagents** - Spawn specialized agents for complex tasks
 - **Logging** - Token usage tracking and file operation audit
-
----
 
 ## 🚀 Quick Start
 
@@ -98,8 +92,6 @@ autobot agent -m "Summarize this project"
 
 **→ [Full Quick Start Guide](docs/quickstart.md)**
 
----
-
 ## 📚 Documentation
 
 | Document | Description |
@@ -112,8 +104,6 @@ autobot agent -m "Summarize this project"
 | [Security](docs/security.md) | Security model and best practices |
 | [Examples](docs/examples.md) | Use cases and code samples |
 | [Development](docs/development.md) | Contributing and local setup |
-
----
 
 ## 💡 Examples
 
@@ -187,8 +177,6 @@ agents:
 
 **→ [More Examples](docs/examples.md)**
 
----
-
 ## 🔧 Development
 
 ### Prerequisites
@@ -209,21 +197,3 @@ make help           # Show all targets
 ```
 
 **→ [Development Guide](docs/development.md)**
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! Please read [Development Guide](docs/development.md) for setup and guidelines.
-
----
-
-## 📄 License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-<p align="center">
-  Built with ❤️ using <a href="https://crystal-lang.org">Crystal</a>
-</p>

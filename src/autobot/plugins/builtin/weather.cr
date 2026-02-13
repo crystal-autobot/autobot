@@ -1,4 +1,5 @@
 require "../plugin"
+require "../../tools/result"
 
 module Autobot
   module Plugins
@@ -58,7 +59,7 @@ module Autobot
           )
         end
 
-        def execute(params : Hash(String, JSON::Any)) : String
+        def execute(params : Hash(String, JSON::Any)) : Tools::ToolResult
           location = URI.encode_path(params["location"].as_s)
           format = params["format"]?.try(&.as_s) || "brief"
 
@@ -70,7 +71,7 @@ module Autobot
           end
         end
 
-        private def fetch(url : String, timeout : String) : String
+        private def fetch(url : String, timeout : String) : Tools::ToolResult
           output = IO::Memory.new
           status = Process.run(
             "curl",
@@ -80,11 +81,12 @@ module Autobot
           )
 
           unless status.success?
-            return "Error: Failed to fetch weather data. Check if the location is valid."
+            return Tools::ToolResult.error("Failed to fetch weather data. Check if the location is valid.")
           end
 
           result = output.to_s.strip
-          result.empty? ? NO_DATA_MESSAGE : result
+          content = result.empty? ? NO_DATA_MESSAGE : result
+          Tools::ToolResult.success(content)
         end
       end
     end

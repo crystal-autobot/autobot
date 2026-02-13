@@ -2,6 +2,7 @@ require "http/client"
 require "json"
 require "log"
 require "uri"
+require "./result"
 
 module Autobot
   module Tools
@@ -40,17 +41,22 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         api_key = @api_key
-        if api_key.nil? || api_key.empty?
-          return "Error: BRAVE_API_KEY not configured"
-        end
+        return ToolResult.error("BRAVE_API_KEY not configured") if api_key.nil? || api_key.empty?
 
         query = params["query"].as_s
         count = Math.min(Math.max(params["count"]?.try(&.as_i) || @max_results, 1), 10)
 
         Log.info { "Web search: #{query} (count: #{count})" }
 
+        results = fetch_search_results(query, count, api_key)
+        format_search_results(query, results, count)
+      rescue ex
+        ToolResult.error(ex.message || "Unknown error")
+      end
+
+      private def fetch_search_results(query : String, count : Int32, api_key : String) : Array(JSON::Any)?
         uri = URI.parse("https://api.search.brave.com/res/v1/web/search")
         uri.query = URI::Params.encode({"q" => query, "count" => count.to_s})
 
@@ -60,25 +66,17 @@ module Autobot
         }
 
         response = HTTP::Client.get(uri, headers: headers)
-
-        unless response.success?
-          return "Error: Search API returned #{response.status_code}"
-        end
+        raise "Search API returned #{response.status_code}" unless response.success?
 
         data = JSON.parse(response.body)
-        results = data.dig?("web", "results")
+        data.dig?("web", "results").try(&.as_a?)
+      end
 
-        unless results && results.as_a?
-          return "No results for: #{query}"
-        end
-
-        items = results.as_a
-        if items.empty?
-          return "No results for: #{query}"
-        end
+      private def format_search_results(query : String, results : Array(JSON::Any)?, count : Int32) : ToolResult
+        return ToolResult.success("No results for: #{query}") if results.nil? || results.empty?
 
         lines = ["Results for: #{query}\n"]
-        items.first(count).each_with_index do |item, i|
+        results.first(count).each_with_index do |item, i|
           title = item["title"]?.try(&.as_s) || ""
           url = item["url"]?.try(&.as_s) || ""
           desc = item["description"]?.try(&.as_s)
@@ -87,9 +85,7 @@ module Autobot
           lines << "   #{desc}" if desc
         end
 
-        lines.join("\n")
-      rescue ex
-        "Error: #{ex.message}"
+        ToolResult.success(lines.join("\n"))
       end
     end
 
@@ -120,12 +116,12 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         url_str = params["url"].as_s
         max_chars = params["maxChars"]?.try(&.as_i) || @max_chars
 
         if error = validate_url(url_str)
-          return %({"error": "URL validation failed: #{error}", "url": "#{url_str}"})
+          return ToolResult.access_denied("URL validation failed: #{error}")
         end
 
         Log.info { "Fetching: #{url_str}" }
@@ -141,7 +137,7 @@ module Autobot
         truncated = text.size > max_chars
         text = text[0, max_chars] if truncated
 
-        {
+        result = {
           url:       url_str,
           finalUrl:  uri.to_s,
           status:    response.status_code,
@@ -150,8 +146,10 @@ module Autobot
           length:    text.size,
           text:      text,
         }.to_json
+
+        ToolResult.success(result)
       rescue ex
-        {error: ex.message, url: params["url"]?.try(&.as_s) || ""}.to_json
+        ToolResult.error(ex.message || "Unknown error")
       end
 
       private def validate_url(url : String) : String?
@@ -179,26 +177,29 @@ module Autobot
           addrinfo = Socket::Addrinfo.resolve(host, "http", Socket::Family::UNSPEC, Socket::Type::STREAM)
           return "Cannot resolve host" if addrinfo.empty?
 
-          ip_str = addrinfo.first.ip_address.address
+          # Validate ALL resolved IPs, not just the first one (prevents DNS rebinding)
+          addrinfo.each do |addr|
+            ip_str = addr.ip_address.address
 
-          # Block private IP ranges (RFC 1918)
-          if private_ip?(ip_str)
-            return "Access to private IP addresses is blocked"
-          end
+            # Block private IP ranges (RFC 1918)
+            if private_ip?(ip_str)
+              return "Access to private IP addresses is blocked"
+            end
 
-          # Block localhost/loopback
-          if loopback?(ip_str)
-            return "Access to localhost is blocked"
-          end
+            # Block localhost/loopback
+            if loopback?(ip_str)
+              return "Access to localhost is blocked"
+            end
 
-          # Block cloud metadata endpoints
-          if cloud_metadata?(ip_str)
-            return "Access to cloud metadata endpoints is blocked"
-          end
+            # Block cloud metadata endpoints
+            if cloud_metadata?(ip_str)
+              return "Access to cloud metadata endpoints is blocked"
+            end
 
-          # Block link-local addresses
-          if link_local?(ip_str)
-            return "Access to link-local addresses is blocked"
+            # Block link-local addresses
+            if link_local?(ip_str)
+              return "Access to link-local addresses is blocked"
+            end
           end
         rescue
           # If we can't resolve, block it to be safe
@@ -239,23 +240,36 @@ module Autobot
         end
 
         headers = HTTP::Headers{"User-Agent" => USER_AGENT}
-        response = HTTP::Client.get(uri, headers: headers)
 
-        if response.status.redirection? && (location = response.headers["Location"]?)
-          new_uri = URI.parse(location)
-          # Handle relative redirects
-          unless new_uri.host
-            new_uri = uri.resolve(new_uri)
+        # Create client with timeout to prevent hanging requests
+        host = uri.host
+        raise "Invalid URI: missing host" unless host
+
+        client = HTTP::Client.new(host, uri.port, tls: uri.scheme == "https")
+        client.read_timeout = DEFAULT_TIMEOUT
+        client.connect_timeout = DEFAULT_TIMEOUT
+
+        begin
+          response = client.get(uri.request_target, headers: headers)
+
+          if response.status.redirection? && (location = response.headers["Location"]?)
+            new_uri = URI.parse(location)
+            # Handle relative redirects
+            unless new_uri.host
+              new_uri = uri.resolve(new_uri)
+            end
+
+            if error = validate_redirect_uri(new_uri)
+              raise "Redirect blocked: #{error}"
+            end
+
+            return fetch_with_redirects(new_uri, redirects + 1)
           end
 
-          if error = validate_redirect_uri(new_uri)
-            raise "Redirect blocked: #{error}"
-          end
-
-          return fetch_with_redirects(new_uri, redirects + 1)
+          response
+        ensure
+          client.close
         end
-
-        response
       end
 
       private def validate_redirect_uri(uri : URI) : String?

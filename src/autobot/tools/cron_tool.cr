@@ -1,6 +1,7 @@
 require "./base"
 require "../cron/service"
 require "../cron/types"
+require "./result"
 
 module Autobot
   module Tools
@@ -60,7 +61,7 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         action = params["action"].as_s
 
         case action
@@ -71,14 +72,14 @@ module Autobot
         when "remove"
           remove_job(params)
         else
-          "Unknown action: #{action}"
+          ToolResult.error("Unknown action: #{action}")
         end
       end
 
-      private def add_job(params : Hash(String, JSON::Any)) : String
+      private def add_job(params : Hash(String, JSON::Any)) : ToolResult
         message = params["message"]?.try(&.as_s) || ""
-        return "Error: message is required for add" if message.empty?
-        return "Error: no session context (channel/chat_id)" if @channel.empty? || @chat_id.empty?
+        return ToolResult.error("message is required for add") if message.empty?
+        return ToolResult.error("no session context (channel/chat_id)") if @channel.empty? || @chat_id.empty?
 
         every_seconds = params["every_seconds"]?.try(&.as_i64)
         cron_expr = params["cron_expr"]?.try(&.as_s)
@@ -95,7 +96,7 @@ module Autobot
                      delete_after = true
                      Cron::CronSchedule.new(kind: Cron::ScheduleKind::At, at_ms: at_ms)
                    else
-                     return "Error: either every_seconds, cron_expr, or at is required"
+                     return ToolResult.error("either every_seconds, cron_expr, or at is required")
                    end
 
         job = @cron.add_job(
@@ -108,25 +109,25 @@ module Autobot
           delete_after_run: delete_after
         )
 
-        "Created job '#{job.name}' (id: #{job.id})"
+        ToolResult.success("Created job '#{job.name}' (id: #{job.id})")
       end
 
-      private def list_jobs : String
+      private def list_jobs : ToolResult
         jobs = @cron.list_jobs
-        return "No scheduled jobs." if jobs.empty?
+        return ToolResult.success("No scheduled jobs.") if jobs.empty?
 
         lines = jobs.map { |j| "- #{j.name} (id: #{j.id}, #{j.schedule.kind})" }
-        "Scheduled jobs:\n#{lines.join("\n")}"
+        ToolResult.success("Scheduled jobs:\n#{lines.join("\n")}")
       end
 
-      private def remove_job(params : Hash(String, JSON::Any)) : String
+      private def remove_job(params : Hash(String, JSON::Any)) : ToolResult
         job_id = params["job_id"]?.try(&.as_s)
-        return "Error: job_id is required for remove" unless job_id
+        return ToolResult.error("job_id is required for remove") unless job_id
 
         if @cron.remove_job(job_id)
-          "Removed job #{job_id}"
+          ToolResult.success("Removed job #{job_id}")
         else
-          "Job #{job_id} not found"
+          ToolResult.error("Job #{job_id} not found")
         end
       end
     end

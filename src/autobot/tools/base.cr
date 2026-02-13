@@ -1,3 +1,5 @@
+require "./result"
+
 module Autobot
   module Tools
     # Abstract base class for agent tools.
@@ -12,7 +14,7 @@ module Autobot
       abstract def name : String
       abstract def description : String
       abstract def parameters : ToolSchema
-      abstract def execute(params : Hash(String, JSON::Any)) : String
+      abstract def execute(params : Hash(String, JSON::Any)) : ToolResult
 
       # Convert tool to OpenAI function-calling schema format.
       def to_schema : Hash(String, JSON::Any)

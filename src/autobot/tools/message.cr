@@ -1,4 +1,5 @@
 require "../bus/events"
+require "./result"
 
 module Autobot
   module Tools
@@ -52,18 +53,18 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         content = params["content"].as_s
         channel = params["channel"]?.try(&.as_s) || @default_channel
         chat_id = params["chat_id"]?.try(&.as_s) || @default_chat_id
 
         if channel.empty? || chat_id.empty?
-          return "Error: No target channel/chat specified"
+          return ToolResult.error("No target channel/chat specified")
         end
 
         callback = @send_callback
         unless callback
-          return "Error: Message sending not configured"
+          return ToolResult.error("Message sending not configured")
         end
 
         msg = Bus::OutboundMessage.new(
@@ -73,9 +74,9 @@ module Autobot
         )
 
         callback.call(msg)
-        "Message sent to #{channel}:#{chat_id}"
+        ToolResult.success("Message sent to #{channel}:#{chat_id}")
       rescue ex
-        "Error sending message: #{ex.message}"
+        ToolResult.error("Error sending message: #{ex.message}")
       end
     end
   end

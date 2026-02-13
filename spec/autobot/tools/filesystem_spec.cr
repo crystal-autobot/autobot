@@ -8,7 +8,8 @@ describe Autobot::Tools::ReadFileTool do
 
     tool = Autobot::Tools::ReadFileTool.new
     result = tool.execute({"path" => JSON::Any.new(file.to_s)})
-    result.should eq("hello world")
+    result.success?.should be_true
+    result.content.should eq("hello world")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
@@ -16,7 +17,8 @@ describe Autobot::Tools::ReadFileTool do
   it "returns error for nonexistent file" do
     tool = Autobot::Tools::ReadFileTool.new
     result = tool.execute({"path" => JSON::Any.new("/nonexistent/file.txt")})
-    result.should contain("Error") # Generic for security
+    result.error?.should be_true
+    result.content.should contain("File not found")
   end
 
   it "returns error for directories" do
@@ -24,9 +26,8 @@ describe Autobot::Tools::ReadFileTool do
 
     tool = Autobot::Tools::ReadFileTool.new
     result = tool.execute({"path" => JSON::Any.new(tmp.to_s)})
-    result.should contain("Error") # Generic for security
-
-
+    result.error?.should be_true
+    result.content.should contain("not a file")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
@@ -39,9 +40,8 @@ describe Autobot::Tools::ReadFileTool do
 
     tool = Autobot::Tools::ReadFileTool.new(allowed_dir: tmp)
     result = tool.execute({"path" => JSON::Any.new((outside / "secret.txt").to_s)})
-    result.should contain("Error") # Generic for security
-
-
+    result.access_denied?.should be_true
+    result.content.should contain("Access denied")
   ensure
     FileUtils.rm_rf(tmp) if tmp
     FileUtils.rm_rf(outside) if outside
@@ -65,7 +65,8 @@ describe Autobot::Tools::WriteFileTool do
       "content" => JSON::Any.new("written content"),
     })
 
-    result.should contain("Successfully wrote")
+    result.success?.should be_true
+    result.content.should contain("Successfully wrote")
     File.read(file).should eq("written content")
   ensure
     FileUtils.rm_rf(tmp) if tmp
@@ -96,7 +97,8 @@ describe Autobot::Tools::WriteFileTool do
       "path"    => JSON::Any.new((outside / "hack.txt").to_s),
       "content" => JSON::Any.new("data"),
     })
-    result.should contain("Error")
+    result.access_denied?.should be_true
+    result.content.should contain("Access denied")
   ensure
     FileUtils.rm_rf(tmp) if tmp
     FileUtils.rm_rf(outside) if outside
@@ -116,7 +118,8 @@ describe Autobot::Tools::EditFileTool do
       "new_text" => JSON::Any.new("Crystal"),
     })
 
-    result.should contain("Successfully edited")
+    result.success?.should be_true
+    result.content.should contain("Successfully edited")
     File.read(file).should eq("Hello Crystal")
   ensure
     FileUtils.rm_rf(tmp) if tmp
@@ -134,9 +137,8 @@ describe Autobot::Tools::EditFileTool do
       "new_text" => JSON::Any.new("replacement"),
     })
 
-    result.should contain("Error") # Generic for security
-
-
+    result.error?.should be_true
+    result.content.should contain("not found")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
@@ -153,8 +155,8 @@ describe Autobot::Tools::EditFileTool do
       "new_text" => JSON::Any.new("world"),
     })
 
-    result.should contain("Error") # Changed to Error for consistency
-    result.should contain("appears 3 times")
+    result.error?.should be_true
+    result.content.should contain("appears 3 times")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
@@ -166,7 +168,8 @@ describe Autobot::Tools::EditFileTool do
       "old_text" => JSON::Any.new("x"),
       "new_text" => JSON::Any.new("y"),
     })
-    result.should contain("Error: File not found")
+    result.error?.should be_true
+    result.content.should contain("File not found")
   end
 end
 
@@ -180,10 +183,11 @@ describe Autobot::Tools::ListDirTool do
     tool = Autobot::Tools::ListDirTool.new
     result = tool.execute({"path" => JSON::Any.new(tmp.to_s)})
 
-    result.should contain("file1.txt")
-    result.should contain("file2.cr")
-    result.should contain("[dir]")
-    result.should contain("subdir")
+    result.success?.should be_true
+    result.content.should contain("file1.txt")
+    result.content.should contain("file2.cr")
+    result.content.should contain("[dir]")
+    result.content.should contain("subdir")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
@@ -191,7 +195,8 @@ describe Autobot::Tools::ListDirTool do
   it "returns error for nonexistent directory" do
     tool = Autobot::Tools::ListDirTool.new
     result = tool.execute({"path" => JSON::Any.new("/nonexistent/dir")})
-    result.should contain("Error: Directory not found")
+    result.error?.should be_true
+    result.content.should contain("Directory not found")
   end
 
   it "handles empty directory" do
@@ -199,7 +204,8 @@ describe Autobot::Tools::ListDirTool do
 
     tool = Autobot::Tools::ListDirTool.new
     result = tool.execute({"path" => JSON::Any.new(tmp.to_s)})
-    result.should contain("empty")
+    result.success?.should be_true
+    result.content.should contain("empty")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end

@@ -95,7 +95,7 @@ module Autobot
 
       private def self.setup_logging(verbose : Bool) : Nil
         level = verbose ? ::Log::Severity::Debug : ::Log::Severity::Info
-        ::Log.setup(level, ::Log::IOBackend.new)
+        Logging.setup(level)
       end
 
       private def self.parse_options(args : Array(String))

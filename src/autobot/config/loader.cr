@@ -28,9 +28,16 @@ module Autobot::Config
     # Save configuration to file
     def self.save(config : Config, path : String? = nil) : Nil
       save_path = Path[path || GLOBAL_CONFIG_PATH.to_s]
-      Dir.mkdir_p(save_path.parent) unless Dir.exists?(save_path.parent)
 
+      # Create parent directory with restrictive permissions (user-only)
+      unless Dir.exists?(save_path.parent)
+        Dir.mkdir_p(save_path.parent)
+        File.chmod(save_path.parent, 0o700)
+      end
+
+      # Write config with restrictive permissions (user read/write only)
       File.write(save_path, config.to_yaml)
+      File.chmod(save_path, 0o600)
       Log.info { "Config saved to #{save_path}" }
     end
 

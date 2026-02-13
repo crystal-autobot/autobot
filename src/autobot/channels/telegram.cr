@@ -415,8 +415,9 @@ module Autobot::Channels
         error: Process::Redirect::Pipe,
       )
 
-      output = process.output.gets_to_end
-      error_output = process.error.gets_to_end
+      # Read with size limit to prevent DoS (truncate at 4000 chars)
+      output = read_limited_io(process.output, 4000)
+      error_output = read_limited_io(process.error, 4000)
       status = process.wait
 
       result = if status.success?
@@ -424,8 +425,6 @@ module Autobot::Channels
                else
                  "Script failed (exit #{status.exit_code}):\n#{error_output}".strip
                end
-
-      result = result[0, 3997] + "..." if result.size > 4000
 
       stop_typing(chat_id)
       send_reply(chat_id, "<pre>#{MarkdownToTelegramHTML.escape_html(result)}</pre>")
@@ -585,6 +584,26 @@ module Autobot::Channels
     rescue ex
       Log.error { "Telegram API GET #{method} error: #{ex.message}" }
       nil
+    end
+
+    private def read_limited_io(io : IO, max_size : Int32) : String
+      buffer = IO::Memory.new
+      bytes_read = 0
+      chunk = Bytes.new(4096)
+
+      while (n = io.read(chunk)) > 0
+        bytes_read += n
+        if bytes_read > max_size
+          buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
+          buffer << "\n... (truncated)"
+          break
+        end
+        buffer.write(chunk[0, n])
+      end
+
+      buffer.to_s
+    rescue
+      ""
     end
 
     private def send_reply(chat_id : String, text : String) : Nil

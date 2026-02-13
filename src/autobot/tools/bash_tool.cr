@@ -1,5 +1,6 @@
 require "log"
 require "../constants"
+require "./result"
 
 module Autobot
   module Tools
@@ -41,43 +42,110 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         args_str = params["args"]?.try(&.as_s) || ""
         input = params["input"]?.try(&.as_s)
 
         Log.info { "Running bash tool: #{@script_path} #{args_str}" }
 
-        run_script(args_str, input)
+        result = run_script(args_str, input)
+        ToolResult.success(result)
       rescue ex
-        "Error running bash tool: #{ex.message}"
+        ToolResult.error("Error running bash tool: #{ex.message}")
       end
 
       private def run_script(args_str : String, input : String?) : String
-        stdout = IO::Memory.new
-        stderr = IO::Memory.new
+        # Use pipes with size limits to prevent DoS
+        stdout_read, stdout_write = IO.pipe
+        stderr_read, stderr_write = IO.pipe
 
         args = parse_args(args_str)
-
         process_input = input ? IO::Memory.new(input) : Process::Redirect::Close
 
-        status = Process.run(
+        process = Process.new(
           @script_path,
           args: args,
           input: process_input,
-          output: stdout,
-          error: stderr,
+          output: stdout_write,
+          error: stderr_write,
         )
 
-        parts = [] of String
-        stdout_text = stdout.to_s
-        parts << stdout_text unless stdout_text.empty?
+        stdout_write.close
+        stderr_write.close
 
-        stderr_text = stderr.to_s
-        if !stderr_text.empty? && stderr_text.strip.size > 0
-          parts << "STDERR:\n#{stderr_text}"
+        # Read with size limits
+        stdout_channel = Channel(String).new(1)
+        stderr_channel = Channel(String).new(1)
+        spawn { stdout_channel.send(read_limited(stdout_read)) }
+        spawn { stderr_channel.send(read_limited(stderr_read)) }
+
+        # Enforce timeout
+        completed = Channel(Process::Status).new(1)
+        spawn do
+          status = process.wait
+          completed.send(status)
         end
 
-        unless status.success?
+        timed_out, status = wait_for_timeout(process, completed)
+
+        stdout_text = stdout_channel.receive
+        stderr_text = stderr_channel.receive
+        stdout_read.close
+        stderr_read.close
+
+        build_script_result(stdout_text, stderr_text, status, timed_out)
+      end
+
+      private def read_limited(io : IO, max_size : Int32 = 10_000) : String
+        buffer = IO::Memory.new
+        bytes_read = 0
+        chunk = Bytes.new(4096)
+
+        while (n = io.read(chunk)) > 0
+          bytes_read += n
+          if bytes_read > max_size
+            buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
+            buffer << "\n... (output truncated at #{max_size} bytes)"
+            break
+          end
+          buffer.write(chunk[0, n])
+        end
+
+        buffer.to_s
+      rescue
+        ""
+      end
+
+      private def wait_for_timeout(process : Process, completed : Channel(Process::Status)) : {Bool, Process::Status?}
+        select
+        when status = completed.receive
+          {false, status}
+        when timeout(SCRIPT_TIMEOUT.seconds)
+          begin
+            process.signal(Signal::TERM)
+            sleep 0.5.seconds
+            process.signal(Signal::KILL) unless process.terminated?
+            process.wait
+          rescue
+          end
+          {true, nil}
+        end
+      end
+
+      private def build_script_result(stdout : String, stderr : String, status : Process::Status?, timed_out : Bool) : String
+        parts = [] of String
+
+        if timed_out
+          parts << "Error: Script timed out after #{SCRIPT_TIMEOUT} seconds"
+        end
+
+        parts << stdout unless stdout.empty?
+
+        if !stderr.empty? && stderr.strip.size > 0
+          parts << "STDERR:\n#{stderr}"
+        end
+
+        if status && !status.success? && !timed_out
           parts << "Exit code: #{status.exit_code}"
         end
 

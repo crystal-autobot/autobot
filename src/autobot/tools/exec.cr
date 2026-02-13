@@ -98,31 +98,55 @@ module Autobot
         )
       end
 
-      def execute(params : Hash(String, JSON::Any)) : String
+      def execute(params : Hash(String, JSON::Any)) : ToolResult
         command = params["command"].as_s
-        cwd = params["working_dir"]?.try(&.as_s) || @working_dir || Dir.current
+        user_cwd = params["working_dir"]?.try(&.as_s)
+
+        Log.debug { "ExecTool: restrict=#{@restrict_to_workspace}, working_dir=#{@working_dir.inspect}" }
+
+        # Validate working directory when workspace restrictions are enabled
+        if @restrict_to_workspace && user_cwd
+          if error = validate_working_dir(user_cwd)
+            return ToolResult.access_denied(error)
+          end
+        end
+
+        cwd = user_cwd || @working_dir || Dir.current
 
         if error = guard_command(command, cwd)
-          return error
+          return ToolResult.access_denied(error)
         end
 
         Log.info { "Executing: #{command} (cwd: #{cwd})" }
 
-        run_command(command, cwd)
+        output = run_command(command, cwd)
+        ToolResult.success(output)
       rescue ex
-        "Error executing command: #{ex.message}"
+        ToolResult.error("Error executing command: #{ex.message}")
       end
 
       private def run_command(command : String, cwd : String) : String
-        stdout = IO::Memory.new
-        stderr = IO::Memory.new
+        # Use pipes to prevent unbounded memory allocation
+        stdout_read, stdout_write = IO.pipe
+        stderr_read, stderr_write = IO.pipe
 
         process = Process.new(
           "sh", ["-c", command],
-          output: stdout,
-          error: stderr,
+          output: stdout_write,
+          error: stderr_write,
           chdir: cwd,
         )
+
+        # Close write ends in parent process
+        stdout_write.close
+        stderr_write.close
+
+        # Read output with size limits to prevent DoS
+        stdout_channel = Channel(String).new(1)
+        stderr_channel = Channel(String).new(1)
+
+        spawn { stdout_channel.send(read_limited_output(stdout_read, MAX_OUTPUT_SIZE)) }
+        spawn { stderr_channel.send(read_limited_output(stderr_read, MAX_OUTPUT_SIZE)) }
 
         completed = Channel(Process::Status).new(1)
         spawn do
@@ -132,16 +156,45 @@ module Autobot
 
         timed_out, status = wait_for_process(process, completed)
 
+        # Collect limited outputs
+        stdout_text = stdout_channel.receive
+        stderr_text = stderr_channel.receive
+
+        stdout_read.close
+        stderr_read.close
+
+        build_command_result(stdout_text, stderr_text, status, timed_out)
+      end
+
+      private def read_limited_output(io : IO, max_size : Int32) : String
+        buffer = IO::Memory.new
+        bytes_read = 0
+        chunk = Bytes.new(4096)
+
+        while (n = io.read(chunk)) > 0
+          bytes_read += n
+          if bytes_read > max_size
+            buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
+            buffer << "\n... (output truncated at #{max_size} bytes)"
+            break
+          end
+          buffer.write(chunk[0, n])
+        end
+
+        buffer.to_s
+      rescue
+        ""
+      end
+
+      private def build_command_result(stdout_text : String, stderr_text : String, status : Process::Status?, timed_out : Bool) : String
         parts = [] of String
 
         if timed_out
           parts << "Error: Command timed out after #{@timeout} seconds"
         end
 
-        stdout_text = stdout.to_s
         parts << stdout_text unless stdout_text.empty?
 
-        stderr_text = stderr.to_s
         if !stderr_text.empty? && stderr_text.strip.size > 0
           parts << "STDERR:\n#{stderr_text}"
         end
@@ -150,13 +203,7 @@ module Autobot
           parts << "\nExit code: #{status.exit_code}"
         end
 
-        result = parts.empty? ? Constants::NO_OUTPUT_MESSAGE : parts.join("\n")
-
-        if result.size > MAX_OUTPUT_SIZE
-          result = result[0, MAX_OUTPUT_SIZE] + "\n... (truncated, #{result.size - MAX_OUTPUT_SIZE} more chars)"
-        end
-
-        result
+        parts.empty? ? Constants::NO_OUTPUT_MESSAGE : parts.join("\n")
       end
 
       private def wait_for_process(process : Process, completed : Channel(Process::Status)) : {Bool, Process::Status?}
@@ -192,6 +239,11 @@ module Autobot
         end
 
         if @restrict_to_workspace
+          # Block cd commands entirely - they change execution context
+          if error = check_directory_change(cmd)
+            return error
+          end
+
           if error = check_path_traversal(cmd, cwd)
             return error
           end
@@ -200,13 +252,48 @@ module Autobot
         nil
       end
 
+      private def validate_working_dir(user_cwd : String) : String?
+        working_dir = @working_dir
+        return nil unless working_dir
+
+        workspace_real = resolve_workspace_path(working_dir)
+        return workspace_real if workspace_real.starts_with?("Error:")
+
+        cwd_real = resolve_workspace_path(user_cwd)
+        return cwd_real if cwd_real.starts_with?("Error:")
+
+        unless cwd_real.starts_with?(workspace_real + "/") || cwd_real == workspace_real
+          return "SECURITY_ERROR: Working directory '#{user_cwd}' is outside workspace. Access denied."
+        end
+
+        nil
+      end
+
+      private def check_directory_change(command : String) : String?
+        # Block any form of directory change when sandbox is enabled
+        if command.match(/\b(cd|chdir|pushd|popd)\b/)
+          return "Error: Directory change commands are blocked when workspace restrictions are enabled"
+        end
+        nil
+      end
+
       private def check_path_traversal(command : String, cwd : String) : String?
         workspace_real = resolve_workspace_path(cwd)
         return workspace_real if workspace_real.starts_with?("Error:")
 
-        return "Error: Path traversal detected" if has_traversal_pattern?(command)
-        return "Error: Encoded path traversal detected" if has_encoded_traversal?(command)
-        return "Error: Shell expansion detected" if has_shell_expansion?(command)
+        # Check for basic traversal patterns first
+        if has_traversal_pattern?(command)
+          return "SECURITY_ERROR: Path traversal detected - ../ sequences are blocked"
+        end
+
+        if has_encoded_traversal?(command)
+          return "SECURITY_ERROR: Encoded path traversal detected"
+        end
+
+        # Check shell expansion (but allow ~ in quoted strings as those are validated separately)
+        if has_unquoted_shell_expansion?(command)
+          return "SECURITY_ERROR: Shell expansion detected - use literal paths only"
+        end
 
         validate_command_paths(command, workspace_real)
       end
@@ -225,29 +312,77 @@ module Autobot
         command.includes?("%2e%2e") || command.includes?("%2E%2E")
       end
 
-      private def has_shell_expansion?(command : String) : Bool
-        command.includes?("$HOME") ||
-          command.includes?("${") ||
-          command.includes?("$USER") ||
-          command.includes?("$PATH") ||
-          command.includes?("~") ||
-          command.includes?("`") ||
-          command.includes?("$(")
+      private def has_unquoted_shell_expansion?(command : String) : Bool
+        # Check for variable expansion
+        return true if command.includes?("$HOME")
+        return true if command.includes?("${")
+        return true if command.includes?("$USER")
+        return true if command.includes?("$PATH")
+        return true if command.includes?("`")
+        return true if command.includes?("$(")
+
+        # Only block unquoted ~ (quoted ~ is validated by path checks)
+        return true if command.match(/(?:^|[\s|>])~/)
+
+        false
       end
 
       private def validate_command_paths(command : String, workspace_real : String) : String?
+        # Check unquoted absolute/home paths: /path or ~/path
         command.scan(/(?:^|[\s|>])([~\/][^\s"'|>&]+)/) do |match|
           path_str = match[1].strip
           if error = validate_single_path(path_str, workspace_real)
             return error
           end
         end
+
+        # Check double-quoted absolute/home paths: "/path" or "~/path"
+        command.scan(/"([~\/][^"]+)"/) do |match|
+          path_str = match[1].strip
+          if error = validate_single_path(path_str, workspace_real)
+            return error
+          end
+        end
+
+        # Check single-quoted absolute/home paths: '/path' or '~/path'
+        command.scan(/'([~\/][^']+)'/) do |match|
+          path_str = match[1].strip
+          if error = validate_single_path(path_str, workspace_real)
+            return error
+          end
+        end
+
+        # Check unquoted relative paths with ../ (works with current directory context)
+        command.scan(/(?:^|[\s|>])([^\s"'|>&]*\.\.\/[^\s"'|>&]*)/) do |match|
+          path_str = match[1].strip
+          next if path_str.empty?
+          if error = validate_relative_path(path_str, workspace_real)
+            return error
+          end
+        end
+
+        # Check quoted relative paths: "../path" or '../path'
+        command.scan(/"([^"]*\.\.\/[^"]*)"/) do |match|
+          path_str = match[1].strip
+          if error = validate_relative_path(path_str, workspace_real)
+            return error
+          end
+        end
+
+        command.scan(/'([^']*\.\.\/[^']*)'/) do |match|
+          path_str = match[1].strip
+          if error = validate_relative_path(path_str, workspace_real)
+            return error
+          end
+        end
+
         nil
       end
 
-      private def validate_single_path(path_str : String, workspace_real : String) : String?
-        expanded = Path[path_str].expand(home: true).to_s
-        real_path = resolve_real_path(expanded)
+      private def validate_relative_path(path_str : String, workspace_real : String) : String?
+        # Resolve relative path against workspace and validate
+        full_path = File.join(workspace_real, path_str)
+        real_path = resolve_real_path(full_path)
 
         unless real_path.starts_with?(workspace_real + "/") || real_path == workspace_real
           return "Error: Path '#{path_str}' resolves outside workspace"
@@ -256,6 +391,19 @@ module Autobot
         nil
       rescue
         "Error: Cannot validate path '#{path_str}'"
+      end
+
+      private def validate_single_path(path_str : String, workspace_real : String) : String?
+        expanded = Path[path_str].expand(home: true).to_s
+        real_path = resolve_real_path(expanded)
+
+        unless real_path.starts_with?(workspace_real + "/") || real_path == workspace_real
+          return "SECURITY_ERROR: Access denied - path '#{path_str}' is outside workspace. Workspace restrictions are enabled. Only files within workspace are accessible."
+        end
+
+        nil
+      rescue
+        "SECURITY_ERROR: Cannot validate path '#{path_str}' - access denied for security"
       end
 
       private def resolve_real_path(expanded : String) : String

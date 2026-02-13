@@ -23,7 +23,7 @@ module Autobot
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
-          restrict_exec_to_workspace: config.tools.try(&.restrict_to_workspace?) || false,
+          restrict_exec_to_workspace: config.tools.try(&.restrict_to_workspace?) || true,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           skills_dirs: [
             (config.workspace_path / "skills").to_s,
@@ -79,6 +79,9 @@ module Autobot
           api_base: provider_config.api_base?
         )
 
+        # Get restrict_to_workspace setting
+        restrict_to_workspace = config.tools.try(&.restrict_to_workspace?) || true
+
         # Create and start agent loop
         agent_loop = Autobot::Agent::Loop.new(
           bus: bus,
@@ -89,7 +92,10 @@ module Autobot
           model: config.default_model,
           max_iterations: config.agents.try(&.defaults.try(&.max_tool_iterations)) || 20,
           memory_window: config.agents.try(&.defaults.try(&.memory_window)) || 50,
-          cron_service: cron_service
+          cron_service: cron_service,
+          brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
+          exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
+          restrict_to_workspace: restrict_to_workspace
         )
 
         # Handle shutdown signals

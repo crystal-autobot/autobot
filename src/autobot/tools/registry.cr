@@ -42,14 +42,17 @@ module Autobot::Tools
       @tools.values.map(&.to_schema)
     end
 
-    def execute(name : String, params : Hash(String, JSON::Any)) : String
+    def execute(name : String, params : Hash(String, JSON::Any), session_key : String? = nil) : String
       tool = @tools[name]?
 
       unless tool
         return "Error: Tool '#{name}' not found"
       end
 
-      if error = @rate_limiter.check_limit(name, @session_key)
+      # Use provided session key or fall back to instance default
+      effective_session_key = session_key || @session_key
+
+      if error = @rate_limiter.check_limit(name, effective_session_key)
         Log.warn { "Rate limit exceeded for tool #{name}: #{error}" }
         return "Error: #{error}"
       end
@@ -62,11 +65,20 @@ module Autobot::Tools
 
         Log.info { "Executing tool: #{name}" }
         result = tool.execute(params)
-        Log.info { "Tool #{name} completed successfully" }
 
-        @rate_limiter.record_call(name, @session_key)
+        # Log based on result status
+        case result.status
+        when ToolResult::Status::Success
+          Log.info { "Tool #{name} completed successfully" }
+        when ToolResult::Status::AccessDenied
+          Log.warn { "Tool #{name} ACCESS DENIED: #{result.content.split('\n').first}" }
+        when ToolResult::Status::Error
+          Log.warn { "Tool #{name} failed: #{result.content.split('\n').first}" }
+        end
 
-        result
+        @rate_limiter.record_call(name, effective_session_key)
+
+        result.to_s
       rescue ex : Exception
         error_msg = "Error executing #{name}"
         Log.error { error_msg }

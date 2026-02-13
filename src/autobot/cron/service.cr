@@ -178,8 +178,13 @@ module Autobot
         return unless s = @store
 
         dir = @store_path.parent
-        Dir.mkdir_p(dir) unless Dir.exists?(dir)
+        unless Dir.exists?(dir)
+          Dir.mkdir_p(dir)
+          File.chmod(dir, 0o700)
+        end
+
         File.write(@store_path, s.to_json)
+        File.chmod(@store_path, 0o600)
       end
 
       private def now_ms : Int64

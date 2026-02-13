@@ -38,6 +38,7 @@ module Autobot::Agent
     @subagents : SubagentManager?
     @cron_service : Cron::Service?
     @memory_manager : MemoryManager
+    @restrict_to_workspace : Bool
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -51,10 +52,10 @@ module Autobot::Agent
       @cron_service : Cron::Service? = nil,
       brave_api_key : String? = nil,
       exec_timeout : Int32 = 60,
-      restrict_to_workspace : Bool = false,
+      @restrict_to_workspace : Bool = false,
     )
       @model = @model || @provider.default_model
-      @context = Context::Builder.new(@workspace)
+      @context = Context::Builder.new(@workspace, @restrict_to_workspace)
 
       # Setup memory manager
       active_model_str = @model || @provider.default_model
@@ -152,7 +153,7 @@ module Autobot::Agent
       )
 
       # Execute agent loop and get response
-      final_content, tools_used = execute_agent_loop(messages)
+      final_content, tools_used = execute_agent_loop(messages, session.key)
 
       # Save to session
       save_to_session(session, msg.content, final_content, tools_used)
@@ -184,7 +185,7 @@ module Autobot::Agent
         chat_id: origin_chat_id
       )
 
-      final_content = run_tool_loop(messages)
+      final_content = run_tool_loop(messages, session.key)
       final_content ||= "Background task completed."
 
       session.add_message(Constants::ROLE_USER, "[System: #{msg.sender_id}] #{msg.content}")
@@ -199,7 +200,7 @@ module Autobot::Agent
     end
 
     # Run the tool execution loop and return the final content.
-    private def run_tool_loop(messages : Array(Hash(String, JSON::Any))) : String?
+    private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : String?
       final_content : String? = nil
 
       @max_iterations.times do
@@ -219,7 +220,7 @@ module Autobot::Agent
 
           response.tool_calls.each do |tool_call|
             Log.info { "Tool call: #{tool_call.name}" }
-            result = @tools.execute(tool_call.name, tool_call.arguments)
+            result = @tools.execute(tool_call.name, tool_call.arguments, session_key)
             messages = @context.add_tool_result(messages, tool_call.id, tool_call.name, result)
           end
         else
@@ -255,7 +256,7 @@ module Autobot::Agent
     end
 
     # Execute the agent loop with tool calls
-    private def execute_agent_loop(messages : Array(Hash(String, JSON::Any))) : {String, Array(String)}
+    private def execute_agent_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String, Array(String)}
       final_content : String? = nil
       tools_used = [] of String
 
@@ -263,7 +264,7 @@ module Autobot::Agent
         response = call_llm(messages)
 
         if response.has_tool_calls?
-          messages = process_tool_calls(messages, response, tools_used)
+          messages = process_tool_calls(messages, response, tools_used, session_key)
         else
           final_content = response.content
           break
@@ -295,6 +296,7 @@ module Autobot::Agent
       messages : Array(Hash(String, JSON::Any)),
       response : Providers::Response,
       tools_used : Array(String),
+      session_key : String,
     ) : Array(Hash(String, JSON::Any))
       # Add assistant message with tool calls
       messages = @context.add_assistant_message(
@@ -303,12 +305,12 @@ module Autobot::Agent
         response.tool_calls
       )
 
-      # Execute tools
+      # Execute tools with session-specific rate limiting
       response.tool_calls.each do |tool_call|
         tools_used << tool_call.name
         Log.info { "Tool call: #{tool_call.name}" }
 
-        result = @tools.execute(tool_call.name, tool_call.arguments)
+        result = @tools.execute(tool_call.name, tool_call.arguments, session_key)
 
         messages = @context.add_tool_result(
           messages,
