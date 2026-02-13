@@ -35,11 +35,17 @@ Supported provider blocks:
 
 ## Channels
 
+**Security Note:** `allow_from` is deny-by-default for security.
+
 ```yaml
 channels:
   telegram:
     enabled: false
     token: ""
+    # allow_from options:
+    # []              - DENY ALL (secure default)
+    # ["*"]           - Allow anyone (use with caution)
+    # ["@user", "id"] - Allowlist specific users (recommended)
     allow_from: []
 
   slack:
@@ -47,11 +53,14 @@ channels:
     bot_token: ""
     app_token: ""
     mode: "socket"
-    group_policy: "mention"
+    group_policy: "mention"  # "mention" (secure) | "open" | "allowlist"
 
   whatsapp:
     enabled: false
-    bridge_url: "ws://localhost:3001"
+    bridge_url: "ws://localhost:3001"  # Prefer wss:// for production
+    # allow_from: []      - DENY ALL
+    # allow_from: ["*"]   - Allow anyone
+    # allow_from: ["num"] - Allowlist phone numbers
     allow_from: []
 ```
 
@@ -59,14 +68,45 @@ channels:
 
 ```yaml
 tools:
-  restrict_to_workspace: true  # Default: true for security (sandbox file access to workspace)
+  restrict_to_workspace: true  # Default: true (sandbox file/command access to workspace)
   exec:
     timeout: 60
+    full_shell_access: false   # Default: false (blocks pipes, redirects, variables in restricted mode)
+                               # Set true ONLY if you need shell features AND trust all command sources
   web:
     search:
       api_key: ""
       max_results: 5
 ```
+
+### Shell Access Modes
+
+**IMPORTANT:** `restrict_to_workspace` and `full_shell_access` are **mutually exclusive**.
+
+**Valid Configurations:**
+
+| restrict_to_workspace | full_shell_access | Result |
+|----------------------|-------------------|---------|
+| `true` | `false` | ✅ **Secure mode** - Simple commands only, workspace sandboxed |
+| `false` | `true` | ✅ **Full shell mode** - All shell features, no sandbox |
+| `false` | `false` | ✅ Simple commands, no sandbox |
+| `true` | `true` | ❌ **REJECTED** - Incompatible settings |
+
+**Why mutually exclusive?**
+
+Shell features (pipes, variables, command substitution) can construct paths dynamically at runtime, bypassing lexical path validation. Example:
+```bash
+echo 2f6574632f686f737473 | xxd -r -p | xargs cat  # Decodes to /etc/hosts
+```
+
+**Recommendation:**
+- **Production:** `restrict_to_workspace: true, full_shell_access: false` (secure)
+- **Docker/DevOps:** `restrict_to_workspace: false, full_shell_access: true` (unrestricted)
+
+**Secure mode allows:**
+- ✅ Simple commands: `cat file.txt`, `ls`, `echo hello`
+- ✅ Multiple arguments: `cat file1 file2`
+- ❌ Pipes, redirects, variables, chaining
 
 ## Cron
 

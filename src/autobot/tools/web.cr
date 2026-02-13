@@ -95,6 +95,13 @@ module Autobot
 
       DEFAULT_MAX_CHARS = 50_000
 
+      # SSRF protection patterns for alternate IP notation
+      OCTAL_IP_PATTERN      = /\b0[0-7]+\.\d+\.\d+\.\d+/
+      HEX_IP_PATTERN        = /\b0x[0-9a-f]+/i
+      INTEGER_IP_PATTERN    = /^\d{8,}$/
+      IPV6_LOOPBACK_PATTERN = /\[::1\]/
+      IPV6_PRIVATE_PATTERN  = /\[(fc|fd)[0-9a-f]{2}:/i
+
       def initialize(@max_chars : Int32 = DEFAULT_MAX_CHARS)
       end
 
@@ -172,38 +179,63 @@ module Autobot
         "Invalid URL"
       end
 
-      private def check_ssrf(host : String) : String?
-        begin
-          addrinfo = Socket::Addrinfo.resolve(host, "http", Socket::Family::UNSPEC, Socket::Type::STREAM)
-          return "Cannot resolve host" if addrinfo.empty?
+      private def resolve_and_validate_ip(host : String) : String
+        # First check if host looks like an IP address with alternate notation
+        if error = check_alternate_ip_notation(host)
+          raise error
+        end
 
-          # Validate ALL resolved IPs, not just the first one (prevents DNS rebinding)
-          addrinfo.each do |addr|
-            ip_str = addr.ip_address.address
+        addrinfo = Socket::Addrinfo.resolve(host, "http", Socket::Family::UNSPEC, Socket::Type::STREAM)
+        raise "Cannot resolve host" if addrinfo.empty?
 
-            # Block private IP ranges (RFC 1918)
-            if private_ip?(ip_str)
-              return "Access to private IP addresses is blocked"
-            end
+        # Validate ALL resolved IPs, not just the first one
+        validated_ips = [] of String
 
-            # Block localhost/loopback
-            if loopback?(ip_str)
-              return "Access to localhost is blocked"
-            end
+        addrinfo.each do |addr|
+          ip_str = addr.ip_address.address
 
-            # Block cloud metadata endpoints
-            if cloud_metadata?(ip_str)
-              return "Access to cloud metadata endpoints is blocked"
-            end
-
-            # Block link-local addresses
-            if link_local?(ip_str)
-              return "Access to link-local addresses is blocked"
-            end
+          if private_ip?(ip_str)
+            raise "Access to private IP addresses is blocked"
           end
-        rescue
-          # If we can't resolve, block it to be safe
-          return "Cannot validate host"
+
+          if loopback?(ip_str)
+            raise "Access to localhost is blocked"
+          end
+
+          if cloud_metadata?(ip_str)
+            raise "Access to cloud metadata endpoints is blocked"
+          end
+
+          if link_local?(ip_str)
+            raise "Access to link-local addresses is blocked"
+          end
+
+          validated_ips << ip_str
+        end
+
+        raise "No valid IPs found" if validated_ips.empty?
+
+        # Return first validated IP to connect to (prevents DNS rebinding)
+        validated_ips.first
+      rescue ex
+        raise "SSRF validation failed: #{ex.message}"
+      end
+
+      private def check_ssrf(host : String) : String?
+        resolve_and_validate_ip(host)
+        nil
+      rescue ex
+        ex.message
+      end
+
+      private def check_alternate_ip_notation(host : String) : String?
+        return "Octal IP notation is blocked" if host.match(OCTAL_IP_PATTERN)
+        return "Hex IP notation is blocked" if host.match(HEX_IP_PATTERN)
+        return "Integer IP notation is blocked" if host.match(INTEGER_IP_PATTERN)
+
+        if host.includes?("[")
+          return "Access to localhost is blocked" if host.match(IPV6_LOOPBACK_PATTERN)
+          return "Access to private addresses is blocked" if host.match(IPV6_PRIVATE_PATTERN)
         end
 
         nil
@@ -239,13 +271,19 @@ module Autobot
           raise "Too many redirects (max #{MAX_REDIRECTS})"
         end
 
-        headers = HTTP::Headers{"User-Agent" => USER_AGENT}
+        hostname = uri.host
+        raise "Invalid URI: missing host" unless hostname
 
-        # Create client with timeout to prevent hanging requests
-        host = uri.host
-        raise "Invalid URI: missing host" unless host
+        # Resolve and validate, then connect to validated IP (prevent DNS rebinding)
+        validated_ip = resolve_and_validate_ip(hostname)
 
-        client = HTTP::Client.new(host, uri.port, tls: uri.scheme == "https")
+        # Connect to validated IP, use Host header for virtual hosting
+        headers = HTTP::Headers{
+          "User-Agent" => USER_AGENT,
+          "Host"       => hostname,
+        }
+
+        client = HTTP::Client.new(validated_ip, uri.port, tls: uri.scheme == "https")
         client.read_timeout = DEFAULT_TIMEOUT
         client.connect_timeout = DEFAULT_TIMEOUT
 

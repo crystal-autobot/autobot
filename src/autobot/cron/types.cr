@@ -73,6 +73,7 @@ module Autobot
       property created_at_ms : Int64 = 0
       property updated_at_ms : Int64 = 0
       property? delete_after_run : Bool = false
+      property owner : String? = nil # Format: "channel:chat_id" for authorization
 
       def initialize(
         @id : String,
@@ -84,6 +85,7 @@ module Autobot
         @created_at_ms = 0_i64,
         @updated_at_ms = 0_i64,
         @delete_after_run = false,
+        @owner : String? = nil,
       )
       end
     end

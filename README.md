@@ -10,34 +10,33 @@ Compiled binary • Multi-provider LLM • Chat integrations • Plugin system
 
 ## Why Autobot?
 
-Built with [Crystal](https://crystal-lang.org), Autobot delivers native performance with a developer-friendly experience. Alternative to [nanobot](https://github.com/HKUDS/nanobot) with faster startup and compiled distribution.
+**Production-grade AI automation** built with [Crystal](https://crystal-lang.org) — engineered for token efficiency, security, and reliability.
 
-| Metric | Value |
-|--------|-------|
-| **Binary size** | ~2MB (optimized) |
-| **Docker image** | <50MB |
-| **Runtime** | Zero dependencies |
-| **Startup** | Instant (<100ms) |
+| What | How |
+|------|-----|
+| **🎯 Token Efficient** | Structured tool results • Memory consolidation • Minimal context overhead • Session management |
+| **📊 Observable** | Status-based logging • Credential sanitization • Token tracking • Operation audit trails |
+| **🔒 Secure by Default** | Workspace sandboxing • SSRF protection • Command guards • Rate limiting • 0600 file permissions |
+| **⚡ Lightweight** | 2MB binary • <50MB Docker • Zero runtime deps • <100ms startup • Streaming I/O |
 
 ## ✨ Features
 
-### Core
-- **Compiled binary** - Single static executable, no runtime required
-- **Multi-provider LLM** - Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM
-- **Memory system** - MEMORY.md (long-term) + HISTORY.md (searchable log)
-- **Sessions** - JSONL-based conversation persistence
+**Core Engine**
+- Multi-provider LLM (Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM)
+- JSONL sessions with memory consolidation
+- Built-in tools: file ops, shell exec, web search/fetch
 
-### Integrations
-- **Chat channels** - Telegram, Slack, WhatsApp (via bridge)
-- **Tool system** - File operations, shell exec, web search/fetch, custom bash tools
-- **Cron scheduler** - Scheduled jobs with cron expressions and intervals
-- **Plugin system** - Extend with custom tools and integrations
+**Integrations**
+- Chat channels: Telegram, Slack, WhatsApp
+- Cron scheduler with expressions and intervals
+- Plugin system for custom tools
+- Bash script auto-discovery as tools
 
-### Advanced
-- **Skills** - Markdown-based skill files with frontmatter and auto-discovery
-- **Custom commands** - Telegram slash commands backed by prompt macros or bash scripts
-- **Subagents** - Spawn specialized agents for complex tasks
-- **Logging** - Token usage tracking and file operation audit
+**Advanced**
+- Skills: Markdown-based with frontmatter
+- Custom commands: macros or bash scripts
+- Subagents for parallel tasks
+- Full observability: tokens, files, operations
 
 ## 🚀 Quick Start
 
@@ -98,10 +97,11 @@ autobot agent -m "Summarize this project"
 |----------|-------------|
 | [Quick Start](docs/quickstart.md) | Installation and first steps |
 | [Configuration](docs/configuration.md) | Complete config reference |
+| [Security](docs/security.md) | Security model and best practices |
+| [Deployment](docs/deployment.md) | Production deployment with proper user/permissions |
 | [CLI Reference](docs/cli.md) | All commands and options |
 | [Architecture](docs/architecture.md) | System design and components |
 | [Plugins](docs/plugins.md) | Building and using plugins |
-| [Security](docs/security.md) | Security model and best practices |
 | [Examples](docs/examples.md) | Use cases and code samples |
 | [Development](docs/development.md) | Contributing and local setup |
 

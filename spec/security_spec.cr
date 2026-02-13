@@ -364,6 +364,111 @@ describe "Security Tests" do
     end
   end
 
+  describe "Shell features blocking (full_shell_access: false)" do
+    it "blocks arbitrary variable usage and assignments" do
+      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
+      Dir.mkdir_p(workspace)
+
+      tool = Autobot::Tools::ExecTool.new(
+        working_dir: workspace,
+        restrict_to_workspace: true,
+        full_shell_access: false
+      )
+
+      variable_attempts = [
+        "X=/etc/hosts; cat $X",        # Variable assignment + expansion
+        "FILE=/etc/passwd; cat $FILE", # Different variable
+        "cat $MY_VAR",                 # Arbitrary variable
+        "echo $PATH",                  # Even common vars blocked
+      ]
+
+      variable_attempts.each do |cmd|
+        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
+        result.access_denied?.should be_true
+        lower = result.content.downcase
+        (lower.includes?("expansion") || lower.includes?("chaining") || lower.includes?("not allowed")).should be_true
+      end
+
+      Dir.delete(workspace) if Dir.exists?(workspace)
+    end
+
+    it "blocks pipes and redirects" do
+      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
+      Dir.mkdir_p(workspace)
+
+      tool = Autobot::Tools::ExecTool.new(
+        working_dir: workspace,
+        restrict_to_workspace: true,
+        full_shell_access: false
+      )
+
+      shell_feature_attempts = [
+        "cat file.txt | grep pattern", # Pipe
+        "echo text > output.txt",      # Output redirect
+        "cat < input.txt",             # Input redirect
+        "ls && cat file",              # Command chain &&
+        "ls || cat file",              # Command chain ||
+        "ls; cat file",                # Command chain ;
+        "sleep 10 &",                  # Background
+      ]
+
+      shell_feature_attempts.each do |cmd|
+        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
+        result.access_denied?.should be_true
+        lower = result.content.downcase
+        (lower.includes?("not allowed") || lower.includes?("restricted")).should be_true
+      end
+
+      Dir.delete(workspace) if Dir.exists?(workspace)
+    end
+
+    it "allows simple commands in restricted mode" do
+      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
+      Dir.mkdir_p(workspace)
+      File.write("#{workspace}/test.txt", "content")
+
+      tool = Autobot::Tools::ExecTool.new(
+        working_dir: workspace,
+        restrict_to_workspace: true,
+        full_shell_access: false
+      )
+
+      safe_commands = [
+        "cat test.txt",
+        "ls",
+        "echo hello",
+      ]
+
+      safe_commands.each do |cmd|
+        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
+        result.success?.should be_true
+      end
+
+      File.delete("#{workspace}/test.txt") if File.exists?("#{workspace}/test.txt")
+      Dir.delete(workspace) if Dir.exists?(workspace)
+    end
+
+    it "allows shell features when full_shell_access is enabled (without restrictions)" do
+      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
+      Dir.mkdir_p(workspace)
+      File.write("#{workspace}/test.txt", "line1\nline2")
+
+      tool = Autobot::Tools::ExecTool.new(
+        working_dir: workspace,
+        restrict_to_workspace: false,
+        full_shell_access: true
+      )
+
+      # Pipes should work when full_shell_access is enabled
+      result = tool.execute({"command" => JSON::Any.new("cat test.txt | head -1")} of String => JSON::Any)
+      result.success?.should be_true
+      result.content.should contain("line1")
+
+      File.delete("#{workspace}/test.txt") if File.exists?("#{workspace}/test.txt")
+      Dir.delete(workspace) if Dir.exists?(workspace)
+    end
+  end
+
   describe "Command timeout enforcement" do
     it "kills long-running commands" do
       tool = Autobot::Tools::ExecTool.new(timeout: 2)
@@ -373,6 +478,33 @@ describe "Security Tests" do
 
       result.success?.should be_true
       result.content.should contain("timed out")
+    end
+  end
+
+  describe "Configuration validation" do
+    it "rejects incompatible restrict_to_workspace + full_shell_access" do
+      expect_raises(ArgumentError, /mutually exclusive/) do
+        Autobot::Tools::ExecTool.new(
+          restrict_to_workspace: true,
+          full_shell_access: true
+        )
+      end
+    end
+
+    it "allows restrict_to_workspace without full_shell_access" do
+      tool = Autobot::Tools::ExecTool.new(
+        restrict_to_workspace: true,
+        full_shell_access: false
+      )
+      tool.should_not be_nil
+    end
+
+    it "allows full_shell_access without workspace restrictions" do
+      tool = Autobot::Tools::ExecTool.new(
+        restrict_to_workspace: false,
+        full_shell_access: true
+      )
+      tool.should_not be_nil
     end
   end
 

@@ -38,8 +38,8 @@ module Autobot::Config
 
   class SlackDMConfig
     include YAML::Serializable
-    property? enabled : Bool = true
-    property policy : String = "open"
+    property? enabled : Bool = false
+    property policy : String = "allowlist"
     property allow_from : Array(String) = [] of String
 
     def initialize
@@ -140,6 +140,7 @@ module Autobot::Config
   class ExecToolConfig
     include YAML::Serializable
     property timeout : Int32 = 60
+    property? full_shell_access : Bool = false
 
     def initialize
     end

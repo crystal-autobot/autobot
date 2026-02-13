@@ -34,12 +34,16 @@ module Autobot
       end
 
       # List all jobs (optionally including disabled ones).
-      def list_jobs(include_disabled : Bool = false) : Array(CronJob)
+      # If owner is provided, only returns jobs owned by that owner.
+      def list_jobs(include_disabled : Bool = false, owner : String? = nil) : Array(CronJob)
         jobs = if include_disabled
                  store.jobs
                else
                  store.jobs.select(&.enabled?)
                end
+
+        jobs = jobs.select { |j| j.owner == owner } if owner
+
         jobs.sort_by { |j| j.state.next_run_at_ms || Int64::MAX }
       end
 
@@ -52,6 +56,7 @@ module Autobot
         channel : String? = nil,
         to : String? = nil,
         delete_after_run : Bool = false,
+        owner : String? = nil,
       ) : CronJob
         now = now_ms
 
@@ -70,7 +75,8 @@ module Autobot
           state: CronJobState.new(next_run_at_ms: compute_next_run(schedule, now)),
           created_at_ms: now,
           updated_at_ms: now,
-          delete_after_run: delete_after_run
+          delete_after_run: delete_after_run,
+          owner: owner
         )
 
         store.jobs << job
@@ -81,7 +87,16 @@ module Autobot
       end
 
       # Remove a job by ID.
-      def remove_job(job_id : String) : Bool
+      # If owner is provided, only removes job if it matches the owner.
+      def remove_job(job_id : String, owner : String? = nil) : Bool
+        job_to_remove = store.jobs.find { |j| j.id == job_id }
+        return false unless job_to_remove
+
+        # Check ownership if provided
+        if owner && job_to_remove.owner != owner
+          return false
+        end
+
         before = store.jobs.size
         store.jobs.reject! { |j| j.id == job_id }
         removed = store.jobs.size < before

@@ -99,6 +99,8 @@ module Autobot
                      return ToolResult.error("either every_seconds, cron_expr, or at is required")
                    end
 
+        owner_key = "#{@channel}:#{@chat_id}"
+
         job = @cron.add_job(
           name: message.size > 30 ? message[0, 30] : message,
           schedule: schedule,
@@ -106,14 +108,16 @@ module Autobot
           deliver: true,
           channel: @channel,
           to: @chat_id,
-          delete_after_run: delete_after
+          delete_after_run: delete_after,
+          owner: owner_key
         )
 
         ToolResult.success("Created job '#{job.name}' (id: #{job.id})")
       end
 
       private def list_jobs : ToolResult
-        jobs = @cron.list_jobs
+        owner_key = owner_context
+        jobs = @cron.list_jobs(owner: owner_key)
         return ToolResult.success("No scheduled jobs.") if jobs.empty?
 
         lines = jobs.map { |j| "- #{j.name} (id: #{j.id}, #{j.schedule.kind})" }
@@ -124,11 +128,18 @@ module Autobot
         job_id = params["job_id"]?.try(&.as_s)
         return ToolResult.error("job_id is required for remove") unless job_id
 
-        if @cron.remove_job(job_id)
+        owner_key = owner_context
+
+        if @cron.remove_job(job_id, owner: owner_key)
           ToolResult.success("Removed job #{job_id}")
         else
-          ToolResult.error("Job #{job_id} not found")
+          ToolResult.error("Job #{job_id} not found or access denied")
         end
+      end
+
+      private def owner_context : String?
+        return nil if @channel.empty? || @chat_id.empty?
+        "#{@channel}:#{@chat_id}"
       end
     end
   end

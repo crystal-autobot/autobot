@@ -25,9 +25,11 @@ module Autobot::Channels
     abstract def send_message(message : Bus::OutboundMessage) : Nil
 
     # Check if a sender is allowed to use this bot.
-    # Returns true if no allow list is configured (open by default).
+    # Returns false if no allow list (deny by default).
+    # Use ["*"] in allow_from to allow all senders.
     def allowed?(sender_id : String) : Bool
-      return true if @allow_from.empty?
+      return false if @allow_from.empty?
+      return true if @allow_from.includes?("*")
 
       sender_str = sender_id.to_s
       return true if sender_str.in?(@allow_from)

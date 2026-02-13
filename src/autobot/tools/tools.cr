@@ -21,6 +21,7 @@ module Autobot
       exec_timeout : Int32 = ExecTool::DEFAULT_TIMEOUT,
       exec_deny_patterns : Array(Regex) = ExecTool::DEFAULT_DENY_PATTERNS,
       restrict_exec_to_workspace : Bool = false,
+      full_shell_access : Bool = false,
       brave_api_key : String? = nil,
       web_fetch_max_chars : Int32 = WebFetchTool::DEFAULT_MAX_CHARS,
       skills_dirs : Array(String) = [] of String,
@@ -39,6 +40,7 @@ module Autobot
         working_dir: workspace.try(&.to_s),
         deny_patterns: exec_deny_patterns,
         restrict_to_workspace: restrict_exec_to_workspace,
+        full_shell_access: full_shell_access,
       ))
 
       # Web tools

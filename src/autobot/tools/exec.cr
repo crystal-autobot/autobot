@@ -11,6 +11,22 @@ module Autobot
       MAX_OUTPUT_SIZE     = 10_000
       SIGNAL_GRACE_PERIOD = 0.5.seconds
 
+      # Path validation patterns
+      DIR_CHANGE_PATTERN          = /\b(cd|chdir|pushd|popd)\b/
+      BARE_DOTDOT_PATTERN         = /(?:^|[\s|>&<;])\.\.(?:[\s|>&<;]|$)/
+      UNQUOTED_TILDE_PATTERN      = /(?:^|[\s|>])~/
+      UNQUOTED_ABSOLUTE_PATH      = /(?:^|[\s|><&;])([~\/][^\s"'|>&<;]+)/
+      DOUBLE_QUOTED_ABSOLUTE_PATH = /"([~\/][^"]+)"/
+      SINGLE_QUOTED_ABSOLUTE_PATH = /'([~\/][^']+)'/
+      UNQUOTED_RELATIVE_PATH      = /(?:^|[\s|>])([^\s"'|>&]*\.\.\/[^\s"'|>&]*)/
+      DOUBLE_QUOTED_RELATIVE_PATH = /"([^"]*\.\.\/[^"]*)"/
+      SINGLE_QUOTED_RELATIVE_PATH = /'([^']*\.\.\/[^']*)'/
+
+      # Shell feature patterns (for restricted mode without full_shell_access)
+      OUTPUT_REDIRECT_PATTERN     = />\s*\S/
+      INPUT_REDIRECT_PATTERN      = /<\s*\S/
+      VARIABLE_ASSIGNMENT_PATTERN = /[A-Z_]\w*=/
+
       DEFAULT_DENY_PATTERNS = [
         # Destructive file operations
         /\brm\s+-[rf]{1,2}\b/i, # rm -r, rm -rf, rm -fr
@@ -70,6 +86,7 @@ module Autobot
       getter deny_patterns : Array(Regex)
       getter allow_patterns : Array(Regex)
       getter? restrict_to_workspace : Bool
+      getter? full_shell_access : Bool
 
       def initialize(
         @timeout = DEFAULT_TIMEOUT,
@@ -77,7 +94,16 @@ module Autobot
         @deny_patterns = DEFAULT_DENY_PATTERNS,
         @allow_patterns = [] of Regex,
         @restrict_to_workspace = false,
+        @full_shell_access = false,
       )
+        # Validate incompatible security settings
+        if @restrict_to_workspace && @full_shell_access
+          raise ArgumentError.new(
+            "Invalid configuration: restrict_to_workspace and full_shell_access are mutually exclusive. " \
+            "Workspace restrictions require simple commands (no shell features). " \
+            "For full shell access (pipes, redirects), disable workspace restrictions."
+          )
+        end
       end
 
       def name : String
@@ -244,11 +270,27 @@ module Autobot
             return error
           end
 
+          # Block shell features when full_shell_access is disabled (secure default)
+          unless @full_shell_access
+            if error = check_shell_features(cmd)
+              return error
+            end
+          end
+
           if error = check_path_traversal(cmd, cwd)
             return error
           end
         end
 
+        nil
+      end
+
+      private def check_shell_features(command : String) : String?
+        return "Error: Pipes not allowed in restricted mode (use direct commands)" if command.includes?("|")
+        return "Error: Output redirection not allowed in restricted mode" if command.match(OUTPUT_REDIRECT_PATTERN)
+        return "Error: Input redirection not allowed in restricted mode" if command.match(INPUT_REDIRECT_PATTERN)
+        return "Error: Command chaining not allowed in restricted mode (use one command)" if command.includes?(";") || command.includes?("&&") || command.includes?("||")
+        return "Error: Background execution not allowed in restricted mode" if command.includes?("&")
         nil
       end
 
@@ -270,8 +312,7 @@ module Autobot
       end
 
       private def check_directory_change(command : String) : String?
-        # Block any form of directory change when sandbox is enabled
-        if command.match(/\b(cd|chdir|pushd|popd)\b/)
+        if command.match(DIR_CHANGE_PATTERN)
           return "Error: Directory change commands are blocked when workspace restrictions are enabled"
         end
         nil
@@ -305,7 +346,10 @@ module Autobot
       end
 
       private def has_traversal_pattern?(command : String) : Bool
-        command.includes?("../") || command.includes?("..\\")
+        return true if command.includes?("../")
+        return true if command.includes?("..\\")
+        return true if command.match(BARE_DOTDOT_PATTERN)
+        false
       end
 
       private def has_encoded_traversal?(command : String) : Bool
@@ -313,47 +357,50 @@ module Autobot
       end
 
       private def has_unquoted_shell_expansion?(command : String) : Bool
-        # Check for variable expansion
+        # Always block these dangerous patterns
         return true if command.includes?("$HOME")
         return true if command.includes?("${")
         return true if command.includes?("$USER")
         return true if command.includes?("$PATH")
         return true if command.includes?("`")
         return true if command.includes?("$(")
+        return true if command.match(UNQUOTED_TILDE_PATTERN)
 
-        # Only block unquoted ~ (quoted ~ is validated by path checks)
-        return true if command.match(/(?:^|[\s|>])~/)
+        # When workspace restricted, ALWAYS block variables (they bypass path validation)
+        # full_shell_access only controls pipes/redirects, NOT variables
+        return true if command.includes?("$")
+        return true if command.match(VARIABLE_ASSIGNMENT_PATTERN)
 
         false
       end
 
       private def validate_command_paths(command : String, workspace_real : String) : String?
-        # Check unquoted absolute/home paths: /path or ~/path
-        command.scan(/(?:^|[\s|>])([~\/][^\s"'|>&]+)/) do |match|
+        # Check unquoted absolute/home paths
+        command.scan(UNQUOTED_ABSOLUTE_PATH) do |match|
           path_str = match[1].strip
           if error = validate_single_path(path_str, workspace_real)
             return error
           end
         end
 
-        # Check double-quoted absolute/home paths: "/path" or "~/path"
-        command.scan(/"([~\/][^"]+)"/) do |match|
+        # Check double-quoted absolute/home paths
+        command.scan(DOUBLE_QUOTED_ABSOLUTE_PATH) do |match|
           path_str = match[1].strip
           if error = validate_single_path(path_str, workspace_real)
             return error
           end
         end
 
-        # Check single-quoted absolute/home paths: '/path' or '~/path'
-        command.scan(/'([~\/][^']+)'/) do |match|
+        # Check single-quoted absolute/home paths
+        command.scan(SINGLE_QUOTED_ABSOLUTE_PATH) do |match|
           path_str = match[1].strip
           if error = validate_single_path(path_str, workspace_real)
             return error
           end
         end
 
-        # Check unquoted relative paths with ../ (works with current directory context)
-        command.scan(/(?:^|[\s|>])([^\s"'|>&]*\.\.\/[^\s"'|>&]*)/) do |match|
+        # Check unquoted relative paths with ../
+        command.scan(UNQUOTED_RELATIVE_PATH) do |match|
           path_str = match[1].strip
           next if path_str.empty?
           if error = validate_relative_path(path_str, workspace_real)
@@ -361,15 +408,16 @@ module Autobot
           end
         end
 
-        # Check quoted relative paths: "../path" or '../path'
-        command.scan(/"([^"]*\.\.\/[^"]*)"/) do |match|
+        # Check double-quoted relative paths
+        command.scan(DOUBLE_QUOTED_RELATIVE_PATH) do |match|
           path_str = match[1].strip
           if error = validate_relative_path(path_str, workspace_real)
             return error
           end
         end
 
-        command.scan(/'([^']*\.\.\/[^']*)'/) do |match|
+        # Check single-quoted relative paths
+        command.scan(SINGLE_QUOTED_RELATIVE_PATH) do |match|
           path_str = match[1].strip
           if error = validate_relative_path(path_str, workspace_real)
             return error
