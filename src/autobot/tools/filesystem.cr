@@ -4,7 +4,14 @@ require "../config/env"
 module Autobot
   module Tools
     def self.resolve_path(path : String, allowed_dir : Path? = nil) : Path
-      resolved = Path[path].expand(home: true)
+      # If we have an allowed_dir and path is relative, resolve from allowed_dir
+      # Otherwise expand from current directory
+      resolved = if allowed_dir && !Path[path].absolute?
+                   canonical_dir = allowed_dir.expand(home: true)
+                   canonical_dir / path
+                 else
+                   Path[path].expand(home: true)
+                 end
 
       # Always block .env files for security
       if Config::Env.file?(resolved)
@@ -15,8 +22,20 @@ module Autobot
         canonical_dir = dir.expand(home: true)
 
         # Resolve real paths to prevent symlink traversal
-        resolved_real = resolve_to_real_path(resolved.to_s)
-        canonical_real = resolve_to_real_path(canonical_dir.to_s)
+        # For relative paths constructed from allowed_dir, we need to normalize before checking
+        resolved_str = resolved.to_s
+        canonical_str = canonical_dir.to_s
+
+        # If resolved was built from canonical_dir, normalize both paths for comparison
+        if !Path[path].absolute?
+          # Path was built from allowed_dir, so just normalize for comparison
+          resolved_real = Path[resolved_str].normalize.to_s
+          canonical_real = Path[canonical_str].normalize.to_s
+        else
+          # Absolute path - resolve to real path if it exists
+          resolved_real = resolve_to_real_path(resolved_str)
+          canonical_real = resolve_to_real_path(canonical_str)
+        end
 
         unless path_within_directory?(resolved_real, canonical_real)
           raise PermissionError.new("Access denied")
