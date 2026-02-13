@@ -8,6 +8,8 @@
 
 ## Why Autobot?
 
+Inspired by [nanobot](https://github.com/HKUDS/nanobot) and [picoclaw](https://github.com/sipeed/picoclaw) — rebuilt in [Crystal](https://crystal-lang.org) with a security and efficiency first approach.
+
 | What | How |
 |------|-----|
 | **🎯 Token Efficient** | Structured tool results • Memory consolidation • Minimal context overhead • Session management |
