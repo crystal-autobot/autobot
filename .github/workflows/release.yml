@@ -91,6 +91,8 @@ jobs:
             platform=$(basename "$dir")
             cp "$dir/autobot" "release/$platform"
             chmod +x "release/$platform"
+            # Create tarball for Homebrew
+            tar czf "release/$platform.tar.gz" -C "$dir" autobot
           done
           cd release && shasum -a 256 autobot-* > checksums.txt
 
@@ -101,6 +103,56 @@ jobs:
           files: |
             release/autobot-*
             release/checksums.txt
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: crystal-autobot/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Download release assets and compute checksums
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          curl -sL https://github.com/crystal-autobot/autobot/releases/download/v${VERSION}/autobot-darwin-amd64.tar.gz -o darwin-amd64.tar.gz
+          curl -sL https://github.com/crystal-autobot/autobot/releases/download/v${VERSION}/autobot-darwin-arm64.tar.gz -o darwin-arm64.tar.gz
+
+          AMD64_SHA256=$(shasum -a 256 darwin-amd64.tar.gz | awk '{print $1}')
+          ARM64_SHA256=$(shasum -a 256 darwin-arm64.tar.gz | awk '{print $1}')
+
+          echo "AMD64_SHA256=${AMD64_SHA256}" >> $GITHUB_ENV
+          echo "ARM64_SHA256=${ARM64_SHA256}" >> $GITHUB_ENV
+
+      - name: Update formula
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          cd homebrew-tap
+
+          # Update version
+          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" autobot.rb
+
+          # Update SHA256 checksums
+          sed -i "s/SHA256_PLACEHOLDER_AMD64/$AMD64_SHA256/" autobot.rb
+          sed -i "s/SHA256_PLACEHOLDER_ARM64/$ARM64_SHA256/" autobot.rb
+
+      - name: Commit and push
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add autobot.rb
+          git commit -m "Update autobot to v$VERSION"
+          git push
 
   docker-publish:
     name: Docker Image (Multi-arch)
