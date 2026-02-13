@@ -58,7 +58,9 @@ jobs:
       - name: Install dependencies
         run: shards install --production
       - name: Build binary
-        run: crystal build src/autobot.cr -o autobot --release --no-debug
+        run: |
+          crystal build src/autobot.cr -o autobot --release --no-debug
+          strip autobot
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -134,16 +136,31 @@ jobs:
           VERSION=${{ steps.version.outputs.VERSION }}
           cd homebrew-tap
 
-          # Update version
-          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" autobot.rb
+          echo "Updating formula to version $VERSION with SHA256 $ARM64_SHA256"
 
-          # Update SHA256 checksum
-          sed -i "s/SHA256_PLACEHOLDER_ARM64/$ARM64_SHA256/" autobot.rb
+          # 1. Update version line: version "X.Y.Z" -> version "$VERSION"
+          sed -i '' "s/version \".*\"/version \"$VERSION\"/" autobot.rb
+
+          # 2. Update download URL: vX.Y.Z/autobot-darwin-arm64.tar.gz -> v$VERSION/autobot-darwin-arm64.tar.gz
+          sed -i '' "s|download/v[0-9.]*/autobot-darwin-arm64.tar.gz|download/v$VERSION/autobot-darwin-arm64.tar.gz|" autobot.rb
+
+          # 3. Update SHA256 checksum in the on_arm block
+          sed -i '' "/on_arm/,/end/ s/sha256 \"[^\"]*\"/sha256 \"$ARM64_SHA256\"/" autobot.rb
+
+          echo "Formula updated:"
+          git diff autobot.rb
 
       - name: Commit and push
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           cd homebrew-tap
+
+          # Check if there are changes to commit
+          if git diff --quiet autobot.rb; then
+            echo "No changes to formula, skipping commit"
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add autobot.rb

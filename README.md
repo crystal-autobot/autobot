@@ -15,7 +15,7 @@ Inspired by [nanobot](https://github.com/HKUDS/nanobot) and [picoclaw](https://g
 | **🎯 Token Efficient** | Structured tool results • Memory consolidation • Minimal context overhead • Session management |
 | **📊 Observable** | Status-based logging • Credential sanitization • Token tracking • Operation audit trails |
 | **🔒 Secure** | Docker/bubblewrap isolation • OS-level workspace restrictions • No manual path validation • SSRF protection • Command guards |
-| **⚡ Lightweight** | 2MB binary • <50MB Docker • Zero runtime deps • <100ms startup • Streaming I/O |
+| **⚡ Lightweight** | Tiny binary • <50MB Docker • Zero runtime deps • <100ms startup • Streaming I/O |
 
 ### 🛡️ Production-Grade Security
 
