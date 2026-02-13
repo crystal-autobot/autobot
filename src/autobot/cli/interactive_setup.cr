@@ -42,96 +42,100 @@ module Autobot
       end
 
       # Runs interactive setup and returns configuration
-      def self.run : Configuration
-        print_header
-        puts ""
+      def self.run(input : IO = STDIN, output : IO = STDOUT) : Configuration
+        print_header(output)
+        output.puts ""
 
-        provider = prompt_provider
-        api_key = prompt_api_key(provider)
-        channels = prompt_channels
+        provider = prompt_provider(input, output)
+        api_key = prompt_api_key(provider, input, output)
+        channels = prompt_channels(input, output)
 
         config = Configuration.new(provider: provider, api_key: api_key, channels: channels)
 
         # Prompt for channel-specific configuration
         channels.each do |channel|
-          prompt_channel_config(channel, config)
+          prompt_channel_config(channel, config, input, output)
         end
 
         config
       end
 
       # Prints setup header
-      private def self.print_header
-        puts CLI::LOGO
-        puts ""
+      private def self.print_header(output : IO)
+        output.puts CLI::LOGO
+        output.puts ""
       end
 
       # Prompts user to select an LLM provider
-      private def self.prompt_provider : String
-        puts "\n[1/3] LLM Provider"
-        puts ""
+      def self.prompt_provider(input : IO, output : IO) : String
+        output.puts "\n[1/3] LLM Provider"
+        output.puts ""
         PROVIDERS.each_with_index do |(key, name), index|
-          puts "  #{index + 1}. #{name}"
+          output.puts "  #{index + 1}. #{name}"
         end
 
         loop do
-          print "\n→ Choice (1-#{PROVIDERS.size}): "
-          input = STDIN.gets.try(&.strip)
-          next unless input
+          output.print "\n→ Choice (1-#{PROVIDERS.size}): "
+          output.flush
+          user_input = input.gets.try(&.strip)
+          next unless user_input
 
-          if choice = input.to_i?
+          if choice = user_input.to_i?
             if choice >= 1 && choice <= PROVIDERS.size
               provider_key = PROVIDERS.keys[choice - 1]
               provider_name = PROVIDERS[provider_key]
-              puts "✓ #{provider_name}\n"
+              output.puts "✓ #{provider_name}\n"
               return provider_key
             end
           end
 
-          puts "✗ Invalid choice. Please enter 1-#{PROVIDERS.size}."
+          output.puts "✗ Invalid choice. Please enter 1-#{PROVIDERS.size}."
         end
       end
 
       # Prompts user for API key with hidden input
-      private def self.prompt_api_key(provider : String) : String
+      private def self.prompt_api_key(provider : String, input : IO, output : IO) : String
         provider_name = PROVIDERS[provider]
-        puts "[2/3] API Key"
-        puts ""
-        puts "Enter your #{provider_name} API key (input hidden):"
-        print "→ "
+        output.puts "[2/3] API Key"
+        output.puts ""
+        output.puts "Enter your #{provider_name} API key (input hidden):"
+        output.print "→ "
+        output.flush
 
-        # Hide input for security
-        system("stty -echo") rescue nil
-        api_key = STDIN.gets.try(&.strip) || ""
-        system("stty echo") rescue nil
+        # Hide input for security (only for real terminal)
+        hide_input = input == STDIN
+        system("stty -echo") rescue nil if hide_input
+        api_key = input.gets.try(&.strip) || ""
+        system("stty echo") rescue nil if hide_input
 
-        puts # Newline after hidden input
+        output.puts # Newline after hidden input
 
         if api_key.empty?
-          puts "⚠  No API key provided. Add it to .env later.\n"
+          output.puts "⚠  No API key provided. Add it to .env later.\n"
           return ""
         end
 
-        puts "✓ API key saved\n"
+        output.puts "✓ API key saved\n"
         api_key
       end
 
       # Prompts user to select chat channels
-      private def self.prompt_channels : Array(String)
-        puts "[3/3] Chat Channels (optional)"
-        puts ""
-        puts "  0. None (CLI only)"
+      def self.prompt_channels(input : IO, output : IO) : Array(String)
+        output.puts "[3/3] Chat Channels (optional)"
+        output.puts ""
+        output.puts "  0. None (CLI only)"
         CHANNELS.each_with_index do |(key, name), index|
-          puts "  #{index + 1}. #{name}"
+          output.puts "  #{index + 1}. #{name}"
         end
-        puts ""
-        puts "Enter numbers separated by spaces (e.g., '1 2' for multiple):"
-        print "→ "
+        output.puts ""
+        output.puts "Enter numbers separated by spaces (e.g., '1 2' for multiple):"
+        output.print "→ "
+        output.flush
 
-        input = STDIN.gets.try(&.strip) || "0"
+        user_input = input.gets.try(&.strip) || "0"
         selected = [] of String
 
-        input.split.each do |num|
+        user_input.split.each do |num|
           next unless choice = num.to_i?
           next if choice == 0 # Skip "None" option
 
@@ -141,41 +145,45 @@ module Autobot
         end
 
         if selected.empty?
-          puts "✓ CLI only\n"
+          output.puts "✓ CLI only\n"
         else
-          puts "✓ #{selected.map { |channel_key| CHANNELS[channel_key] }.join(", ")}\n"
+          output.puts "✓ #{selected.map { |channel_key| CHANNELS[channel_key] }.join(", ")}\n"
         end
 
         selected
       end
 
       # Prompts for channel-specific configuration
-      private def self.prompt_channel_config(channel : String, config : Configuration)
+      def self.prompt_channel_config(channel : String, config : Configuration, input : IO, output : IO)
         case channel
         when "telegram"
-          puts "━" * 50
-          puts "Telegram Configuration"
-          puts ""
-          print "  Bot Token: "
-          config.telegram_token = STDIN.gets.try(&.strip) || ""
-          puts "  ✓ Configured\n"
+          output.puts "━" * 50
+          output.puts "Telegram Configuration"
+          output.puts ""
+          output.print "  Bot Token: "
+          output.flush
+          config.telegram_token = input.gets.try(&.strip) || ""
+          output.puts "  ✓ Configured\n"
         when "slack"
-          puts "━" * 50
-          puts "Slack Configuration"
-          puts ""
-          print "  Bot Token (xoxb-...): "
-          config.slack_bot_token = STDIN.gets.try(&.strip) || ""
-          print "  App Token (xapp-...): "
-          config.slack_app_token = STDIN.gets.try(&.strip) || ""
-          puts "  ✓ Configured\n"
+          output.puts "━" * 50
+          output.puts "Slack Configuration"
+          output.puts ""
+          output.print "  Bot Token (xoxb-...): "
+          output.flush
+          config.slack_bot_token = input.gets.try(&.strip) || ""
+          output.print "  App Token (xapp-...): "
+          output.flush
+          config.slack_app_token = input.gets.try(&.strip) || ""
+          output.puts "  ✓ Configured\n"
         when "whatsapp"
-          puts "━" * 50
-          puts "WhatsApp Configuration"
-          puts ""
-          print "  Bridge URL [ws://localhost:3001]: "
-          url = STDIN.gets.try(&.strip) || ""
+          output.puts "━" * 50
+          output.puts "WhatsApp Configuration"
+          output.puts ""
+          output.print "  Bridge URL [ws://localhost:3001]: "
+          output.flush
+          url = input.gets.try(&.strip) || ""
           config.whatsapp_bridge_url = url.empty? ? "ws://localhost:3001" : url
-          puts "  ✓ Configured\n"
+          output.puts "  ✓ Configured\n"
         end
       end
     end
