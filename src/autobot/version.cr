@@ -1,5 +1,6 @@
 module Autobot
-  VERSION = "0.1.0"
+  # Version from shard.yml (single source of truth)
+  VERSION = {{ `shards version #{__DIR__}/../..`.stringify.strip }}
 
   # Build info
   CRYSTAL_VERSION = {{ Crystal::VERSION }}
