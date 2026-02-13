@@ -49,7 +49,7 @@ jobs:
           path: autobot
 
   build-macos:
-    name: macOS (Universal Binary)
+    name: macOS ARM64
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -57,23 +57,13 @@ jobs:
         run: brew install crystal
       - name: Install dependencies
         run: shards install --production
-      - name: Build ARM binary
-        run: crystal build src/autobot.cr -o autobot-arm64 --release --no-debug
-      - name: Build Intel binary
-        run: |
-          # Cross-compile for x86_64 on ARM Mac
-          crystal build src/autobot.cr -o autobot-amd64 --release --no-debug --cross-compile --target x86_64-apple-darwin || \
-          crystal build src/autobot.cr -o autobot-amd64 --release --no-debug
-      - name: Upload ARM artifact
+      - name: Build binary
+        run: crystal build src/autobot.cr -o autobot --release --no-debug
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: autobot-darwin-arm64
-          path: autobot-arm64
-      - name: Upload Intel artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: autobot-darwin-amd64
-          path: autobot-amd64
+          path: autobot
 
   release:
     name: Create Release
@@ -90,12 +80,19 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
+          ls -la artifacts/
           for dir in artifacts/autobot-*; do
+            echo "Processing: $dir"
+            ls -la "$dir" || echo "Directory empty or missing"
             platform=$(basename "$dir")
-            cp "$dir/autobot" "release/$platform"
-            chmod +x "release/$platform"
-            # Create tarball for Homebrew
-            tar czf "release/$platform.tar.gz" -C "$dir" autobot
+            if [ -f "$dir/autobot" ]; then
+              cp "$dir/autobot" "release/$platform"
+              chmod +x "release/$platform"
+              # Create tarball for Homebrew
+              tar czf "release/$platform.tar.gz" -C "$dir" autobot
+            else
+              echo "Warning: $dir/autobot not found, skipping"
+            fi
           done
           cd release && shasum -a 256 autobot-* > checksums.txt
 
@@ -126,13 +123,9 @@ jobs:
       - name: Download release assets and compute checksums
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-          curl -sL https://github.com/crystal-autobot/autobot/releases/download/v${VERSION}/autobot-darwin-amd64.tar.gz -o darwin-amd64.tar.gz
           curl -sL https://github.com/crystal-autobot/autobot/releases/download/v${VERSION}/autobot-darwin-arm64.tar.gz -o darwin-arm64.tar.gz
 
-          AMD64_SHA256=$(shasum -a 256 darwin-amd64.tar.gz | awk '{print $1}')
           ARM64_SHA256=$(shasum -a 256 darwin-arm64.tar.gz | awk '{print $1}')
-
-          echo "AMD64_SHA256=${AMD64_SHA256}" >> $GITHUB_ENV
           echo "ARM64_SHA256=${ARM64_SHA256}" >> $GITHUB_ENV
 
       - name: Update formula
@@ -143,8 +136,7 @@ jobs:
           # Update version
           sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" autobot.rb
 
-          # Update SHA256 checksums
-          sed -i "s/SHA256_PLACEHOLDER_AMD64/$AMD64_SHA256/" autobot.rb
+          # Update SHA256 checksum
           sed -i "s/SHA256_PLACEHOLDER_ARM64/$ARM64_SHA256/" autobot.rb
 
       - name: Commit and push
