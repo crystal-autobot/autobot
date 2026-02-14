@@ -16,8 +16,10 @@ module Autobot::Agent
     Log = ::Log.for("agent.memory_manager")
 
     # Memory consolidation settings
-    MIN_KEEP_COUNT =  2
-    MAX_KEEP_COUNT = 10
+    DISABLED_MEMORY_WINDOW             =  0 # Setting memory_window to 0 disables consolidation
+    MIN_KEEP_COUNT                     =  2 # Minimum messages to keep after consolidation
+    MAX_KEEP_COUNT                     = 10 # Maximum messages to keep after consolidation
+    MAX_MESSAGES_WITHOUT_CONSOLIDATION = 10 # When consolidation is disabled, keep only this many messages
 
     def initialize(
       @workspace : Path,
@@ -29,8 +31,26 @@ module Autobot::Agent
       @memory = MemoryStore.new(@workspace)
     end
 
+    # Check if consolidation is enabled
+    def enabled? : Bool
+      @memory_window != DISABLED_MEMORY_WINDOW
+    end
+
+    # Trim messages when consolidation is disabled
+    def trim_if_disabled(session : Session::Session) : Nil
+      return if enabled?
+      return if session.messages.size <= MAX_MESSAGES_WITHOUT_CONSOLIDATION
+
+      old_count = session.messages.size
+      session.messages = session.messages[-MAX_MESSAGES_WITHOUT_CONSOLIDATION..]
+      @sessions.save(session)
+      Log.info { "Memory consolidation disabled - trimmed session from #{old_count} to #{session.messages.size} messages" }
+    end
+
     # Check if session needs consolidation and perform it if necessary.
+    # Runs consolidation in background to avoid blocking the agent loop.
     def consolidate_if_needed(session : Session::Session) : Nil
+      return unless enabled?
       return unless needs_consolidation?(session)
 
       keep_count = calculate_keep_count
@@ -43,7 +63,10 @@ module Autobot::Agent
       current_memory = @memory.read_long_term
       prompt = build_prompt(current_memory, conversation)
 
-      perform_consolidation(session, prompt, current_memory, keep_count)
+      # Run consolidation in background to avoid blocking
+      spawn do
+        perform_consolidation(session, prompt, current_memory, keep_count)
+      end
     end
 
     private def needs_consolidation?(session : Session::Session) : Bool
@@ -130,11 +153,15 @@ module Autobot::Agent
     end
 
     private def apply_result(result : JSON::Any, current_memory : String) : Nil
-      if entry = result["history_entry"]?.try(&.as_s)
-        @memory.append_history(entry)
+      # Extract history_entry (string or convert from hash)
+      if entry_json = result["history_entry"]?
+        entry = entry_json.as_s? || entry_json.to_json
+        @memory.append_history(entry) unless entry.empty?
       end
 
-      if update = result["memory_update"]?.try(&.as_s)
+      # Extract memory_update (string or convert from hash)
+      if update_json = result["memory_update"]?
+        update = update_json.as_s? || update_json.to_json
         @memory.write_long_term(update) if update != current_memory
       end
     end

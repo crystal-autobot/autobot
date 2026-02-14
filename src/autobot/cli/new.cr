@@ -93,16 +93,18 @@ module Autobot
         Dir.mkdir_p(workspace)
         File.chmod(workspace, 0o700)
 
-        # Create workspace templates
         Onboard::WORKSPACE_TEMPLATES.each do |filename, content|
-          File.write(workspace / filename, content)
+          file_path = workspace / filename
+          File.write(file_path, content)
+          File.chmod(file_path, 0o600) rescue nil
         end
 
-        # Create memory directory
         memory_dir = workspace / "memory"
         Dir.mkdir_p(memory_dir)
+        File.chmod(memory_dir, 0o700) rescue nil
 
-        File.write(memory_dir / "MEMORY.md", <<-MD)
+        memory_file = memory_dir / "MEMORY.md"
+        File.write(memory_file, <<-MD)
         # Long-term Memory
 
         This file stores important information that should persist across sessions.
@@ -115,15 +117,23 @@ module Autobot
 
         (User preferences learned over time)
         MD
+        File.chmod(memory_file, 0o600) rescue nil
 
-        File.write(memory_dir / "HISTORY.md", "")
+        history_file = memory_dir / "HISTORY.md"
+        File.write(history_file, "")
+        File.chmod(history_file, 0o600) rescue nil
 
-        # Create skills directory
-        Dir.mkdir_p(workspace / "skills")
+        skills_dir = workspace / "skills"
+        Dir.mkdir_p(skills_dir)
+        File.chmod(skills_dir, 0o700) rescue nil
 
-        # Create sessions and logs directories
-        Dir.mkdir_p("./sessions")
-        Dir.mkdir_p("./logs")
+        sessions_dir = Path["./sessions"]
+        Dir.mkdir_p(sessions_dir)
+        File.chmod(sessions_dir, 0o700) rescue nil
+
+        logs_dir = Path["./logs"]
+        Dir.mkdir_p(logs_dir)
+        File.chmod(logs_dir, 0o700) rescue nil
       end
 
       # Creates .gitignore file

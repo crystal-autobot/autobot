@@ -135,16 +135,16 @@ module Autobot::Agent
 
       log_incoming_message(msg)
 
-      # Get or create session
       session = @sessions.get_or_create(session_key || msg.session_key)
 
-      # Consolidate memory if session is too large
-      @memory_manager.consolidate_if_needed(session)
+      if @memory_manager.enabled?
+        @memory_manager.consolidate_if_needed(session)
+      else
+        @memory_manager.trim_if_disabled(session)
+      end
 
-      # Update tool contexts for message routing
       update_tool_contexts(msg.channel, msg.chat_id)
-
-      # Build messages for LLM
+      update_tool_contexts(msg.channel, msg.chat_id)
       messages = @context.build_messages(
         history: session.get_history,
         current_message: msg.content,
