@@ -1,216 +1,173 @@
 # Sandboxing Architecture
 
-Autobot uses **kernel-level sandboxing** to safely restrict LLM file access. This document explains how it works.
+Autobot uses **kernel-level sandboxing** to safely restrict LLM file access. This document explains the hybrid architecture with two execution modes.
 
 ## Overview
 
 ```
-┌─────────────────────────────────────┐
-│ Host System (unrestricted)         │
-│                                     │
-│  ┌──────────────────────────────┐  │
-│  │ autobot (main process)       │  │  ← Your agent, API calls, config
-│  │  PID: 1234                   │  │    Full system access
-│  │                              │  │
-│  │  Spawns ↓                    │  │
-│  └──────────────────────────────┘  │
-│                                     │
-│  ┌─────────────────────────────────────────┐
-│  │ Kernel Sandbox (restricted)             │
-│  │                                          │
-│  │  ┌───────────────────────────────────┐  │
-│  │  │ autobot (sandbox server mode)     │  │  ← File operations only
-│  │  │  PID: 1235                        │  │    Workspace access ONLY
-│  │  │                                   │  │
-│  │  │  Executes:                        │  │
-│  │  │   - read_file                     │  │
-│  │  │   - write_file                    │  │
-│  │  │   - list_dir                      │  │
-│  │  │   - exec (shell commands)         │  │
-│  │  └───────────────────────────────────┘  │
-│  │                                          │
-│  │  Kernel enforces:                        │
-│  │   ✓ Can read/write: /workspace/*        │
-│  │   ✗ Cannot access: /etc/passwd          │
-│  │   ✗ Cannot access: ~/.ssh/              │
-│  │   ✗ Cannot access: $HOME/.env           │
-│  └─────────────────────────────────────────┘
-└─────────────────────────────────────┘
-
-        IPC: Unix domain socket
+┌─────────────────────────────────────────────────────────────┐
+│ Hybrid Sandboxing: Simple Default + Optional Performance    │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ DEFAULT: Sandbox.exec (~50ms/op)                     │  │
+│  │  • Works everywhere, zero setup                       │  │
+│  │  • Single binary                                      │  │
+│  │  • Spawns sandbox per operation                       │  │
+│  │  • Uses shell commands (cat, ls, base64)             │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ OPTIONAL: autobot-server (~3ms/op)                   │  │
+│  │  • 15x faster performance                             │  │
+│  │  • Persistent sandbox process                         │  │
+│  │  • Requires separate install                          │  │
+│  │  • Power users only                                   │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Single Binary, Two Processes
+## Why Two Modes?
 
-Autobot uses **one binary file** that runs in **two modes**:
+**Previous approach:** Single-binary internal server
+- ❌ Binary compatibility issues (macOS binary can't run in Linux containers)
+- ❌ Over-engineered
+- ❌ Broke on macOS with Docker
 
-### Mode 1: Normal Agent (unrestricted)
-```bash
-$ autobot agent
-# Main process - handles agent logic, API calls, secrets
-```
+**Current approach:** Hybrid architecture
+- ✅ Default works everywhere (shell commands work in any container)
+- ✅ Optional performance upgrade path
+- ✅ No binary compatibility issues
+- ✅ Graceful fallback
 
-### Mode 2: Sandbox Server (restricted)
-```bash
-$ autobot __internal_sandbox_server__ /tmp/socket.sock /workspace
-# Spawned process - runs inside kernel sandbox
-# Hidden from user, managed automatically
-```
+## Default Mode: Sandbox.exec
 
-**User only sees one command, but gets two processes for safety.**
+### How It Works
 
-## How It Works
-
-### 1. Agent Starts
+Instead of spawning a persistent server, we spawn a sandboxed process for each operation:
 
 ```crystal
-# User runs:
-$ autobot agent
+# Read file
+Sandbox.exec("cat #{shell_escape(path)} 2>&1", workspace, timeout: 10)
 
-# Autobot initializes:
-registry = Tools.create_registry(
-  workspace: Path["/workspace"],
-  sandbox_config: "auto"  # Detects available sandbox
-)
+# Write file (using base64 to avoid escaping issues)
+encoded = Base64.strict_encode(content)
+Sandbox.exec("printf '%s' '#{encoded}' | base64 -d > #{shell_escape(path)}", workspace, timeout: 30)
 
-# Creates SandboxService:
-service = SandboxService.new(workspace, Sandbox::Type::Bubblewrap)
-service.start  # Spawns autobot in sandbox mode
+# List directory
+Sandbox.exec("ls -1a #{shell_escape(path)} 2>&1", workspace, timeout: 10)
 ```
 
-### 2. Sandbox Process Spawns
+### Why Shell Commands?
 
-**Linux (bubblewrap):**
+- **Alpine container has `/bin/sh` built-in** - no binary compatibility issues
+- **We pass strings, not binaries** - works everywhere
+- **Works in Docker/bubblewrap/any Linux container**
+- **Simple and reliable**
+
+### Execution (Linux - bubblewrap)
+
 ```bash
 bwrap \
   --ro-bind /usr /usr \
   --ro-bind /bin /bin \
-  --bind /workspace /workspace \  # ONLY writable directory
+  --bind /workspace /workspace \
   --unshare-all \
   --proc /proc \
   --dev /dev \
-  --tmpfs /tmp \
   --chdir /workspace \
-  -- /usr/local/bin/autobot __internal_sandbox_server__ /tmp/socket.sock /workspace
+  -- sh -c "cat file.txt"
 ```
 
-**macOS (Docker - required for full isolation):**
+### Execution (macOS/Universal - Docker)
+
 ```bash
 docker run --rm \
   -v /workspace:/workspace:rw \
-  -v /tmp/socket.sock:/tmp/socket.sock \
-  -v /usr/local/bin/autobot:/usr/local/bin/autobot:ro \
+  -w /workspace \
   --memory 512m --cpus 1 \
   alpine:latest \
-  /usr/local/bin/autobot __internal_sandbox_server__ /tmp/socket.sock /workspace
+  sh -c "cat file.txt"
 ```
 
-**Why Docker on macOS?**
-- macOS sandbox-exec only restricts writes, NOT reads
-- Write-only sandboxing is insufficient (agent could read ~/.ssh/, /etc/passwd)
-- Docker provides full isolation (read + write restrictions)
-- Apple is deprecating sandbox-exec anyway
+**Performance:** ~50ms per operation (acceptable for most use cases)
 
-**Docker (universal):**
+## Optional Mode: autobot-server
+
+### When to Use
+
+Install autobot-server if you need:
+- **15x faster** file operations (~3ms vs ~50ms)
+- **High-frequency** file access patterns
+- **Performance-critical** workloads
+
+**Most users don't need this** - the default mode is fast enough.
+
+### How It Works
+
+A persistent sandbox process communicates via Unix socket:
+
+```
+┌─────────────────┐           ┌─────────────────────┐
+│ autobot (main)  │  socket   │ autobot-server      │
+│ PID: 1234       │◄─────────►│ PID: 1235 (sandbox) │
+│ unrestricted    │  JSON/IPC │ workspace only      │
+└─────────────────┘           └─────────────────────┘
+```
+
+### Installation
+
+**Homebrew (macOS/Linux):**
 ```bash
-docker run --rm \
-  -v /workspace:/workspace:rw \
-  -v /tmp/socket.sock:/tmp/socket.sock \
-  --memory 512m --cpus 1 \
-  alpine:latest \
-  /usr/local/bin/autobot __internal_sandbox_server__ /tmp/socket.sock /workspace
+brew install crystal-autobot/tap/autobot-server
 ```
 
-### 3. Operations Execute
+**Manual:**
+```bash
+# macOS ARM64
+curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-darwin-arm64 \
+  -o /usr/local/bin/autobot-server
+chmod +x /usr/local/bin/autobot-server
 
-**User request:**
-```
-> Agent: "read memory/MEMORY.md"
-```
-
-**Internal flow:**
-```
-1. Main process (unrestricted):
-   tool = ReadFileTool.new(sandbox_service)
-   tool.execute({"path" => "memory/MEMORY.md"})
-
-2. SandboxService sends via Unix socket:
-   {"id": "req-1", "op": "read_file", "path": "memory/MEMORY.md"}
-
-3. Sandbox server (restricted) receives:
-   - Resolves path: /workspace/memory/MEMORY.md
-   - Checks: path within workspace? ✓
-   - Reads file (kernel allows - within workspace)
-   - Returns: {"id": "req-1", "status": "ok", "data": "..."}
-
-4. Main process receives result:
-   Returns content to agent
+# Linux AMD64
+curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-linux-amd64 \
+  -o /usr/local/bin/autobot-server
+chmod +x /usr/local/bin/autobot-server
 ```
 
-**Attack attempt:**
-```
-> Agent (compromised): "read /etc/passwd"
+### Auto-Detection
 
-1. Main process sends:
-   {"id": "req-2", "op": "read_file", "path": "/etc/passwd"}
+Autobot automatically detects and uses autobot-server if installed:
 
-2. Sandbox server rejects:
-   - Path is absolute? ✗ REJECTED
-   - Returns: {"id": "req-2", "status": "error", "error": "Absolute paths not allowed"}
+```bash
+$ autobot agent
 
-# Even if server had a bug and tried to read /etc/passwd:
-# Kernel would block it - file is outside namespace/container
+✓ Sandbox: bubblewrap (Linux namespaces)
+→ Sandbox mode: autobot-server (persistent, ~3ms/op)
 ```
 
-## Security Layers
-
-**Defense in depth:**
-
-1. **Application layer** (sandbox server code)
-   - Rejects absolute paths
-   - Rejects `..` traversal
-   - Validates path is workspace-relative
-
-2. **Kernel layer** (OS enforces)
-   - Process cannot access files outside workspace
-   - Even if application has bugs
-   - Cannot be bypassed from inside sandbox
-
-3. **IPC layer** (Unix socket)
-   - Only JSON protocol allowed
-   - No arbitrary code execution
-   - Structured request/response only
-
-## Recovery Mechanism
-
-If sandbox crashes during operation:
-
+If not installed:
+```bash
+→ Sandbox mode: Sandbox.exec (bubblewrap, ~50ms/op)
 ```
-1. Main process detects: IO::Error (socket closed)
 
-2. Automatic recovery (up to 2 attempts):
-   - Stop crashed process
-   - Clean up old socket
-   - Spawn new sandbox process
-   - Reconnect socket
-   - Retry failed operation
+### Graceful Fallback
 
-3. If recovery succeeds:
-   ✓ Operation completes
-   ⚠ User sees brief warning
+If autobot-server fails to start, autobot automatically falls back to Sandbox.exec:
 
-4. If recovery fails:
-   ✗ Clear error message
-   → User restarts agent
+```bash
+⚠ autobot-server failed to start: socket error
+→ Falling back to Sandbox.exec
 ```
+
+**No manual intervention needed** - everything just works.
 
 ## Platform Support
 
-| Platform | Technology | Startup | Per Operation | Security |
-|----------|-----------|---------|---------------|----------|
-| **Linux** | bubblewrap | ~10ms | ~2-3ms | Full isolation (namespaces) ✅ |
-| **macOS** | Docker | ~100ms | ~5-10ms | Full isolation (containers) ✅ |
-| **Windows** | Docker (WSL2) | ~150ms | ~10-15ms | Full isolation (containers) ✅ |
+| Platform | Sandbox Tool | Default (Sandbox.exec) | Optional (autobot-server) |
+|----------|-------------|------------------------|---------------------------|
+| **Linux** | bubblewrap | ~50ms/op | ~3ms/op (15x faster) |
+| **macOS** | Docker | ~50ms/op | ~3ms/op (15x faster) |
+| **Windows** | Docker (WSL2) | ~50ms/op | ~3ms/op (15x faster) |
 
 ## Installation
 
@@ -228,71 +185,95 @@ sudo pacman -S bubblewrap
 
 ### macOS (Requires Docker)
 ```bash
-# Docker Desktop required for full isolation
+# Docker Desktop required
 # Download from: https://docs.docker.com/desktop/install/mac-install/
-
-# Verify Docker is running
-docker run --rm alpine:latest echo "Sandbox ready"
-```
-
-**Why Docker?** macOS sandbox-exec cannot provide read-level isolation (only write restrictions), making it insufficient for security.
-
-### Universal (Docker)
-```bash
-# Install Docker for your platform
-https://docs.docker.com/engine/install/
 
 # Verify
 docker run --rm alpine:latest echo "Sandbox ready"
 ```
 
-## Verification
+**Why Docker on macOS?**
+- macOS sandbox-exec only restricts writes, NOT reads
+- Can't prevent reading `/etc/passwd`, `~/.ssh/`, etc.
+- Docker provides full read+write isolation
+- Apple is deprecating sandbox-exec anyway
 
-**Test sandboxing works:**
+### Windows (Docker via WSL2)
 ```bash
-$ autobot agent
+# Install Docker Desktop with WSL2 backend
+# https://docs.docker.com/desktop/windows/wsl/
 
-> Agent: "read /etc/passwd"
-
-# Should see error:
-Error: Absolute paths not allowed
-
-# Even if you try:
-> Agent: "read ../../../etc/passwd"
-
-Error: Parent directory traversal not allowed
-```
-
-**Check processes:**
-```bash
-$ ps aux | grep autobot
-user  1234  autobot agent              # Main process
-user  1235  autobot __internal_sando... # Sandbox (hidden)
+# Verify
+docker run --rm alpine:latest echo "Sandbox ready"
 ```
 
 ## Configuration
 
-Sandbox can be configured in `config.yml`:
+Configure sandboxing in `config.yml`:
 
 ```yaml
 tools:
-  sandbox: auto  # auto | bubblewrap | docker | none
-
-  # Advanced options:
-  use_sandbox_service: true      # Use persistent service (recommended)
-  exec_timeout: 120              # Command timeout (seconds)
-  exec_deny_patterns:            # Block dangerous commands
-    - "rm -rf /"
-    - ":(){ :|:& };:"            # Fork bomb
+  sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
 ```
 
 **Options:**
-- `auto`: Auto-detect best available (recommended)
-  - Linux → bubblewrap (fast)
-  - macOS → Docker (full isolation)
-- `bubblewrap`: Force bubblewrap (Linux only)
-- `docker`: Force Docker (all platforms)
-- `none`: Disable sandboxing (UNSAFE - tests only)
+- `auto` - Auto-detect best available (recommended)
+  - Tries: autobot-server → bubblewrap → Docker
+- `bubblewrap` - Force bubblewrap (Linux only)
+- `docker` - Force Docker (all platforms)
+- `none` - Disable sandboxing (UNSAFE - tests only)
+
+## Security Properties
+
+### What Sandboxing Prevents
+
+✅ Reading system files (`/etc/passwd`, `/etc/shadow`)
+✅ Reading home directory (`~/.ssh/`, `~/.aws/credentials`)
+✅ Writing outside workspace
+✅ Accessing secrets in parent directories
+✅ Path traversal attacks (`../../../etc/passwd`)
+✅ Absolute path exploits (`/etc/passwd`)
+
+### Security Layers
+
+**Defense in depth:**
+
+1. **Application layer** (path validation)
+   - Rejects absolute paths
+   - Rejects `..` traversal
+   - Validates workspace-relative paths
+
+2. **Shell escaping** (command injection prevention)
+   - Single-quote escaping
+   - Base64 encoding for file content
+
+3. **Kernel layer** (OS enforces)
+   - Process cannot access files outside workspace
+   - Even if application has bugs
+   - Cannot be bypassed from inside sandbox
+
+### What Sandboxing Does NOT Prevent
+
+⚠️ Network attacks (agent has network access)
+⚠️ API key theft (main process has keys)
+⚠️ DoS via API calls
+⚠️ Social engineering (user approves actions)
+
+**Defense in depth:** Use API key scoping, rate limiting, and audit logs.
+
+## Performance
+
+**Benchmark: 1000 file operations**
+
+| Mode | Time | Per Operation | Use Case |
+|------|------|---------------|----------|
+| autobot-server | 3.2s | 3.2ms | Performance-critical workloads |
+| Sandbox.exec | 52s | 52ms | Normal use (default) |
+| No sandbox | 450ms | 0.45ms | Tests only (UNSAFE) |
+
+**Takeaway:**
+- Default (~50ms/op) is acceptable for most use cases
+- Install autobot-server for 15x speedup if needed
 
 ## Troubleshooting
 
@@ -305,45 +286,34 @@ tools:
 # Linux: Install bubblewrap
 sudo apt install bubblewrap
 
-# macOS: sandbox-exec should be pre-installed
-which sandbox-exec
-
-# Universal: Install Docker
+# macOS/Windows: Install Docker
 # https://docs.docker.com/engine/install/
 ```
 
-### Error: "Failed to start sandbox service"
+### Error: "Failed to start sandbox"
 
-**Problem:** Binary or socket issues
+**Problem:** Binary or configuration issues
 
 **Fix:**
 ```bash
-# 1. Verify binary exists
-ls -lh $(which autobot)
+# 1. Verify tools are installed
+which bwrap    # Linux
+which docker   # macOS/Windows
 
-# 2. Check /tmp is writable
-touch /tmp/test && rm /tmp/test
+# 2. Check workspace exists
+ls -ld /path/to/workspace
 
 # 3. Try Docker fallback
 autobot agent --sandbox docker
 ```
 
-### Sandbox crashes during operation
+### Slow performance
 
-**Problem:** Process killed (OOM, signal)
+**Problem:** Each operation takes ~50ms
 
-**Expected:** Auto-recovery handles this
-```
-⚠ Sandbox service communication failed (attempt 1/2)
-ℹ Attempting to recover sandbox service...
-✓ Sandbox service recovered successfully
-```
-
-**If recovery fails:**
+**Solution:** Install autobot-server for 15x speedup
 ```bash
-# Restart agent
-^C
-autobot agent
+brew install crystal-autobot/tap/autobot-server
 ```
 
 ## Development
@@ -353,8 +323,8 @@ autobot agent
 Tests automatically disable sandboxing:
 
 ```crystal
-# Tests pass sandbox_service: nil
-tool = ReadFileTool.new(nil)
+# Tests pass sandbox_service: nil, workspace: nil
+tool = ReadFileTool.new(nil, nil)
 
 # Tool uses direct file operations (fast, no overhead)
 tool.execute({"path" => "test.txt"})  # Direct File.read
@@ -363,86 +333,37 @@ tool.execute({"path" => "test.txt"})  # Direct File.read
 ### Testing Sandbox Behavior
 
 ```crystal
-# spec/security_spec.cr tests sandbox escaping
+# spec/security_spec.cr tests sandbox restrictions
 it "prevents reading system files" do
-  tool = ReadFileTool.new(sandbox_service)
+  tool = ReadFileTool.new(nil, workspace)
   result = tool.execute({"path" => "/etc/passwd"})
   result.error?.should be_true
 end
 ```
 
-### Manual Testing
-
-```bash
-# Start sandbox server manually (for debugging)
-$ autobot __internal_sandbox_server__ /tmp/test.sock /tmp/workspace &
-
-# Send request via socket
-$ echo '{"id":"1","op":"read_file","path":"test.txt"}' | nc -U /tmp/test.sock
-
-# Should receive:
-{"id":"1","status":"ok","data":"file contents"}
-```
-
-## Performance
-
-**Benchmark: 1000 file operations**
-
-| Setup | Time | Per Operation |
-|-------|------|---------------|
-| No sandbox | 450ms | 0.45ms |
-| Sandbox (persistent) | 2.8s | 2.8ms |
-| Sandbox (spawn per-op) | 52s | 52ms |
-
-**Takeaway:** Persistent sandbox service adds ~2-3ms overhead (acceptable), while spawning per operation adds ~50ms (too slow).
-
-## Security Properties
-
-**What sandboxing prevents:**
-
-✅ Reading system files (`/etc/passwd`, `/etc/shadow`)
-✅ Reading home directory (`~/.ssh/`, `~/.aws/`)
-✅ Writing outside workspace
-✅ Accessing secrets in parent directories
-✅ Network attacks via filesystem (symlinks to `/dev`)
-✅ Fork bombs and resource exhaustion (Docker limits)
-
-**What sandboxing does NOT prevent:**
-
-⚠️ Network attacks (agent has network access)
-⚠️ API key theft (main process has keys)
-⚠️ DoS via API calls
-⚠️ Social engineering (user approves actions)
-
-**Defense in depth:** Sandboxing is ONE layer. Also use:
-- API key scoping
-- Rate limiting
-- User confirmation for sensitive actions
-- Audit logs
-
 ## FAQ
 
-**Q: Why two processes instead of one?**
-A: Kernel sandboxing works per-process. Can't sandbox part of a process - it's all or nothing.
+**Q: Do I need to install autobot-server?**
+A: No! The default Sandbox.exec works fine for most users. Install autobot-server only if you need 15x faster performance.
+
+**Q: What if autobot-server crashes?**
+A: Autobot automatically falls back to Sandbox.exec. No manual intervention needed.
+
+**Q: Why not always use autobot-server?**
+A: Keeping it optional reduces complexity for most users. Single binary + zero setup = better experience.
+
+**Q: Does this work on Windows?**
+A: Yes, via Docker with WSL2 backend.
+
+**Q: How do I verify sandboxing works?**
+A: Try reading `/etc/passwd` - should fail with "Absolute paths not allowed"
+
+**Q: What's the performance impact?**
+A: Default ~50ms/op is acceptable. Install autobot-server for ~3ms/op if needed.
 
 **Q: Can I disable sandboxing?**
 A: Only for tests. Production requires sandboxing for safety.
 
-**Q: What if sandbox crashes?**
-A: Automatic recovery (up to 2 attempts), then fail with clear error.
-
-**Q: Does this work on Windows?**
-A: Via Docker (using WSL2). Native Windows sandboxing not yet implemented.
-
-**Q: How do I verify it's working?**
-A: Try `read /etc/passwd` - should fail with "Absolute paths not allowed"
-
-**Q: Performance impact?**
-A: ~2-3ms per operation. Negligible for typical agent workloads.
-
-**Q: What about plugins/bash tools?**
-A: All tools use the same sandbox service - no exceptions.
-
 ---
 
-**Summary:** Autobot uses kernel-level sandboxing with a persistent service process for high-performance, secure LLM file access. Single binary, automatic recovery, multi-platform support.
+**Summary:** Autobot provides a hybrid sandboxing architecture with a simple default that works everywhere (~50ms/op) and an optional performance mode for power users (~3ms/op). No manual configuration needed - autobot automatically detects and uses the best option available.
