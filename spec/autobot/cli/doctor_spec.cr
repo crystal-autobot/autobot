@@ -408,4 +408,47 @@ describe Autobot::CLI::Doctor do
       Autobot::CLI::Doctor.pluralize("warning", 0).should eq("0 warnings")
     end
   end
+
+  describe ".check_sandbox_performance" do
+    it "suggests autobot-server on Linux when not installed" do
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_sandbox_performance(Autobot::Tools::Sandbox::Type::Bubblewrap)
+
+        output = io.to_s
+        # Will show either "installed" or "not installed" depending on actual system
+        # Just verify the check runs and shows performance info
+        output.should contain("autobot-server")
+        output.should match(/~\d+ms\/op/)
+      end
+    end
+
+    it "notes autobot-server not applicable on Docker" do
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_sandbox_performance(Autobot::Tools::Sandbox::Type::Docker)
+
+        io.to_s.should contain("— Performance mode: Sandbox.exec")
+        io.to_s.should contain("~50ms/op")
+        io.to_s.should contain("not applicable on macOS/Windows")
+      end
+    end
+
+    it "skips performance check for None sandbox type" do
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_sandbox_performance(Autobot::Tools::Sandbox::Type::None)
+
+        # Should not output anything for None type
+        io.to_s.should_not contain("autobot-server")
+      end
+    end
+  end
+
+  describe ".command_exists?" do
+    it "returns true for existing commands" do
+      Autobot::CLI::Doctor.command_exists?("sh").should be_true
+    end
+
+    it "returns false for non-existing commands" do
+      Autobot::CLI::Doctor.command_exists?("nonexistent-command-xyz").should be_false
+    end
+  end
 end

@@ -164,14 +164,12 @@ module Autobot
       def self.check_sandbox_availability(config : Config::Config, errors : Int32) : Int32
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
-        # Warn if sandbox is disabled
         if sandbox_config.downcase == "none"
           report(Status::Warn, "Sandbox disabled (sandbox: none)")
           hint("Enable sandboxing for better security ('auto', 'bubblewrap', or 'docker')")
           return errors
         end
 
-        # Check if sandbox tools are available when enabled
         unless Tools::Sandbox.available?
           report(Status::Fail, "Sandbox enabled but no sandbox tool found")
           hint("Install bubblewrap: sudo apt install bubblewrap")
@@ -181,7 +179,33 @@ module Autobot
 
         sandbox_type = Tools::Sandbox.detect
         report(Status::Pass, "Sandbox available (#{sandbox_type.to_s.downcase})")
+
+        check_sandbox_performance(sandbox_type)
+
         errors
+      end
+
+      def self.check_sandbox_performance(sandbox_type : Tools::Sandbox::Type) : Nil
+        case sandbox_type
+        when Tools::Sandbox::Type::Bubblewrap
+          if command_exists?("autobot-server")
+            report(Status::Pass, "autobot-server installed (~3ms/op)")
+          else
+            report(Status::Skip, "autobot-server not installed (using Sandbox.exec ~50ms/op)")
+            hint("Optional: Install for 15x speedup → https://github.com/crystal-autobot/sandbox-server")
+          end
+        when Tools::Sandbox::Type::Docker
+          report(Status::Skip, "Performance mode: Sandbox.exec (~50ms/op)")
+          hint("Note: autobot-server not applicable on macOS/Windows (Docker overhead dominates)")
+        when Tools::Sandbox::Type::None
+          # No performance check for disabled sandbox
+        end
+      end
+
+      def self.command_exists?(cmd : String) : Bool
+        Process.run("which", [cmd], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
+      rescue
+        false
       end
 
       def self.check_workspace(config : Config::Config, config_file : Path, errors : Int32) : Int32
