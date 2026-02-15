@@ -124,14 +124,18 @@ module Autobot
     ) : SandboxService?
       return nil unless sandboxed && workspace && sandbox_type != Sandbox::Type::None
 
-      # Check if we should use the server (either explicitly requested or autobot-server is available)
+      # autobot-server only works with bubblewrap (Linux only)
+      # macOS/Windows should use Sandbox.exec + Docker (simpler, works fine)
+      return nil unless sandbox_type == Sandbox::Type::Bubblewrap
+
+      # Check if we should use the server
       use_service = use_sandbox_service.nil? ? false : use_sandbox_service
       return nil unless use_service
 
-      # Check if autobot-server binary exists
+      # Check if autobot-server binary exists (Linux only)
       unless command_exists?("autobot-server")
         if use_sandbox_service == true
-          raise "autobot-server not installed. Install: brew install crystal-autobot/tap/autobot-server"
+          raise "autobot-server not installed. Install: https://github.com/crystal-autobot/sandbox-server"
         end
         ::Log.for("Tools").debug { "autobot-server not found, using Sandbox.exec" }
         return nil

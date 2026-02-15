@@ -91,15 +91,16 @@ docker run --rm \
 
 **Performance:** ~50ms per operation (acceptable for most use cases)
 
-## Optional Mode: autobot-server
+## Optional Mode: autobot-server (Linux Only)
 
 ### When to Use
 
-Install autobot-server if you need:
-- **15x faster** file operations (~3ms vs ~50ms)
-- **High-frequency** file access patterns
-- **Performance-critical** workloads
+Install autobot-server if you:
+- **Run on Linux** with bubblewrap
+- Need **15x faster** file operations (~3ms vs ~50ms)
+- Have **high-frequency** file access patterns
 
+**Not available on macOS/Windows** - Docker overhead dominates, so autobot-server doesn't help.
 **Most users don't need this** - the default mode is fast enough.
 
 ### How It Works
@@ -114,32 +115,30 @@ A persistent sandbox process communicates via Unix socket:
 └─────────────────┘           └─────────────────────┘
 ```
 
-### Installation
+### Installation (Linux Only)
 
-**Homebrew (macOS/Linux):**
+**Linux AMD64:**
 ```bash
-brew install crystal-autobot/tap/autobot-server
-```
-
-**Manual:**
-```bash
-# macOS ARM64
-curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-darwin-arm64 \
-  -o /usr/local/bin/autobot-server
-chmod +x /usr/local/bin/autobot-server
-
-# Linux AMD64
 curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-linux-amd64 \
   -o /usr/local/bin/autobot-server
 chmod +x /usr/local/bin/autobot-server
 ```
 
-### Auto-Detection
+**Linux ARM64:**
+```bash
+curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-linux-arm64 \
+  -o /usr/local/bin/autobot-server
+chmod +x /usr/local/bin/autobot-server
+```
 
-Autobot automatically detects and uses autobot-server if installed:
+**Note:** autobot-server only works on Linux with bubblewrap. macOS/Windows users should use the default Sandbox.exec mode (Docker overhead makes autobot-server unnecessary).
+
+### Auto-Detection (Linux Only)
+
+On Linux, autobot automatically detects and uses autobot-server if installed:
 
 ```bash
-$ autobot agent
+$ autobot agent  # On Linux
 
 ✓ Sandbox: bubblewrap (Linux namespaces)
 → Sandbox mode: autobot-server (persistent, ~3ms/op)
@@ -149,6 +148,8 @@ If not installed:
 ```bash
 → Sandbox mode: Sandbox.exec (bubblewrap, ~50ms/op)
 ```
+
+**On macOS/Windows:** Always uses Sandbox.exec + Docker (autobot-server not applicable).
 
 ### Graceful Fallback
 
@@ -165,9 +166,11 @@ If autobot-server fails to start, autobot automatically falls back to Sandbox.ex
 
 | Platform | Sandbox Tool | Default (Sandbox.exec) | Optional (autobot-server) |
 |----------|-------------|------------------------|---------------------------|
-| **Linux** | bubblewrap | ~50ms/op | ~3ms/op (15x faster) |
-| **macOS** | Docker | ~50ms/op | ~3ms/op (15x faster) |
-| **Windows** | Docker (WSL2) | ~50ms/op | ~3ms/op (15x faster) |
+| **Linux** | bubblewrap | ~50ms/op | ~3ms/op (15x faster) ✅ |
+| **macOS** | Docker | ~50ms/op | Not applicable |
+| **Windows** | Docker (WSL2) | ~50ms/op | Not applicable |
+
+**Note:** autobot-server only works on Linux with bubblewrap. Docker overhead on macOS/Windows makes the performance gain negligible.
 
 ## Installation
 
@@ -307,14 +310,18 @@ ls -ld /path/to/workspace
 autobot agent --sandbox docker
 ```
 
-### Slow performance
+### Slow performance on Linux
 
-**Problem:** Each operation takes ~50ms
+**Problem:** Each operation takes ~50ms on Linux
 
-**Solution:** Install autobot-server for 15x speedup
+**Solution:** Install autobot-server for 15x speedup (Linux only)
 ```bash
-brew install crystal-autobot/tap/autobot-server
+curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-linux-amd64 \
+  -o /usr/local/bin/autobot-server
+chmod +x /usr/local/bin/autobot-server
 ```
+
+**Note:** Not applicable on macOS/Windows (Docker overhead dominates).
 
 ## Development
 
@@ -344,7 +351,7 @@ end
 ## FAQ
 
 **Q: Do I need to install autobot-server?**
-A: No! The default Sandbox.exec works fine for most users. Install autobot-server only if you need 15x faster performance.
+A: No! The default Sandbox.exec works fine for most users. Install autobot-server only if you're on Linux and need 15x faster performance. Not available on macOS/Windows.
 
 **Q: What if autobot-server crashes?**
 A: Autobot automatically falls back to Sandbox.exec. No manual intervention needed.
@@ -359,7 +366,7 @@ A: Yes, via Docker with WSL2 backend.
 A: Try reading `/etc/passwd` - should fail with "Absolute paths not allowed"
 
 **Q: What's the performance impact?**
-A: Default ~50ms/op is acceptable. Install autobot-server for ~3ms/op if needed.
+A: Default ~50ms/op is acceptable for most use cases. On Linux, install autobot-server for ~3ms/op. On macOS/Windows, Docker overhead dominates so autobot-server doesn't help.
 
 **Q: Can I disable sandboxing?**
 A: Only for tests. Production requires sandboxing for safety.

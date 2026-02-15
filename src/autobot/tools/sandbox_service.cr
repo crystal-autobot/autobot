@@ -5,8 +5,9 @@ require "./sandbox"
 
 module Autobot
   module Tools
-    # Persistent sandbox service for high-performance sandboxed operations
-    # Starts a long-running sandbox process and communicates via Unix socket
+    # Persistent sandbox service for high-performance sandboxed operations (Linux only)
+    # Requires bubblewrap and autobot-server binary
+    # Communicates via Unix socket for 15x faster operations than Sandbox.exec
     class SandboxService
       Log = ::Log.for(self)
 
@@ -108,22 +109,16 @@ module Autobot
         Log.debug { "SandboxService initialized: workspace=#{@workspace}, type=#{@sandbox_type}" }
       end
 
-      # Start the persistent sandbox service
+      # Start the persistent sandbox service (Linux/bubblewrap only)
       def start : Nil
         raise "SandboxService already running" if @running
+        raise "SandboxService only supports bubblewrap (Linux only)" unless @sandbox_type == Sandbox::Type::Bubblewrap
 
         socket_path = create_socket_path
         @socket_path = socket_path
-        Log.info { "Starting sandbox service: #{@sandbox_type} at #{socket_path}" }
+        Log.info { "Starting sandbox service at #{socket_path}" }
 
-        case @sandbox_type
-        when Sandbox::Type::Bubblewrap
-          start_bubblewrap(socket_path)
-        when Sandbox::Type::Docker
-          start_docker(socket_path)
-        when Sandbox::Type::None
-          raise "Cannot start sandbox service without sandbox type"
-        end
+        start_bubblewrap(socket_path)
 
         @running = true
         connect_to_service
@@ -257,14 +252,7 @@ module Autobot
         socket_path = create_socket_path
         @socket_path = socket_path
 
-        case @sandbox_type
-        when Sandbox::Type::Bubblewrap
-          start_bubblewrap(socket_path)
-        when Sandbox::Type::Docker
-          start_docker(socket_path)
-        when Sandbox::Type::None
-          raise "Cannot recover sandbox service without sandbox type"
-        end
+        start_bubblewrap(socket_path)
 
         @running = true
         connect_to_service
@@ -283,63 +271,25 @@ module Autobot
         workspace_real = File.realpath(@workspace.to_s)
 
         bwrap_args = [
-          # System binaries (read-only)
           "--ro-bind", "/usr", "/usr",
           "--ro-bind", "/lib", "/lib",
           "--ro-bind", "/lib64", "/lib64",
           "--ro-bind", "/bin", "/bin",
           "--ro-bind", "/sbin", "/sbin",
-
-          # Workspace (read-write) - ONLY this directory is writable
           "--bind", workspace_real, workspace_real,
-
-          # Socket for IPC (bind parent directory)
           "--bind", "/tmp", "/tmp",
-
-          # Essential system directories
           "--proc", "/proc",
           "--dev", "/dev",
           "--tmpfs", "/tmp",
-
-          # Isolation
           "--unshare-all",
           "--share-net",
           "--die-with-parent",
-
-          # Working directory
           "--chdir", workspace_real,
-
-          # Execute external autobot-server binary
           "--", "autobot-server", socket_path, workspace_real,
         ]
 
         Log.debug { "Starting bubblewrap with autobot-server" }
         @process = Process.new("bwrap", bwrap_args)
-      end
-
-      private def start_docker(socket_path : String) : Nil
-        workspace_real = File.realpath(@workspace.to_s)
-
-        # Mount /tmp directory (socket will be created inside container)
-        socket_dir = File.dirname(socket_path)
-
-        docker_args = [
-          "run",
-          "--rm",
-          "-v", "#{workspace_real}:#{workspace_real}:rw",
-          "-v", "#{socket_dir}:#{socket_dir}:rw", # Mount parent dir for socket
-          "-w", workspace_real,
-          "--network", "bridge",
-          "--memory", Sandbox::DOCKER_MEMORY_LIMIT,
-          "--cpus", Sandbox::DOCKER_CPU_LIMIT,
-          "autobot/sandbox-server:latest", # Docker image with autobot-server
-          "autobot-server",
-          socket_path,
-          workspace_real,
-        ]
-
-        Log.debug { "Starting Docker with autobot-server" }
-        @process = Process.new("docker", docker_args)
       end
 
       private def connect_to_service : Nil
