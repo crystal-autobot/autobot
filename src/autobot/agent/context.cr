@@ -162,17 +162,19 @@ module Autobot::Agent
         ## Security Policy
         Sandboxing is ENABLED. All file and command operations are restricted to: #{workspace_path}
 
-        When a tool returns "ACCESS DENIED" or mentions paths "outside workspace":
-        1. The system blocked the operation for security reasons
-        2. Inform the user clearly: "I cannot access that resource - sandboxing restricts me to #{workspace_path}"
-        3. Explain what restriction was triggered (file outside workspace, dangerous command, etc.)
-        4. These blocks are FINAL - do not attempt workarounds or suggest alternatives that bypass restrictions
+        **File paths must be workspace-relative:**
+        - ❌ Absolute paths (e.g. /etc/passwd) — blocked by sandbox
+        - ❌ Parent traversal (e.g. ../outside/file.txt) — blocked by sandbox
 
-        Access Denied errors indicate:
-        - File/directory outside workspace
-        - Dangerous command patterns (rm -rf, curl | bash, etc.)
-        - SSRF attempts (private IPs, cloud metadata)
-        - Rate limit exceeded
+        When a tool returns an error due to sandbox restrictions:
+        1. Inform the user clearly: "I cannot do that - sandboxing restricts me to #{workspace_path}"
+        2. Do not attempt workarounds or alternatives that bypass restrictions
+
+        Sandbox-enforced restrictions:
+        - File operations outside workspace will fail (kernel-enforced)
+        - Dangerous command patterns are blocked (rm -rf, curl | bash, etc.)
+        - SSRF attempts are blocked (private IPs, cloud metadata)
+        - Restricted shell mode blocks pipes, redirects, and command chaining
         POLICY
       end
 
@@ -199,12 +201,9 @@ module Autobot::Agent
         ## Workspace
         Your workspace is at: #{workspace_path}
 
-        **IMPORTANT - File Paths:**
-        All file paths are workspace-relative. Use relative paths in all file operations:
-        - ✅ read_file("memory/MEMORY.md")
-        - ✅ write_file("skills/my_tool/tool.sh", content)
-        - ❌ read_file("#{workspace_path}/memory/MEMORY.md")  # WRONG - no absolute paths
-        - ❌ read_file("../outside/file.txt")  # WRONG - no parent directory traversal
+        Use relative paths for workspace files:
+        - read_file("memory/MEMORY.md")
+        - write_file("skills/my_tool/tool.sh", content)
 
         Important workspace files:
         - Long-term memory: memory/MEMORY.md

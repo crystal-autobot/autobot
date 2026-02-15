@@ -22,8 +22,6 @@ module Autobot
         else
           read_file_direct(path)
         end
-      rescue ex : PermissionError
-        ToolResult.access_denied("Access denied: #{ex.message}")
       rescue ex
         ToolResult.error("Cannot read file: #{ex.message}")
       end
@@ -34,8 +32,6 @@ module Autobot
         else
           write_file_direct(path, content)
         end
-      rescue ex : PermissionError
-        ToolResult.access_denied("Access denied: #{ex.message}")
       rescue ex
         ToolResult.error("Cannot write file: #{ex.message}")
       end
@@ -46,8 +42,6 @@ module Autobot
         else
           list_dir_direct(path)
         end
-      rescue ex : PermissionError
-        ToolResult.access_denied("Access denied: #{ex.message}")
       rescue ex
         ToolResult.error("Cannot list directory: #{ex.message}")
       end
