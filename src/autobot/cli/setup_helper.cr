@@ -19,7 +19,7 @@ module Autobot
         )
 
         plugin_registry = Plugins::Registry.new
-        executor = tool_registry.sandbox_executor || Tools::SandboxExecutor.new(nil, nil)
+        executor = tool_registry.sandbox_executor || Tools::SandboxExecutor.new(nil)
         plugin_context = Plugins::PluginContext.new(
           config: config,
           tool_registry: tool_registry,

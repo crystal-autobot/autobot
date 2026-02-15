@@ -1,6 +1,5 @@
 require "./result"
 require "./sandbox"
-require "./sandbox_service"
 
 module Autobot
   module Tools
@@ -8,19 +7,17 @@ module Autobot
     # Prevents tools from bypassing sandboxing by using direct File.* operations
     #
     # Usage:
-    #   executor = SandboxExecutor.new(sandbox_service, workspace)
+    #   executor = SandboxExecutor.new(workspace)
     #   result = executor.read_file("test.txt")
     #   result = executor.exec("ls -la")
     class SandboxExecutor
       MAX_FILE_SIZE = 1_048_576
 
-      def initialize(@sandbox_service : SandboxService?, @workspace : Path?)
+      def initialize(@workspace : Path?)
       end
 
       def read_file(path : String) : ToolResult
-        if service = @sandbox_service
-          read_file_via_service(service, path)
-        elsif workspace = @workspace
+        if workspace = @workspace
           read_file_via_sandbox_exec(path, workspace)
         else
           read_file_direct(path)
@@ -32,9 +29,7 @@ module Autobot
       end
 
       def write_file(path : String, content : String) : ToolResult
-        if service = @sandbox_service
-          write_file_via_service(service, path, content)
-        elsif workspace = @workspace
+        if workspace = @workspace
           write_file_via_sandbox_exec(path, content, workspace)
         else
           write_file_direct(path, content)
@@ -46,9 +41,7 @@ module Autobot
       end
 
       def list_dir(path : String) : ToolResult
-        if service = @sandbox_service
-          list_dir_via_service(service, path)
-        elsif workspace = @workspace
+        if workspace = @workspace
           list_dir_via_sandbox_exec(path, workspace)
         else
           list_dir_direct(path)
@@ -60,54 +53,13 @@ module Autobot
       end
 
       def exec(command : String, timeout : Int32 = 60) : ToolResult
-        if service = @sandbox_service
-          exec_via_service(service, command, timeout)
-        elsif workspace = @workspace
+        if workspace = @workspace
           exec_via_sandbox_exec(command, timeout, workspace)
         else
           exec_direct(command, timeout)
         end
       rescue ex
         ToolResult.error("Cannot execute command: #{ex.message}")
-      end
-
-      # Service-based execution
-      private def read_file_via_service(service : SandboxService, path : String) : ToolResult
-        operation = SandboxService::Operation.new(
-          type: SandboxService::OperationType::ReadFile,
-          path: path
-        )
-        response = service.execute(operation)
-        response.success? ? ToolResult.success(response.data || "") : ToolResult.error(response.error || "Unknown error")
-      end
-
-      private def write_file_via_service(service : SandboxService, path : String, content : String) : ToolResult
-        operation = SandboxService::Operation.new(
-          type: SandboxService::OperationType::WriteFile,
-          path: path,
-          content: content
-        )
-        response = service.execute(operation)
-        response.success? ? ToolResult.success(response.data || "") : ToolResult.error(response.error || "Unknown error")
-      end
-
-      private def list_dir_via_service(service : SandboxService, path : String) : ToolResult
-        operation = SandboxService::Operation.new(
-          type: SandboxService::OperationType::ListDir,
-          path: path
-        )
-        response = service.execute(operation)
-        response.success? ? ToolResult.success(response.data || "") : ToolResult.error(response.error || "Unknown error")
-      end
-
-      private def exec_via_service(service : SandboxService, command : String, timeout : Int32) : ToolResult
-        operation = SandboxService::Operation.new(
-          type: SandboxService::OperationType::Exec,
-          command: command,
-          timeout: timeout
-        )
-        response = service.execute(operation)
-        response.success? ? ToolResult.success(response.data || "") : ToolResult.error(response.error || "Unknown error")
       end
 
       # Sandbox.exec-based execution

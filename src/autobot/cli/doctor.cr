@@ -180,43 +180,7 @@ module Autobot
         sandbox_type = Tools::Sandbox.detect
         report(Status::Pass, "Sandbox available (#{sandbox_type.to_s.downcase})")
 
-        check_sandbox_performance(sandbox_type)
-
         errors
-      end
-
-      def self.check_sandbox_performance(sandbox_type : Tools::Sandbox::Type) : Nil
-        case sandbox_type
-        when Tools::Sandbox::Type::Bubblewrap
-          check_bubblewrap_performance
-        when Tools::Sandbox::Type::Docker
-          check_docker_performance
-        end
-      end
-
-      def self.check_bubblewrap_performance : Nil
-        if command_exists?("autobot-server")
-          report(Status::Pass, "autobot-server detected (~3ms/op)")
-        else
-          report(Status::Skip, "autobot-server not installed (using Sandbox.exec ~50ms/op)")
-          hint("Optional: Install for 15x speedup → https://github.com/crystal-autobot/sandbox-server")
-        end
-      end
-
-      def self.check_docker_performance : Nil
-        if command_exists?("autobot-server")
-          report(Status::Pass, "autobot-server detected (~3ms/op via Docker)")
-        else
-          report(Status::Skip, "autobot-server not installed (using Sandbox.exec ~50ms/op)")
-          hint("Optional: Install for 15x speedup with Docker sandbox → https://github.com/crystal-autobot/sandbox-server")
-          hint("Requires Linux binary; Docker mounts it into alpine:latest")
-        end
-      end
-
-      def self.command_exists?(cmd : String) : Bool
-        Process.run("which", [cmd], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
-      rescue
-        false
       end
 
       def self.check_workspace(config : Config::Config, config_file : Path, errors : Int32) : Int32

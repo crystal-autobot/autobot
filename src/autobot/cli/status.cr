@@ -59,7 +59,7 @@ module Autobot
           # Plugins
           plugin_registry = Plugins::Registry.new
           tool_registry = Tools::Registry.new
-          executor = Tools::SandboxExecutor.new(nil, nil)
+          executor = Tools::SandboxExecutor.new(nil)
           context = Plugins::PluginContext.new(
             config: config,
             tool_registry: tool_registry,

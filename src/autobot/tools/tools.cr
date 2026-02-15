@@ -7,7 +7,6 @@ require "./web"
 require "./message"
 require "./bash_tool"
 require "./sandbox"
-require "./sandbox_service"
 require "./sandbox_executor"
 
 module Autobot
@@ -43,18 +42,8 @@ module Autobot
         ::Log.for("Tools").warn { "⚠️  Sandboxing disabled - development mode only" }
       end
 
-      # Create and start sandbox service if autobot-server is available
-      sandbox_service = create_sandbox_service(workspace, sandbox_type)
-
-      # Log which execution mode is being used
-      if sandbox_service
-        ::Log.for("Tools").info { "→ Sandbox mode: autobot-server (persistent, ~3ms/op)" }
-      elsif sandboxed
-        ::Log.for("Tools").info { "→ Sandbox mode: Sandbox.exec (#{sandbox_type.to_s.downcase}, ~50ms/op)" }
-      end
-
       # Create centralized sandbox executor
-      executor = SandboxExecutor.new(sandbox_service, workspace)
+      executor = SandboxExecutor.new(workspace)
 
       # Register tools
       register_filesystem_tools(registry, executor)
@@ -63,8 +52,7 @@ module Autobot
       register_web_tools(registry, brave_api_key, web_fetch_max_chars)
       register_bash_tools(registry, executor, skills_dirs)
 
-      # Store references in registry for cleanup and plugin access
-      registry.sandbox_service = sandbox_service if sandbox_service
+      # Store reference in registry for plugin access
       registry.sandbox_executor = executor
 
       registry
@@ -80,7 +68,7 @@ module Autobot
     ) : Registry
       registry = Registry.new
 
-      executor = SandboxExecutor.new(nil, workspace)
+      executor = SandboxExecutor.new(workspace)
 
       register_filesystem_tools(registry, executor)
       register_exec_tool(registry, executor, exec_timeout, ExecTool::DEFAULT_DENY_PATTERNS,
@@ -93,12 +81,6 @@ module Autobot
       registry
     end
 
-    private def self.command_exists?(cmd : String) : Bool
-      Process.run("which", [cmd], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
-    rescue
-      false
-    end
-
     private def self.log_sandbox_configuration(sandbox_type : Sandbox::Type) : Nil
       case sandbox_type
       when Sandbox::Type::Bubblewrap
@@ -108,21 +90,6 @@ module Autobot
       when Sandbox::Type::None
         ::Log.for("Tools").warn { "⚠️  No sandbox tool found - install bubblewrap or Docker" }
       end
-    end
-
-    # Auto-detect and start autobot-server if the binary is available.
-    # Falls back gracefully to Sandbox.exec if server fails to start.
-    private def self.create_sandbox_service(workspace : Path?, sandbox_type : Sandbox::Type) : SandboxService?
-      return nil unless workspace && sandbox_type != Sandbox::Type::None
-      return nil unless command_exists?("autobot-server")
-
-      service = SandboxService.new(workspace, sandbox_type)
-      service.start
-      service
-    rescue ex
-      ::Log.for("Tools").warn { "autobot-server failed to start: #{ex.message}" }
-      ::Log.for("Tools").info { "→ Falling back to Sandbox.exec" }
-      nil
     end
 
     private def self.register_filesystem_tools(

@@ -61,7 +61,7 @@ describe Autobot::Plugins::PluginContext do
     registry = Autobot::Tools::Registry.new
     tmp = TestHelper.tmp_dir
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     context = Autobot::Plugins::PluginContext.new(
       config: config,
       tool_registry: registry,
@@ -113,7 +113,7 @@ describe Autobot::Plugins::Registry do
     config = Autobot::Config::Config.new
     tool_registry = Autobot::Tools::Registry.new
     tmp = TestHelper.tmp_dir
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     context = Autobot::Plugins::PluginContext.new(config: config, tool_registry: tool_registry, workspace: tmp, sandbox_executor: executor)
 
     registry.setup_all(context)
@@ -174,7 +174,7 @@ describe Autobot::Plugins::Loader do
     config = Autobot::Config::Config.new
     tool_registry = Autobot::Tools::Registry.new
     tmp = TestHelper.tmp_dir
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     context = Autobot::Plugins::PluginContext.new(config: config, tool_registry: tool_registry, workspace: tmp, sandbox_executor: executor)
 
     Autobot::Plugins::Loader.load_all(registry, context)

@@ -6,7 +6,7 @@ describe Autobot::Tools::ReadFileTool do
     file = tmp / "test.txt"
     File.write(file, "hello world")
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::ReadFileTool.new(executor)
     result = tool.execute({"path" => JSON::Any.new(file.to_s)})
     result.success?.should be_true
@@ -16,7 +16,7 @@ describe Autobot::Tools::ReadFileTool do
   end
 
   it "returns error for nonexistent file" do
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::ReadFileTool.new(executor)
     result = tool.execute({"path" => JSON::Any.new("/nonexistent/file.txt")})
     result.error?.should be_true
@@ -26,7 +26,7 @@ describe Autobot::Tools::ReadFileTool do
   it "returns error for directories" do
     tmp = TestHelper.tmp_dir
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::ReadFileTool.new(executor)
     result = tool.execute({"path" => JSON::Any.new(tmp.to_s)})
     result.error?.should be_true
@@ -41,7 +41,7 @@ describe Autobot::Tools::WriteFileTool do
     tmp = TestHelper.tmp_dir
     file = tmp / "write.txt"
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::WriteFileTool.new(executor)
     result = tool.execute({
       "path"    => JSON::Any.new(file.to_s),
@@ -59,7 +59,7 @@ describe Autobot::Tools::WriteFileTool do
     tmp = TestHelper.tmp_dir
     file = tmp / "sub" / "dir" / "file.txt"
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::WriteFileTool.new(executor)
     tool.execute({
       "path"    => JSON::Any.new(file.to_s),
@@ -79,7 +79,7 @@ describe Autobot::Tools::EditFileTool do
     file = tmp / "edit.txt"
     File.write(file, "Hello World")
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::EditFileTool.new(executor)
     result = tool.execute({
       "path"     => JSON::Any.new(file.to_s),
@@ -98,7 +98,7 @@ describe Autobot::Tools::EditFileTool do
     file = tmp / "edit.txt"
     File.write(file, "Hello World")
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::EditFileTool.new(executor)
     result = tool.execute({
       "path"     => JSON::Any.new(file.to_s),
@@ -117,7 +117,7 @@ describe Autobot::Tools::EditFileTool do
     file = tmp / "edit.txt"
     File.write(file, "hello hello hello")
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::EditFileTool.new(executor)
     result = tool.execute({
       "path"     => JSON::Any.new(file.to_s),
@@ -132,7 +132,7 @@ describe Autobot::Tools::EditFileTool do
   end
 
   it "returns error for nonexistent file" do
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::EditFileTool.new(executor)
     result = tool.execute({
       "path"     => JSON::Any.new("/nonexistent.txt"),
@@ -151,7 +151,7 @@ describe Autobot::Tools::ListDirTool do
     File.write(tmp / "file2.cr", "")
     Dir.mkdir(tmp / "subdir")
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::ListDirTool.new(executor)
     result = tool.execute({"path" => JSON::Any.new(tmp.to_s)})
 
@@ -164,7 +164,7 @@ describe Autobot::Tools::ListDirTool do
   end
 
   it "returns error for nonexistent directory" do
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::ListDirTool.new(executor)
     result = tool.execute({"path" => JSON::Any.new("/nonexistent/dir")})
     result.error?.should be_true
@@ -174,7 +174,7 @@ describe Autobot::Tools::ListDirTool do
   it "handles empty directory" do
     tmp = TestHelper.tmp_dir
 
-    executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     tool = Autobot::Tools::ListDirTool.new(executor)
     result = tool.execute({"path" => JSON::Any.new(tmp.to_s)})
     result.success?.should be_true

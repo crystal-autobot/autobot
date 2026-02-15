@@ -1,7 +1,7 @@
 require "../../spec_helper"
 
 private def create_test_executor
-  Autobot::Tools::SandboxExecutor.new(nil, nil)
+  Autobot::Tools::SandboxExecutor.new(nil)
 end
 
 describe Autobot::Tools::ExecTool do

@@ -1,47 +1,20 @@
 # Sandboxing Architecture
 
-Autobot uses **kernel-level sandboxing** to safely restrict LLM file access. This document explains the hybrid architecture with two execution modes.
+Autobot uses **kernel-level sandboxing** to safely restrict LLM file access. Each operation spawns a sandboxed process via bubblewrap or Docker.
 
 ## Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Hybrid Sandboxing: Simple Default + Optional Performance    │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ DEFAULT: Sandbox.exec (~50ms/op)                     │  │
-│  │  • Works everywhere, zero setup                       │  │
-│  │  • Single binary                                      │  │
-│  │  • Spawns sandbox per operation                       │  │
-│  │  • Uses shell commands (cat, ls, base64)             │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ OPTIONAL: autobot-server (~3ms/op)                   │  │
-│  │  • 15x faster performance                             │  │
-│  │  • Persistent sandbox process                         │  │
-│  │  • Requires separate install                          │  │
-│  │  • Power users only                                   │  │
-│  └──────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│ Sandbox.exec                                          │
+│  • Works everywhere, zero setup                       │
+│  • Single binary                                      │
+│  • Spawns sandbox per operation                       │
+│  • Uses shell commands (cat, ls, base64)             │
+└──────────────────────────────────────────────────────┘
 ```
 
-## Why Two Modes?
-
-**Previous approach:** Single-binary internal server
-- ❌ Binary compatibility issues (macOS binary can't run in Linux containers)
-- ❌ Over-engineered
-- ❌ Broke on macOS with Docker
-
-**Current approach:** Hybrid architecture
-- ✅ Default works everywhere (shell commands work in any container)
-- ✅ Optional performance upgrade path
-- ✅ No binary compatibility issues
-- ✅ Graceful fallback
-
-## Default Mode: Sandbox.exec
-
-### How It Works
+## How It Works
 
 Instead of spawning a persistent server, we spawn a sandboxed process for each operation:
 
@@ -89,85 +62,14 @@ docker run --rm \
   sh -c "cat file.txt"
 ```
 
-**Performance:** ~50ms per operation (acceptable for most use cases)
-
-## Optional Mode: autobot-server
-
-### When to Use
-
-Install autobot-server if you:
-- Need **15x faster** file operations (~3ms vs ~50ms)
-- Have **high-frequency** file access patterns
-
-**Most users don't need this** - the default mode is fast enough.
-
-### How It Works
-
-A persistent sandbox process communicates via Unix socket:
-
-```
-┌─────────────────┐           ┌─────────────────────┐
-│ autobot (main)  │  socket   │ autobot-server      │
-│ PID: 1234       │◄─────────►│ PID: 1235 (sandbox) │
-│ unrestricted    │  JSON/IPC │ workspace only      │
-└─────────────────┘           └─────────────────────┘
-```
-
-### Installation
-
-**Linux AMD64:**
-```bash
-curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-linux-amd64 \
-  -o /usr/local/bin/autobot-server
-chmod +x /usr/local/bin/autobot-server
-```
-
-**Linux ARM64:**
-```bash
-curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-linux-arm64 \
-  -o /usr/local/bin/autobot-server
-chmod +x /usr/local/bin/autobot-server
-```
-
-**Linux with Docker:** autobot-server is automatically mounted into the Docker container. No special image needed.
-
-### Auto-Detection
-
-Autobot automatically detects and uses autobot-server if installed:
-
-```bash
-$ autobot agent
-
-✓ Sandbox: bubblewrap (Linux namespaces)
-→ Sandbox mode: autobot-server (persistent, ~3ms/op)
-```
-
-If not installed:
-```bash
-→ Sandbox mode: Sandbox.exec (bubblewrap, ~50ms/op)
-```
-
-### Graceful Fallback
-
-If autobot-server fails to start, autobot automatically falls back to Sandbox.exec:
-
-```bash
-⚠ autobot-server failed to start: socket error
-→ Falling back to Sandbox.exec
-```
-
-**No manual intervention needed** - everything just works.
-
 ## Platform Support
 
-| Platform | Sandbox Tool | Default (Sandbox.exec) | Optional (autobot-server) |
-|----------|-------------|------------------------|---------------------------|
-| **Linux** | bubblewrap | ~50ms/op | ~3ms/op (15x faster) ✅ |
-| **Linux** | Docker | ~50ms/op | ~3ms/op (15x faster) ✅ |
-| **macOS** | Docker | ~50ms/op | — |
-| **Windows** | Docker (WSL2) | ~50ms/op | — |
-
-> **Note:** `autobot-server` is a Linux binary. On Linux with Docker, it is mounted into `alpine:latest` automatically. macOS/Windows users can still use Docker for the default Sandbox.exec mode.
+| Platform | Sandbox Tool |
+|----------|-------------|
+| **Linux** | bubblewrap (recommended) |
+| **Linux** | Docker |
+| **macOS** | Docker |
+| **Windows** | Docker (WSL2) |
 
 ## Installation
 
@@ -222,59 +124,33 @@ tools:
 - `docker` - Force Docker (all platforms)
 - `none` - Disable sandboxing (UNSAFE - tests only)
 
-**Note:** If `autobot-server` is installed, it is automatically used for faster batch operations regardless of sandbox config.
-
 ## Security Properties
 
 ### What Sandboxing Prevents
 
-- ✅ Reading system files (`/etc/passwd`, `/etc/shadow`)
-- ✅ Reading home directory (`~/.ssh/`, `~/.aws/credentials`)
-- ✅ Writing outside workspace
-- ✅ Accessing secrets in parent directories
-- ✅ Path traversal attacks (`../../../etc/passwd`)
-- ✅ Absolute path exploits (`/etc/passwd`)
+- Reading system files (`/etc/passwd`, `/etc/shadow`)
+- Reading home directory (`~/.ssh/`, `~/.aws/credentials`)
+- Writing outside workspace
+- Accessing secrets in parent directories
+- Path traversal attacks (`../../../etc/passwd`)
+- Absolute path exploits (`/etc/passwd`)
 
-### Security Layers
+### How It Works
 
-**Defense in depth:**
+All filesystem and exec operations go through `SandboxExecutor`, which routes them to `Sandbox.exec`. Each operation spawns a sandboxed process (bubblewrap or Docker) that **cannot access files outside the workspace** — enforced by the OS kernel, not application code.
 
-1. **Application layer** (path validation)
-   - Rejects absolute paths
-   - Rejects `..` traversal
-   - Validates workspace-relative paths
+**Shell escaping** (single-quote escaping, base64 encoding for file content) prevents command injection within sandboxed commands.
 
-2. **Shell escaping** (command injection prevention)
-   - Single-quote escaping
-   - Base64 encoding for file content
-
-3. **Kernel layer** (OS enforces)
-   - Process cannot access files outside workspace
-   - Even if application has bugs
-   - Cannot be bypassed from inside sandbox
+**Note:** Plugin tools that call external CLIs (e.g. `gh`, `curl`) use `Process.run` with argument arrays (no shell interpretation) and run outside the sandbox since they need host resources (auth configs, SSL certs).
 
 ### What Sandboxing Does NOT Prevent
 
-- ⚠️ Network attacks (agent has network access)
-- ⚠️ API key theft (main process has keys)
-- ⚠️ DoS via API calls
-- ⚠️ Social engineering (user approves actions)
+- Network attacks (agent has network access)
+- API key theft (main process has keys)
+- DoS via API calls
+- Social engineering (user approves actions)
 
 **Defense in depth:** Use API key scoping, rate limiting, and audit logs.
-
-## Performance
-
-**Benchmark: 1000 file operations**
-
-| Mode | Time | Per Operation | Use Case |
-|------|------|---------------|----------|
-| autobot-server | 3.2s | 3.2ms | Performance-critical workloads |
-| Sandbox.exec | 52s | 52ms | Normal use (default) |
-| No sandbox | 450ms | 0.45ms | Tests only (UNSAFE) |
-
-**Takeaway:**
-- Default (~50ms/op) is acceptable for most use cases
-- Install autobot-server for 15x speedup if needed
 
 ## Troubleshooting
 
@@ -308,17 +184,6 @@ ls -ld /path/to/workspace
 autobot agent --sandbox docker
 ```
 
-### Slow performance on Linux
-
-**Problem:** Each operation takes ~50ms on Linux
-
-**Solution:** Install autobot-server for 15x speedup
-```bash
-curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/download/autobot-server-linux-amd64 \
-  -o /usr/local/bin/autobot-server
-chmod +x /usr/local/bin/autobot-server
-```
-
 ## Development
 
 ### Running Without Sandbox (Tests)
@@ -326,8 +191,8 @@ chmod +x /usr/local/bin/autobot-server
 Tests automatically disable sandboxing:
 
 ```crystal
-# Tests pass nil service and nil workspace to SandboxExecutor
-executor = SandboxExecutor.new(nil, nil)
+# Tests pass nil workspace to SandboxExecutor
+executor = SandboxExecutor.new(nil)
 tool = ReadFileTool.new(executor)
 
 # Tool uses direct file operations (fast, no overhead)
@@ -339,7 +204,7 @@ tool.execute({"path" => JSON::Any.new("test.txt")})  # Direct File.read
 ```crystal
 # spec/security_spec.cr tests sandbox restrictions
 it "prevents reading system files" do
-  executor = SandboxExecutor.new(nil, workspace)
+  executor = SandboxExecutor.new(workspace)
   tool = ReadFileTool.new(executor)
   result = tool.execute({"path" => JSON::Any.new("/etc/passwd")})
   result.error?.should be_true
@@ -348,27 +213,15 @@ end
 
 ## FAQ
 
-**Q: Do I need to install autobot-server?**
-A: No! The default Sandbox.exec works fine for most users. Install autobot-server if you need 15x faster performance.
-
-**Q: What if autobot-server crashes?**
-A: Autobot automatically falls back to Sandbox.exec. No manual intervention needed.
-
-**Q: Why not always use autobot-server?**
-A: Keeping it optional reduces complexity for most users. Single binary + zero setup = better experience.
-
 **Q: Does this work on Windows?**
 A: Yes, via Docker with WSL2 backend.
 
 **Q: How do I verify sandboxing works?**
 A: Try reading `/etc/passwd` - should fail with "Absolute paths not allowed"
 
-**Q: What's the performance impact?**
-A: Default ~50ms/op is acceptable for most use cases. Install autobot-server for ~3ms/op.
-
 **Q: Can I disable sandboxing?**
 A: Only for tests. Production requires sandboxing for safety.
 
 ---
 
-**Summary:** Autobot provides a hybrid sandboxing architecture with a simple default that works everywhere (~50ms/op) and an optional performance mode for power users (~3ms/op). No manual configuration needed - autobot automatically detects and uses the best option available.
+**Summary:** Autobot uses kernel-level sandboxing (bubblewrap or Docker) to restrict LLM file access. Each operation spawns a sandboxed process with shell commands, ensuring compatibility across all platforms with zero extra setup.

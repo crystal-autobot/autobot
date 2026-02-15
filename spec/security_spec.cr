@@ -7,7 +7,7 @@ require "../src/autobot/tools/rate_limiter"
 require "../src/autobot/log_sanitizer"
 
 private def create_test_executor
-  Autobot::Tools::SandboxExecutor.new(nil, nil)
+  Autobot::Tools::SandboxExecutor.new(nil)
 end
 
 describe "Security Tests" do
@@ -476,7 +476,7 @@ describe "Security Tests" do
         File.write("#{outside}/secret.txt", "sensitive data")
         File.symlink("#{outside}/secret.txt", "#{workspace}/link_to_secret")
 
-        executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+        executor = Autobot::Tools::SandboxExecutor.new(nil)
         tool = Autobot::Tools::ReadFileTool.new(executor)
         result = tool.execute({"path" => JSON::Any.new("#{workspace}/link_to_secret")} of String => JSON::Any)
         result.success?.should be_true
