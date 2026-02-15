@@ -17,7 +17,7 @@ module Autobot
     # Options:
     #   - `workspace` restricts filesystem tools to a directory
     #   - `exec_timeout` sets shell command timeout (seconds)
-    #   - `sandbox_config` sets sandbox mode (auto/bubblewrap/sandboxexec/docker/none)
+    #   - `sandbox_config` sets sandbox mode (auto/bubblewrap/docker/none)
     #   - `brave_api_key` enables web search
     #   - `skills_dirs` adds extra directories for bash tool discovery
     #   - `use_sandbox_service` enables persistent sandbox service (default: true when sandboxed)
@@ -36,7 +36,7 @@ module Autobot
 
       # Determine sandbox configuration
       sandboxed = sandbox_config.downcase != "none"
-      sandbox_type = resolve_sandbox_type(sandbox_config)
+      sandbox_type = Sandbox.resolve_type(sandbox_config)
 
       # Log sandbox configuration
       if sandboxed
@@ -65,42 +65,39 @@ module Autobot
 
       # Register tools
       register_filesystem_tools(registry, executor)
-      register_exec_tool(registry, sandbox_service, exec_timeout, exec_deny_patterns,
+      register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
         sandbox_config, full_shell_access, workspace)
       register_web_tools(registry, brave_api_key, web_fetch_max_chars)
-      register_bash_tools(registry, skills_dirs, sandbox_service)
+      register_bash_tools(registry, executor, skills_dirs)
 
-      # Store service reference in registry for cleanup
+      # Store references in registry for cleanup and plugin access
       registry.sandbox_service = sandbox_service if sandbox_service
+      registry.sandbox_executor = executor
 
       registry
     end
 
-    private def self.resolve_sandbox_type(sandbox_config : String) : Sandbox::Type
-      case sandbox_config.downcase
-      when "bubblewrap"
-        Sandbox::Type::Bubblewrap
-      when "docker"
-        Sandbox::Type::Docker
-      when "none"
-        Sandbox::Type::None
-      else
-        Sandbox.detect
-      end
-    end
+    # Create a registry for subagent use (no message or spawn tools).
+    # Shares the same sandbox config as the parent agent.
+    def self.create_subagent_registry(
+      workspace : Path,
+      exec_timeout : Int32 = ExecTool::DEFAULT_TIMEOUT,
+      sandbox_config : String = "auto",
+      brave_api_key : String? = nil,
+    ) : Registry
+      registry = Registry.new
 
-    private def self.should_use_server?(sandbox_config : String, use_sandbox_service : Bool?) : Bool
-      # Explicit override takes precedence
-      return use_sandbox_service unless use_sandbox_service.nil?
+      executor = SandboxExecutor.new(nil, workspace)
 
-      case sandbox_config.downcase
-      when "auto"
-        command_exists?("autobot-server") # Use if installed
-      when "autobot-server"
-        true # Explicitly requested
-      else
-        false # Other modes use Sandbox.exec
-      end
+      register_filesystem_tools(registry, executor)
+      register_exec_tool(registry, executor, exec_timeout, ExecTool::DEFAULT_DENY_PATTERNS,
+        sandbox_config, false, workspace)
+
+      registry.register(WebSearchTool.new(api_key: brave_api_key))
+      registry.register(WebFetchTool.new)
+
+      registry.sandbox_executor = executor
+      registry
     end
 
     private def self.command_exists?(cmd : String) : Bool
@@ -168,7 +165,7 @@ module Autobot
 
     private def self.register_exec_tool(
       registry : Registry,
-      sandbox_service : SandboxService?,
+      executor : SandboxExecutor,
       timeout : Int32,
       deny_patterns : Array(Regex),
       sandbox_config : String,
@@ -176,12 +173,12 @@ module Autobot
       workspace : Path?,
     )
       registry.register(ExecTool.new(
+        executor: executor,
         timeout: timeout,
         working_dir: workspace.try(&.to_s),
         deny_patterns: deny_patterns,
         sandbox_config: sandbox_config,
         full_shell_access: full_shell_access,
-        sandbox_service: sandbox_service,
       ))
     end
 
@@ -197,10 +194,10 @@ module Autobot
 
     private def self.register_bash_tools(
       registry : Registry,
+      executor : SandboxExecutor,
       skills_dirs : Array(String),
-      sandbox_service : SandboxService?,
     )
-      BashToolDiscovery.discover(skills_dirs, sandbox_service).each do |tool|
+      BashToolDiscovery.discover(executor, skills_dirs).each do |tool|
         registry.register(tool)
       end
     end

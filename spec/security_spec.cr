@@ -6,6 +6,10 @@ require "../src/autobot/tools/web"
 require "../src/autobot/tools/rate_limiter"
 require "../src/autobot/log_sanitizer"
 
+private def create_test_executor
+  Autobot::Tools::SandboxExecutor.new(nil, nil)
+end
+
 describe "Security Tests" do
   describe "BashTool command injection protection" do
     it "safely handles malicious arguments" do
@@ -14,7 +18,7 @@ describe "Security Tests" do
       File.write(script_path, "#!/bin/sh\necho \"Args: $@\"\n")
       File.chmod(script_path, 0o755)
 
-      tool = Autobot::Tools::BashTool.new(script_path, "test_tool", "Test tool")
+      tool = Autobot::Tools::BashTool.new(create_test_executor, script_path, "test_tool", "Test tool")
 
       # Test injection attempts
       malicious_inputs = [
@@ -47,6 +51,7 @@ describe "Security Tests" do
 
     it "allows sandbox: none without validation" do
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: "/tmp",
         sandbox_config: "none"
       )
@@ -58,6 +63,7 @@ describe "Security Tests" do
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: workspace,
         sandbox_config: "auto"
       )
@@ -79,6 +85,7 @@ describe "Security Tests" do
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: workspace,
         sandbox_config: "auto"
       )
@@ -100,7 +107,7 @@ describe "Security Tests" do
     end
 
     it "blocks dangerous commands" do
-      tool = Autobot::Tools::ExecTool.new
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
 
       dangerous_commands = [
         "rm -rf /",
@@ -253,6 +260,7 @@ describe "Security Tests" do
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: workspace,
         sandbox_config: "auto"
       )
@@ -289,6 +297,7 @@ describe "Security Tests" do
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: workspace,
         sandbox_config: "auto",
         full_shell_access: false
@@ -316,6 +325,7 @@ describe "Security Tests" do
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: workspace,
         sandbox_config: "auto",
         full_shell_access: false
@@ -349,6 +359,7 @@ describe "Security Tests" do
       File.write("#{workspace}/test.txt", "content")
 
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: workspace,
         sandbox_config: "none",
         full_shell_access: false
@@ -375,6 +386,7 @@ describe "Security Tests" do
       File.write("#{workspace}/test.txt", "line1\nline2")
 
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: workspace,
         sandbox_config: "none",
         full_shell_access: true
@@ -392,7 +404,7 @@ describe "Security Tests" do
 
   describe "Command timeout enforcement" do
     it "kills long-running commands" do
-      tool = Autobot::Tools::ExecTool.new(timeout: 2, sandbox_config: "none")
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, timeout: 2, sandbox_config: "none")
 
       # Command that would run forever
       result = tool.execute({"command" => JSON::Any.new("sleep 100")} of String => JSON::Any)
@@ -406,6 +418,7 @@ describe "Security Tests" do
     it "rejects incompatible sandbox + full_shell_access" do
       expect_raises(ArgumentError, /mutually exclusive/) do
         Autobot::Tools::ExecTool.new(
+          executor: create_test_executor,
           sandbox_config: "auto",
           full_shell_access: true
         )
@@ -414,6 +427,7 @@ describe "Security Tests" do
 
     it "allows sandbox without full_shell_access" do
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         sandbox_config: "auto",
         full_shell_access: false
       )
@@ -422,6 +436,7 @@ describe "Security Tests" do
 
     it "allows full_shell_access without sandbox" do
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         sandbox_config: "none",
         full_shell_access: true
       )

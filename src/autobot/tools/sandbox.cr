@@ -51,6 +51,20 @@ module Autobot
         detect != Type::None
       end
 
+      # Resolve sandbox type from config string
+      def self.resolve_type(config : String) : Type
+        case config.downcase
+        when "bubblewrap" then Type::Bubblewrap
+        when "docker"     then Type::Docker
+        when "none"       then Type::None
+        when "auto"       then detect
+        else
+          raise ArgumentError.new(
+            "Invalid sandbox config: #{config}. Use 'auto', 'bubblewrap', 'docker', or 'none'"
+          )
+        end
+      end
+
       # Require sandbox or raise clear error
       def self.require_sandbox! : Nil
         unless available?
@@ -242,23 +256,6 @@ module Autobot
         status, stdout, stderr = exec(command, workspace, timeout: LIST_DIR_TIMEOUT, max_output_size: MAX_LIST_OUTPUT)
 
         {status.success?, status.success? ? stdout : stderr}
-      end
-
-      def self.edit_file(path : String, old_text : String, new_text : String, workspace : Path) : {Bool, String}
-        success, content = read_file(path, workspace)
-        return {false, content} unless success
-
-        unless content.includes?(old_text)
-          return {false, "Text not found in file"}
-        end
-
-        count = content.scan(old_text).size
-        if count > 1
-          return {false, "Text appears #{count} times. Provide more context"}
-        end
-
-        new_content = content.sub(old_text, new_text)
-        write_file(path, new_content, workspace)
       end
 
       private def self.shell_escape(arg : String) : String

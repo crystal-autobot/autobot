@@ -184,22 +184,60 @@ module Autobot
 
         entries = Dir.entries(dir_path.to_s)
           .reject { |e| e == "." || e == ".." }
-          .reject { |e| Config::Env.file?(e) }
           .sort!
 
         return ToolResult.success("Directory is empty") if entries.empty?
 
-        items = entries.map do |entry|
-          full = File.join(dir_path.to_s, entry)
-          prefix = Dir.exists?(full) ? "[dir]  " : "[file] "
-          "#{prefix}#{entry}"
-        end
-
-        ToolResult.success(items.join("\n"))
+        ToolResult.success(entries.join("\n"))
       end
 
       private def exec_direct(command : String, timeout : Int32) : ToolResult
-        ToolResult.error("Direct exec not supported in test mode")
+        stdout_read, stdout_write = IO.pipe
+        stderr_read, stderr_write = IO.pipe
+
+        process = Process.new(
+          "sh", ["-c", command],
+          output: stdout_write,
+          error: stderr_write
+        )
+
+        stdout_write.close
+        stderr_write.close
+
+        stdout_channel = Channel(String).new(1)
+        stderr_channel = Channel(String).new(1)
+
+        spawn { stdout_channel.send(stdout_read.gets_to_end) }
+        spawn { stderr_channel.send(stderr_read.gets_to_end) }
+
+        completed = Channel(Process::Status).new(1)
+        spawn do
+          status = process.wait
+          completed.send(status)
+        end
+
+        select
+        when completed.receive
+          # Process completed
+        when timeout(timeout.seconds)
+          process.signal(Signal::TERM)
+          sleep 0.5.seconds
+          process.signal(Signal::KILL) unless process.terminated?
+          process.wait
+        end
+
+        stdout_text = stdout_channel.receive
+        stderr_text = stderr_channel.receive
+
+        stdout_read.close
+        stderr_read.close
+
+        parts = [] of String
+        parts << stdout_text unless stdout_text.empty?
+        parts << "STDERR:\n#{stderr_text}" unless stderr_text.empty?
+
+        data = parts.empty? ? "[no output]" : parts.join("\n")
+        ToolResult.success(data)
       end
     end
   end

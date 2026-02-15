@@ -280,7 +280,6 @@ module Autobot
           "--bind", "/tmp", "/tmp",
           "--proc", "/proc",
           "--dev", "/dev",
-          "--tmpfs", "/tmp",
           "--unshare-all",
           "--share-net",
           "--die-with-parent",

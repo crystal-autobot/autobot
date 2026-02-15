@@ -1,8 +1,6 @@
 require "log"
 require "../constants"
-require "../config/env"
 require "./sandbox"
-require "./sandbox_service"
 
 module Autobot
   module Tools
@@ -85,16 +83,15 @@ module Autobot
       getter allow_patterns : Array(Regex)
       getter? full_shell_access : Bool
       getter sandbox_type : Sandbox::Type
-      @sandbox_service : SandboxService?
 
       def initialize(
+        @executor : SandboxExecutor,
         @timeout = DEFAULT_TIMEOUT,
         @working_dir : String? = nil,
         @deny_patterns = DEFAULT_DENY_PATTERNS,
         @allow_patterns = [] of Regex,
         @full_shell_access = false,
         sandbox_config : String = "auto",
-        @sandbox_service : SandboxService? = nil,
       )
         validate_config!(sandbox_config)
         @sandbox_type = resolve_sandbox_type(sandbox_config)
@@ -147,35 +144,20 @@ module Autobot
       end
 
       private def run_command(command : String, cwd : String) : String
-        if sandboxed?
-          # Production: require sandbox service (fail fast if unavailable)
-          service = @sandbox_service || raise "Sandbox service required but not available"
-          workspace = @working_dir || raise "Working directory required for sandboxed execution"
+        workspace = @working_dir
 
-          # Calculate relative path from workspace
+        if sandboxed? && workspace
           relative_cwd = calculate_relative_path(cwd, workspace)
 
-          # Use cd to change directory in the sandbox
           sandboxed_command = if relative_cwd == "." || relative_cwd.empty?
                                 command
                               else
                                 "cd #{relative_cwd} && #{command}"
                               end
 
-          operation = SandboxService::Operation.new(
-            type: SandboxService::OperationType::Exec,
-            command: sandboxed_command,
-            timeout: @timeout
-          )
-          response = service.execute(operation)
-
-          if response.success?
-            response.data || ""
-          else
-            "Error: #{response.error}"
-          end
+          result = @executor.exec(sandboxed_command, timeout: @timeout)
+          result.success? ? result.content : "Error: #{result.content}"
         else
-          # Test mode: direct execution (explicitly unsandboxed)
           run_command_direct(command, cwd)
         end
       end
@@ -281,11 +263,6 @@ module Autobot
       private def guard_command(command : String) : String?
         cmd = command.strip
 
-        # Always block .env file access
-        if Config::Env.command_references_file?(cmd)
-          return "Error: Access to .env files is blocked for security"
-        end
-
         @deny_patterns.each do |pattern|
           if pattern.matches?(cmd)
             return "Error: Command blocked by safety guard (dangerous pattern detected)"
@@ -358,18 +335,7 @@ module Autobot
       end
 
       private def resolve_sandbox_type(sandbox_config : String) : Sandbox::Type
-        case sandbox_config.downcase
-        when "bubblewrap"
-          Sandbox::Type::Bubblewrap
-        when "docker"
-          Sandbox::Type::Docker
-        when "none"
-          Sandbox::Type::None
-        when "auto"
-          Sandbox.detect
-        else
-          raise ArgumentError.new("Invalid sandbox config: #{sandbox_config}. Use 'auto', 'bubblewrap', 'docker', or 'none'")
-        end
+        Sandbox.resolve_type(sandbox_config)
       end
 
       private def ensure_sandbox_available! : Nil

@@ -1,36 +1,10 @@
 require "./result"
 require "./sandbox_executor"
-require "../config/env"
 
 module Autobot
   module Tools
-    # Simple path expansion - security handled by kernel sandbox
     def self.resolve_path(path : String) : Path
-      # Always block .env files for security
-      if Config::Env.file?(path)
-        raise PermissionError.new("Access to .env files is always denied for security")
-      end
-
       Path[path].expand(home: true)
-    end
-
-    private def self.resolve_to_real_path(path : String) : String
-      if File.exists?(path) || Dir.exists?(path)
-        File.realpath(path)
-      else
-        parent = File.dirname(path)
-        if File.exists?(parent)
-          File.realpath(parent) + "/" + File.basename(path)
-        else
-          path
-        end
-      end
-    rescue
-      path
-    end
-
-    private def self.path_within_directory?(path : String, directory : String) : Bool
-      path.starts_with?(directory + "/") || path == directory
     end
 
     class PermissionError < Exception; end

@@ -79,20 +79,13 @@ module Autobot
 
         begin
           # Build isolated tool registry (no message or spawn tools)
-          tools = Tools::Registry.new
-          executor = Tools::SandboxExecutor.new(nil, nil)
-          tools.register(Tools::ReadFileTool.new(executor))
-          tools.register(Tools::WriteFileTool.new(executor))
-          tools.register(Tools::EditFileTool.new(executor))
-          tools.register(Tools::ListDirTool.new(executor))
-          tools.register(Tools::ExecTool.new(
-            working_dir: @workspace.to_s,
-            timeout: @exec_timeout,
+          # Uses the same sandbox config as the parent agent
+          tools = Tools.create_subagent_registry(
+            workspace: @workspace,
+            exec_timeout: @exec_timeout,
             sandbox_config: @sandbox_config,
-            sandbox_service: nil
-          ))
-          tools.register(Tools::WebSearchTool.new(api_key: @brave_api_key))
-          tools.register(Tools::WebFetchTool.new)
+            brave_api_key: @brave_api_key,
+          )
 
           # Build messages with subagent-specific prompt
           system_prompt = build_subagent_prompt(task)

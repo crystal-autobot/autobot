@@ -330,11 +330,12 @@ chmod +x /usr/local/bin/autobot-server
 Tests automatically disable sandboxing:
 
 ```crystal
-# Tests pass sandbox_service: nil, workspace: nil
-tool = ReadFileTool.new(nil, nil)
+# Tests pass nil service and nil workspace to SandboxExecutor
+executor = SandboxExecutor.new(nil, nil)
+tool = ReadFileTool.new(executor)
 
 # Tool uses direct file operations (fast, no overhead)
-tool.execute({"path" => "test.txt"})  # Direct File.read
+tool.execute({"path" => JSON::Any.new("test.txt")})  # Direct File.read
 ```
 
 ### Testing Sandbox Behavior
@@ -342,8 +343,9 @@ tool.execute({"path" => "test.txt"})  # Direct File.read
 ```crystal
 # spec/security_spec.cr tests sandbox restrictions
 it "prevents reading system files" do
-  tool = ReadFileTool.new(nil, workspace)
-  result = tool.execute({"path" => "/etc/passwd"})
+  executor = SandboxExecutor.new(nil, workspace)
+  tool = ReadFileTool.new(executor)
+  result = tool.execute({"path" => JSON::Any.new("/etc/passwd")})
   result.error?.should be_true
 end
 ```

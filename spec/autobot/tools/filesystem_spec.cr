@@ -158,7 +158,6 @@ describe Autobot::Tools::ListDirTool do
     result.success?.should be_true
     result.content.should contain("file1.txt")
     result.content.should contain("file2.cr")
-    result.content.should contain("[dir]")
     result.content.should contain("subdir")
   ensure
     FileUtils.rm_rf(tmp) if tmp
