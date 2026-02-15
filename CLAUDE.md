@@ -6,7 +6,7 @@
 
 ### Ameba Rules
 - **No formatting warnings** - Code must be formatted with `crystal tool format`
-- **No cyclomatic complexity violations** - Keep methods simple (max complexity: 10)
+- **No cyclomatic complexity violations** - Keep methods simple (max complexity: 10), follow it at the beginning to avoid refactoring
 - **No style violations** - Follow Crystal style guide
 - **No naming violations** - Use proper naming conventions
 

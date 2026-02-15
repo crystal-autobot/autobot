@@ -1,4 +1,5 @@
 require "log"
+require "base64"
 
 module Autobot
   module Tools
@@ -222,10 +223,71 @@ module Autobot
             status = process.wait
             status
           rescue
-            # Process already terminated, create a timeout status
             Process::Status.new(TIMEOUT_EXIT_CODE)
           end
         end
+      end
+
+      # Read file via sandboxed cat command
+      def self.read_file(path : String, workspace : Path, max_size : Int32 = 1_000_000) : {Bool, String}
+        # Escape path and use cat
+        command = "cat #{shell_escape(path)} 2>&1"
+        status, stdout, stderr = exec(command, workspace, timeout: 10, max_output_size: max_size)
+
+        {status.success?, status.success? ? stdout : stderr}
+      end
+
+      # Write file via shell redirection
+      def self.write_file(path : String, content : String, workspace : Path) : {Bool, String}
+        # Create parent directory first
+        dir = File.dirname(path)
+        if dir != "." && dir != "/"
+          mkdir_status, _, mkdir_err = exec("mkdir -p #{shell_escape(dir)}", workspace, timeout: 5)
+          return {false, mkdir_err} unless mkdir_status.success?
+        end
+
+        # Write using base64 to avoid escaping issues
+        encoded = Base64.strict_encode(content)
+        command = "printf '%s' '#{encoded}' | base64 -d > #{shell_escape(path)} 2>&1"
+        status, _, stderr = exec(command, workspace, timeout: 30, max_output_size: 10_000)
+
+        message = status.success? ? "Wrote #{content.bytesize} bytes" : stderr
+        {status.success?, message}
+      end
+
+      # List directory via ls
+      def self.list_dir(path : String, workspace : Path) : {Bool, String}
+        command = "ls -1a #{shell_escape(path)} 2>&1"
+        status, stdout, stderr = exec(command, workspace, timeout: 10, max_output_size: 100_000)
+
+        {status.success?, status.success? ? stdout : stderr}
+      end
+
+      # Edit file (read, replace, write)
+      def self.edit_file(path : String, old_text : String, new_text : String, workspace : Path) : {Bool, String}
+        # Read first
+        success, content = read_file(path, workspace)
+        return {false, content} unless success
+
+        # Check if text exists
+        unless content.includes?(old_text)
+          return {false, "Text not found in file"}
+        end
+
+        # Check for ambiguity
+        count = content.scan(old_text).size
+        if count > 1
+          return {false, "Text appears #{count} times. Provide more context"}
+        end
+
+        # Replace and write
+        new_content = content.sub(old_text, new_text)
+        write_file(path, new_content, workspace)
+      end
+
+      # Shell escape for safety (single quotes, escape embedded quotes)
+      private def self.shell_escape(arg : String) : String
+        "'#{arg.gsub("'", "'\\''")}'"
       end
 
       # Check if command exists in PATH
@@ -252,16 +314,17 @@ module Autobot
 
         Install one of:
 
-        • bubblewrap (recommended, lightweight):
+        • bubblewrap (recommended for Linux):
             Ubuntu/Debian: sudo apt install bubblewrap
             Fedora:        sudo dnf install bubblewrap
             Arch:          sudo pacman -S bubblewrap
 
-        • Docker (production):
-            Ubuntu/Debian: sudo apt install docker.io
+        • Docker (required for macOS, universal):
+            macOS:         https://docs.docker.com/desktop/install/mac-install/
+            Linux:         sudo apt install docker.io
             Others:        https://docs.docker.com/engine/install/
 
-        Learn more: docs/security.md#sandboxing
+        Learn more: docs/sandboxing.md
         ERROR
       end
     end

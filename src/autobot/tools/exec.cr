@@ -2,6 +2,7 @@ require "log"
 require "../constants"
 require "../config/env"
 require "./sandbox"
+require "./sandbox_service"
 
 module Autobot
   module Tools
@@ -84,6 +85,7 @@ module Autobot
       getter allow_patterns : Array(Regex)
       getter? full_shell_access : Bool
       getter sandbox_type : Sandbox::Type
+      @sandbox_service : SandboxService?
 
       def initialize(
         @timeout = DEFAULT_TIMEOUT,
@@ -92,6 +94,7 @@ module Autobot
         @allow_patterns = [] of Regex,
         @full_shell_access = false,
         sandbox_config : String = "auto",
+        @sandbox_service : SandboxService? = nil,
       )
         validate_config!(sandbox_config)
         @sandbox_type = resolve_sandbox_type(sandbox_config)
@@ -144,13 +147,35 @@ module Autobot
       end
 
       private def run_command(command : String, cwd : String) : String
-        # Use sandbox when enabled
         if sandboxed?
-          status, stdout_text, stderr_text = Sandbox.exec(command, Path[cwd], @timeout, MAX_OUTPUT_SIZE)
-          timed_out = status.exit_code == Sandbox::TIMEOUT_EXIT_CODE
-          build_command_result(stdout_text, stderr_text, status, timed_out)
+          # Production: require sandbox service (fail fast if unavailable)
+          service = @sandbox_service || raise "Sandbox service required but not available"
+          workspace = @working_dir || raise "Working directory required for sandboxed execution"
+
+          # Calculate relative path from workspace
+          relative_cwd = calculate_relative_path(cwd, workspace)
+
+          # Use cd to change directory in the sandbox
+          sandboxed_command = if relative_cwd == "." || relative_cwd.empty?
+                                command
+                              else
+                                "cd #{relative_cwd} && #{command}"
+                              end
+
+          operation = SandboxService::Operation.new(
+            type: SandboxService::OperationType::Exec,
+            command: sandboxed_command,
+            timeout: @timeout
+          )
+          response = service.execute(operation)
+
+          if response.success?
+            response.data || ""
+          else
+            "Error: #{response.error}"
+          end
         else
-          # Direct execution (no sandbox) for dev/testing
+          # Test mode: direct execution (explicitly unsandboxed)
           run_command_direct(command, cwd)
         end
       end
@@ -356,6 +381,14 @@ module Autobot
 
       def sandboxed? : Bool
         @sandbox_type != Sandbox::Type::None
+      end
+
+      private def calculate_relative_path(cwd : String, workspace : String) : String
+        if cwd.starts_with?(workspace)
+          cwd[workspace.size..-1].lstrip('/')
+        else
+          "."
+        end
       end
 
       private def validate_working_dir(user_cwd : String) : String?

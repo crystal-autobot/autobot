@@ -1,6 +1,7 @@
 require "log"
 require "../constants"
 require "./result"
+require "./sandbox_service"
 
 module Autobot
   module Tools
@@ -17,8 +18,9 @@ module Autobot
       getter script_path : String
       @tool_name : String
       @tool_description : String
+      @sandbox_service : SandboxService?
 
-      def initialize(@script_path : String, @tool_name : String? = nil, @tool_description : String? = nil)
+      def initialize(@script_path : String, @tool_name : String? = nil, @tool_description : String? = nil, @sandbox_service : SandboxService? = nil)
         base = File.basename(@script_path, ".sh")
         @tool_name ||= "bash_#{base}"
         @tool_description ||= "Run the '#{base}' bash script."
@@ -55,45 +57,74 @@ module Autobot
       end
 
       private def run_script(args_str : String, input : String?) : String
-        # Use pipes with size limits to prevent DoS
-        stdout_read, stdout_write = IO.pipe
-        stderr_read, stderr_write = IO.pipe
-
+        # Build command to execute
         args = parse_args(args_str)
-        process_input = input ? IO::Memory.new(input) : Process::Redirect::Close
+        command = "#{@script_path} #{args.map { |arg| shell_escape(arg) }.join(" ")}"
 
-        process = Process.new(
-          @script_path,
-          args: args,
-          input: process_input,
-          output: stdout_write,
-          error: stderr_write,
-        )
+        # Use sandbox service if available
+        if service = @sandbox_service
+          operation = SandboxService::Operation.new(
+            type: SandboxService::OperationType::Exec,
+            command: command,
+            stdin: input,
+            timeout: SCRIPT_TIMEOUT
+          )
+          response = service.execute(operation)
 
-        stdout_write.close
-        stderr_write.close
+          if response.success?
+            response.data || ""
+          else
+            raise "Sandbox execution failed: #{response.error}"
+          end
+        else
+          # Fallback to direct execution (for tests/development)
+          # Use pipes with size limits to prevent DoS
+          stdout_read, stdout_write = IO.pipe
+          stderr_read, stderr_write = IO.pipe
 
-        # Read with size limits
-        stdout_channel = Channel(String).new(1)
-        stderr_channel = Channel(String).new(1)
-        spawn { stdout_channel.send(read_limited(stdout_read)) }
-        spawn { stderr_channel.send(read_limited(stderr_read)) }
+          process_input = input ? IO::Memory.new(input) : Process::Redirect::Close
 
-        # Enforce timeout
-        completed = Channel(Process::Status).new(1)
-        spawn do
-          status = process.wait
-          completed.send(status)
+          process = Process.new(
+            @script_path,
+            args: args,
+            input: process_input,
+            output: stdout_write,
+            error: stderr_write,
+          )
+
+          stdout_write.close
+          stderr_write.close
+
+          # Read with size limits
+          stdout_channel = Channel(String).new(1)
+          stderr_channel = Channel(String).new(1)
+          spawn { stdout_channel.send(read_limited(stdout_read)) }
+          spawn { stderr_channel.send(read_limited(stderr_read)) }
+
+          # Enforce timeout
+          completed = Channel(Process::Status).new(1)
+          spawn do
+            status = process.wait
+            completed.send(status)
+          end
+
+          timed_out, status = wait_for_timeout(process, completed)
+
+          stdout_text = stdout_channel.receive
+          stderr_text = stderr_channel.receive
+          stdout_read.close
+          stderr_read.close
+
+          build_script_result(stdout_text, stderr_text, status, timed_out)
         end
+      end
 
-        timed_out, status = wait_for_timeout(process, completed)
-
-        stdout_text = stdout_channel.receive
-        stderr_text = stderr_channel.receive
-        stdout_read.close
-        stderr_read.close
-
-        build_script_result(stdout_text, stderr_text, status, timed_out)
+      private def shell_escape(arg : String) : String
+        if arg.includes?(' ') || arg.includes?('\t') || arg.includes?('"') || arg.includes?('\'')
+          "'#{arg.gsub("'", "'\\''")}'"
+        else
+          arg
+        end
       end
 
       private def read_limited(io : IO, max_size : Int32 = 10_000) : String
@@ -216,21 +247,21 @@ module Autobot
 
       # Discover all executable .sh files in skills directories.
       # Returns an array of BashTool instances ready for registration.
-      def self.discover(extra_dirs : Array(String) = [] of String) : Array(BashTool)
+      def self.discover(extra_dirs : Array(String) = [] of String, sandbox_service : SandboxService? = nil) : Array(BashTool)
         tools = [] of BashTool
         dirs = SKILLS_DIRS + extra_dirs
 
         dirs.each do |dir|
           next unless Dir.exists?(dir)
 
-          discover_in_dir(dir, tools)
+          discover_in_dir(dir, tools, sandbox_service)
         end
 
         Log.info { "Discovered #{tools.size} bash tools" } if tools.size > 0
         tools
       end
 
-      private def self.discover_in_dir(dir : String, tools : Array(BashTool)) : Nil
+      private def self.discover_in_dir(dir : String, tools : Array(BashTool), sandbox_service : SandboxService?) : Nil
         Dir.glob(File.join(dir, "**", "*.sh")).each do |script|
           next unless File.info(script).permissions.owner_execute?
 
@@ -242,7 +273,8 @@ module Autobot
           tools << BashTool.new(
             script_path: script,
             tool_name: tool_name,
-            tool_description: desc
+            tool_description: desc,
+            sandbox_service: sandbox_service
           )
         end
       end

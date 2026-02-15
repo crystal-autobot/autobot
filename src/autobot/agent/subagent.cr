@@ -80,16 +80,15 @@ module Autobot
         begin
           # Build isolated tool registry (no message or spawn tools)
           tools = Tools::Registry.new
-          sandboxed = @sandbox_config.downcase != "none"
-          allowed_dir = sandboxed ? @workspace : nil
-          tools.register(Tools::ReadFileTool.new(allowed_dir: allowed_dir))
-          tools.register(Tools::WriteFileTool.new(allowed_dir: allowed_dir))
-          tools.register(Tools::EditFileTool.new(allowed_dir: allowed_dir))
-          tools.register(Tools::ListDirTool.new(allowed_dir: allowed_dir))
+          tools.register(Tools::ReadFileTool.new(nil))
+          tools.register(Tools::WriteFileTool.new(nil))
+          tools.register(Tools::EditFileTool.new(nil))
+          tools.register(Tools::ListDirTool.new(nil))
           tools.register(Tools::ExecTool.new(
             working_dir: @workspace.to_s,
             timeout: @exec_timeout,
-            sandbox_config: @sandbox_config
+            sandbox_config: @sandbox_config,
+            sandbox_service: nil
           ))
           tools.register(Tools::WebSearchTool.new(api_key: @brave_api_key))
           tools.register(Tools::WebFetchTool.new)

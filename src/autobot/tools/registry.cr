@@ -1,5 +1,6 @@
 require "./base"
 require "./rate_limiter"
+require "./sandbox_service"
 
 module Autobot::Tools
   # Registry for agent tools with rate limiting
@@ -9,10 +10,12 @@ module Autobot::Tools
     @tools : Hash(String, Tool)
     @rate_limiter : RateLimiter
     @session_key : String
+    @sandbox_service : SandboxService?
 
     def initialize(@session_key : String = "default")
       @tools = {} of String => Tool
       @rate_limiter = RateLimiter.new
+      @sandbox_service = nil
     end
 
     # Register a tool
@@ -101,6 +104,20 @@ module Autobot::Tools
     def clear : Nil
       @tools.clear
       Log.info { "Cleared all tools from registry" }
+    end
+
+    # Set sandbox service for lifecycle management
+    def sandbox_service=(service : SandboxService?)
+      @sandbox_service = service
+    end
+
+    # Cleanup resources (stop sandbox service)
+    def cleanup : Nil
+      if service = @sandbox_service
+        service.stop
+        @sandbox_service = nil
+        Log.info { "Stopped sandbox service" }
+      end
     end
   end
 end

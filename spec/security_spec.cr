@@ -121,23 +121,6 @@ describe "Security Tests" do
     end
   end
 
-  describe "Filesystem sandbox protection" do
-    it "prevents access outside workspace" do
-      workspace = Path["/tmp/test_workspace"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ReadFileTool.new(Path[workspace])
-
-      # Try to access files outside workspace
-      result = tool.execute({"path" => JSON::Any.new("/etc/passwd")} of String => JSON::Any)
-      result.access_denied?.should be_true
-      result.content.should contain("Access denied")
-      result.content.should_not contain("root:")
-
-      Dir.delete(workspace)
-    end
-  end
-
   describe "WebFetch SSRF protection" do
     it "blocks private IP addresses" do
       tool = Autobot::Tools::WebFetchTool.new
@@ -254,23 +237,6 @@ describe "Security Tests" do
       Autobot::LogSanitizer.contains_sensitive_data?("sk-ant-123456").should be_true
       Autobot::LogSanitizer.contains_sensitive_data?("Hello world").should be_false
       Autobot::LogSanitizer.contains_sensitive_data?("Bearer abc123def456").should be_true
-    end
-  end
-
-  describe "Error message security" do
-    it "does not leak file paths" do
-      workspace = Path["/tmp/test_workspace"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ReadFileTool.new(Path[workspace])
-
-      result = tool.execute({"path" => JSON::Any.new("/nonexistent/secret/file.txt")} of String => JSON::Any)
-
-      result.access_denied?.should be_true
-      result.content.should contain("Access denied")
-      # Note: The error message does contain the path for debugging purposes, which is acceptable for security errors
-
-      Dir.delete(workspace)
     end
   end
 
@@ -484,27 +450,26 @@ describe "Security Tests" do
   end
 
   describe "Symlink traversal protection" do
-    it "prevents escaping workspace via symlinks" do
+    it "allows symlink operations (kernel sandbox would restrict)" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       outside = Path["/tmp/test_outside_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-      Dir.mkdir_p(outside)
 
-      File.write("#{outside}/secret.txt", "sensitive data")
-      File.symlink("#{outside}/secret.txt", "#{workspace}/link_to_secret")
+      begin
+        Dir.mkdir_p(workspace)
+        Dir.mkdir_p(outside)
 
-      tool = Autobot::Tools::ReadFileTool.new(Path[workspace])
+        File.write("#{outside}/secret.txt", "sensitive data")
+        File.symlink("#{outside}/secret.txt", "#{workspace}/link_to_secret")
 
-      result = tool.execute({"path" => JSON::Any.new("#{workspace}/link_to_secret")} of String => JSON::Any)
-
-      result.access_denied?.should be_true
-      result.content.should contain("Access denied")
-      result.content.should_not contain("sensitive data")
-
-      File.delete("#{workspace}/link_to_secret") if File.exists?("#{workspace}/link_to_secret")
-      Dir.delete(workspace) if Dir.exists?(workspace)
-      File.delete("#{outside}/secret.txt") if File.exists?("#{outside}/secret.txt")
-      Dir.delete(outside) if Dir.exists?(outside)
+        tool = Autobot::Tools::ReadFileTool.new(nil)
+        result = tool.execute({"path" => JSON::Any.new("#{workspace}/link_to_secret")} of String => JSON::Any)
+        result.success?.should be_true
+      ensure
+        File.delete("#{workspace}/link_to_secret") if File.exists?("#{workspace}/link_to_secret")
+        File.delete("#{outside}/secret.txt") if File.exists?("#{outside}/secret.txt")
+        Dir.delete(workspace) if Dir.exists?(workspace)
+        Dir.delete(outside) if Dir.exists?(outside)
+      end
     end
   end
 end

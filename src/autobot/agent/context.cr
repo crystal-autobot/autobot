@@ -198,17 +198,27 @@ module Autobot::Agent
 
         ## Workspace
         Your workspace is at: #{workspace_path}
-        - Long-term memory: #{workspace_path}/memory/MEMORY.md
-        - History log: #{workspace_path}/memory/HISTORY.md (grep-searchable)
-        - Custom skills: #{workspace_path}/skills/{skill-name}/SKILL.md
+
+        **IMPORTANT - File Paths:**
+        All file paths are workspace-relative. Use relative paths in all file operations:
+        - ✅ read_file("memory/MEMORY.md")
+        - ✅ write_file("skills/my_tool/tool.sh", content)
+        - ❌ read_file("#{workspace_path}/memory/MEMORY.md")  # WRONG - no absolute paths
+        - ❌ read_file("../outside/file.txt")  # WRONG - no parent directory traversal
+
+        Important workspace files:
+        - Long-term memory: memory/MEMORY.md
+        - History log: memory/HISTORY.md (grep-searchable)
+        - Custom skills: skills/{skill-name}/SKILL.md
+
         #{build_security_policy(workspace_path)}
         IMPORTANT: When responding to direct questions or conversations, reply directly with your text response.
         Only use the 'message' tool when you need to send a message to a specific chat channel.
         For normal conversation, just respond with text - do not call the message tool.
 
         Always be helpful, accurate, and concise. When using tools, think step by step.
-        When remembering something important, write to #{workspace_path}/memory/MEMORY.md
-        To recall past events, grep #{workspace_path}/memory/HISTORY.md
+        When remembering something important, write to memory/MEMORY.md
+        To recall past events, grep memory/HISTORY.md
         IDENTITY
       end
 
