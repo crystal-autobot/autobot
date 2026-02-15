@@ -461,7 +461,8 @@ describe "Security Tests" do
         File.write("#{outside}/secret.txt", "sensitive data")
         File.symlink("#{outside}/secret.txt", "#{workspace}/link_to_secret")
 
-        tool = Autobot::Tools::ReadFileTool.new(nil)
+        executor = Autobot::Tools::SandboxExecutor.new(nil, nil)
+        tool = Autobot::Tools::ReadFileTool.new(executor)
         result = tool.execute({"path" => JSON::Any.new("#{workspace}/link_to_secret")} of String => JSON::Any)
         result.success?.should be_true
       ensure

@@ -80,10 +80,11 @@ module Autobot
         begin
           # Build isolated tool registry (no message or spawn tools)
           tools = Tools::Registry.new
-          tools.register(Tools::ReadFileTool.new(nil))
-          tools.register(Tools::WriteFileTool.new(nil))
-          tools.register(Tools::EditFileTool.new(nil))
-          tools.register(Tools::ListDirTool.new(nil))
+          executor = Tools::SandboxExecutor.new(nil, nil)
+          tools.register(Tools::ReadFileTool.new(executor))
+          tools.register(Tools::WriteFileTool.new(executor))
+          tools.register(Tools::EditFileTool.new(executor))
+          tools.register(Tools::ListDirTool.new(executor))
           tools.register(Tools::ExecTool.new(
             working_dir: @workspace.to_s,
             timeout: @exec_timeout,

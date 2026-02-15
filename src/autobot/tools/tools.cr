@@ -8,6 +8,7 @@ require "./message"
 require "./bash_tool"
 require "./sandbox"
 require "./sandbox_service"
+require "./sandbox_executor"
 
 module Autobot
   module Tools
@@ -59,8 +60,11 @@ module Autobot
         ::Log.for("Tools").info { "→ Sandbox mode: Sandbox.exec (#{sandbox_type.to_s.downcase}, ~50ms/op)" }
       end
 
+      # Create centralized sandbox executor
+      executor = SandboxExecutor.new(sandbox_service, workspace)
+
       # Register tools
-      register_filesystem_tools(registry, sandbox_service, workspace)
+      register_filesystem_tools(registry, executor)
       register_exec_tool(registry, sandbox_service, exec_timeout, exec_deny_patterns,
         sandbox_config, full_shell_access, workspace)
       register_web_tools(registry, brave_api_key, web_fetch_max_chars)
@@ -154,13 +158,12 @@ module Autobot
 
     private def self.register_filesystem_tools(
       registry : Registry,
-      sandbox_service : SandboxService?,
-      workspace : Path?,
+      executor : SandboxExecutor,
     )
-      registry.register(ReadFileTool.new(sandbox_service, workspace))
-      registry.register(WriteFileTool.new(sandbox_service, workspace))
-      registry.register(EditFileTool.new(sandbox_service, workspace))
-      registry.register(ListDirTool.new(sandbox_service, workspace))
+      registry.register(ReadFileTool.new(executor))
+      registry.register(WriteFileTool.new(executor))
+      registry.register(EditFileTool.new(executor))
+      registry.register(ListDirTool.new(executor))
     end
 
     private def self.register_exec_tool(
