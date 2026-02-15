@@ -37,6 +37,13 @@ module Autobot
       sandboxed = sandbox_config.downcase != "none"
       sandbox_type = resolve_sandbox_type(sandbox_config)
 
+      # Log sandbox configuration
+      if sandboxed
+        log_sandbox_configuration(sandbox_type)
+      else
+        ::Log.for("Tools").warn { "⚠️  Sandboxing disabled - development mode only" }
+      end
+
       # Create and start sandbox service if enabled
       sandbox_service = create_sandbox_service(
         workspace: workspace,
@@ -44,6 +51,13 @@ module Autobot
         sandboxed: sandboxed,
         use_sandbox_service: use_sandbox_service
       )
+
+      # Log which execution mode is being used
+      if sandbox_service
+        ::Log.for("Tools").info { "→ Sandbox mode: autobot-server (persistent, ~3ms/op)" }
+      elsif sandboxed
+        ::Log.for("Tools").info { "→ Sandbox mode: Sandbox.exec (#{sandbox_type.to_s.downcase}, ~50ms/op)" }
+      end
 
       # Register tools
       register_filesystem_tools(registry, sandbox_service, workspace)
@@ -91,6 +105,17 @@ module Autobot
       false
     end
 
+    private def self.log_sandbox_configuration(sandbox_type : Sandbox::Type) : Nil
+      case sandbox_type
+      when Sandbox::Type::Bubblewrap
+        ::Log.for("Tools").info { "✓ Sandbox: bubblewrap (Linux namespaces)" }
+      when Sandbox::Type::Docker
+        ::Log.for("Tools").info { "✓ Sandbox: Docker (container isolation)" }
+      when Sandbox::Type::None
+        ::Log.for("Tools").warn { "⚠️  No sandbox tool found - install bubblewrap or Docker" }
+      end
+    end
+
     private def self.create_sandbox_service(
       workspace : Path?,
       sandbox_type : Sandbox::Type,
@@ -115,12 +140,11 @@ module Autobot
       begin
         service = SandboxService.new(workspace, sandbox_type)
         service.start
-        ::Log.for("Tools").info { "Using autobot-server for 15x faster operations" }
         service
       rescue ex
-        ::Log.for("Tools").warn { "autobot-server found but failed: #{ex.message}" }
-        ::Log.for("Tools").warn { "Falling back to Sandbox.exec (slower but reliable)" }
-        nil # Graceful degradation
+        ::Log.for("Tools").warn { "autobot-server failed to start: #{ex.message}" }
+        ::Log.for("Tools").info { "→ Falling back to Sandbox.exec" }
+        nil
       end
     end
 
