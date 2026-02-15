@@ -92,6 +92,25 @@ module Autobot
         end
       end
 
+      # Build common bubblewrap arguments (shared with SandboxService)
+      def self.build_bubblewrap_args(workspace_real : String) : Array(String)
+        args = [
+          "--ro-bind", "/usr", "/usr",
+          "--ro-bind", "/lib", "/lib",
+          "--ro-bind", "/bin", "/bin",
+          "--ro-bind", "/sbin", "/sbin",
+          "--bind", workspace_real, workspace_real,
+          "--proc", "/proc",
+          "--dev", "/dev",
+          "--unshare-all",
+          "--share-net",
+          "--die-with-parent",
+          "--chdir", workspace_real,
+        ]
+        args.push("--ro-bind", "/lib64", "/lib64") if Dir.exists?("/lib64")
+        args
+      end
+
       private def self.exec_bubblewrap(
         command : String,
         workspace : Path,
@@ -100,22 +119,9 @@ module Autobot
       ) : {Process::Status, String, String}
         workspace_real = File.realpath(workspace.to_s)
 
-        bwrap_args = [
-          "--ro-bind", "/usr", "/usr",
-          "--ro-bind", "/lib", "/lib",
-          "--ro-bind", "/lib64", "/lib64",
-          "--ro-bind", "/bin", "/bin",
-          "--ro-bind", "/sbin", "/sbin",
-          "--bind", workspace_real, workspace_real,
-          "--proc", "/proc",
-          "--dev", "/dev",
-          "--tmpfs", "/tmp",
-          "--unshare-all",
-          "--share-net",
-          "--die-with-parent",
-          "--chdir", workspace_real,
-          "--", "sh", "-c", command,
-        ]
+        bwrap_args = build_bubblewrap_args(workspace_real)
+        bwrap_args.push("--tmpfs", "/tmp")
+        bwrap_args.push("--", "sh", "-c", command)
 
         Log.debug { "Executing in bubblewrap: #{command}" }
         run_sandboxed_command("bwrap", bwrap_args, timeout, max_output_size)

@@ -129,7 +129,7 @@ curl -L https://github.com/crystal-autobot/sandbox-server/releases/latest/downlo
 chmod +x /usr/local/bin/autobot-server
 ```
 
-**macOS:** See [releases](https://github.com/crystal-autobot/sandbox-server/releases) for macOS binaries.
+**Linux with Docker:** autobot-server is automatically mounted into the Docker container. No special image needed.
 
 ### Auto-Detection
 
@@ -163,8 +163,11 @@ If autobot-server fails to start, autobot automatically falls back to Sandbox.ex
 | Platform | Sandbox Tool | Default (Sandbox.exec) | Optional (autobot-server) |
 |----------|-------------|------------------------|---------------------------|
 | **Linux** | bubblewrap | ~50ms/op | ~3ms/op (15x faster) ✅ |
-| **macOS** | Docker | ~50ms/op | ~3ms/op ✅ |
-| **Windows** | Docker (WSL2) | ~50ms/op | ~3ms/op ✅ |
+| **Linux** | Docker | ~50ms/op | ~3ms/op (15x faster) ✅ |
+| **macOS** | Docker | ~50ms/op | — |
+| **Windows** | Docker (WSL2) | ~50ms/op | — |
+
+> **Note:** `autobot-server` is a Linux binary. On Linux with Docker, it is mounted into `alpine:latest` automatically. macOS/Windows users can still use Docker for the default Sandbox.exec mode.
 
 ## Installation
 
