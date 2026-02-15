@@ -20,7 +20,6 @@ module Autobot
     #   - `sandbox_config` sets sandbox mode (auto/bubblewrap/docker/none)
     #   - `brave_api_key` enables web search
     #   - `skills_dirs` adds extra directories for bash tool discovery
-    #   - `use_sandbox_service` enables persistent sandbox service (default: true when sandboxed)
     def self.create_registry(
       workspace : Path? = nil,
       exec_timeout : Int32 = ExecTool::DEFAULT_TIMEOUT,
@@ -30,7 +29,6 @@ module Autobot
       brave_api_key : String? = nil,
       web_fetch_max_chars : Int32 = WebFetchTool::DEFAULT_MAX_CHARS,
       skills_dirs : Array(String) = [] of String,
-      use_sandbox_service : Bool? = nil,
     ) : Registry
       registry = Registry.new
 
@@ -45,13 +43,8 @@ module Autobot
         ::Log.for("Tools").warn { "⚠️  Sandboxing disabled - development mode only" }
       end
 
-      # Create and start sandbox service if enabled
-      sandbox_service = create_sandbox_service(
-        workspace: workspace,
-        sandbox_type: sandbox_type,
-        sandboxed: sandboxed,
-        use_sandbox_service: use_sandbox_service
-      )
+      # Create and start sandbox service if autobot-server is available
+      sandbox_service = create_sandbox_service(workspace, sandbox_type)
 
       # Log which execution mode is being used
       if sandbox_service
@@ -117,40 +110,19 @@ module Autobot
       end
     end
 
-    private def self.create_sandbox_service(
-      workspace : Path?,
-      sandbox_type : Sandbox::Type,
-      sandboxed : Bool,
-      use_sandbox_service : Bool?,
-    ) : SandboxService?
-      return nil unless sandboxed && workspace && sandbox_type != Sandbox::Type::None
+    # Auto-detect and start autobot-server if the binary is available.
+    # Falls back gracefully to Sandbox.exec if server fails to start.
+    private def self.create_sandbox_service(workspace : Path?, sandbox_type : Sandbox::Type) : SandboxService?
+      return nil unless workspace && sandbox_type != Sandbox::Type::None
+      return nil unless command_exists?("autobot-server")
 
-      # autobot-server only works with bubblewrap (Linux only)
-      # macOS/Windows should use Sandbox.exec + Docker (simpler, works fine)
-      return nil unless sandbox_type == Sandbox::Type::Bubblewrap
-
-      # Check if we should use the server
-      use_service = use_sandbox_service.nil? ? false : use_sandbox_service
-      return nil unless use_service
-
-      # Check if autobot-server binary exists (Linux only)
-      unless command_exists?("autobot-server")
-        if use_sandbox_service == true
-          raise "autobot-server not installed. Install: https://github.com/crystal-autobot/sandbox-server"
-        end
-        ::Log.for("Tools").debug { "autobot-server not found, using Sandbox.exec" }
-        return nil
-      end
-
-      begin
-        service = SandboxService.new(workspace, sandbox_type)
-        service.start
-        service
-      rescue ex
-        ::Log.for("Tools").warn { "autobot-server failed to start: #{ex.message}" }
-        ::Log.for("Tools").info { "→ Falling back to Sandbox.exec" }
-        nil
-      end
+      service = SandboxService.new(workspace, sandbox_type)
+      service.start
+      service
+    rescue ex
+      ::Log.for("Tools").warn { "autobot-server failed to start: #{ex.message}" }
+      ::Log.for("Tools").info { "→ Falling back to Sandbox.exec" }
+      nil
     end
 
     private def self.register_filesystem_tools(

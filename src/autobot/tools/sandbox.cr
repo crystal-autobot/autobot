@@ -258,7 +258,7 @@ module Autobot
         {status.success?, status.success? ? stdout : stderr}
       end
 
-      private def self.shell_escape(arg : String) : String
+      def self.shell_escape(arg : String) : String
         "'#{arg.gsub("'", "'\\''")}'"
       end
 

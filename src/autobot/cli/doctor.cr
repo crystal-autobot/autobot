@@ -186,19 +186,13 @@ module Autobot
       end
 
       def self.check_sandbox_performance(sandbox_type : Tools::Sandbox::Type) : Nil
-        case sandbox_type
-        when Tools::Sandbox::Type::Bubblewrap
-          if command_exists?("autobot-server")
-            report(Status::Pass, "autobot-server installed (~3ms/op)")
-          else
-            report(Status::Skip, "autobot-server not installed (using Sandbox.exec ~50ms/op)")
-            hint("Optional: Install for 15x speedup → https://github.com/crystal-autobot/sandbox-server")
-          end
-        when Tools::Sandbox::Type::Docker
-          report(Status::Skip, "Performance mode: Sandbox.exec (~50ms/op)")
-          hint("Note: autobot-server not applicable on macOS/Windows (Docker overhead dominates)")
-        when Tools::Sandbox::Type::None
-          # No performance check for disabled sandbox
+        return if sandbox_type == Tools::Sandbox::Type::None
+
+        if command_exists?("autobot-server")
+          report(Status::Pass, "autobot-server detected (~3ms/op)")
+        else
+          report(Status::Skip, "autobot-server not installed (using Sandbox.exec ~50ms/op)")
+          hint("Optional: Install for 15x speedup → https://github.com/crystal-autobot/sandbox-server")
         end
       end
 

@@ -152,7 +152,7 @@ module Autobot
           sandboxed_command = if relative_cwd == "." || relative_cwd.empty?
                                 command
                               else
-                                "cd #{relative_cwd} && #{command}"
+                                "cd #{Sandbox.shell_escape(relative_cwd)} && #{command}"
                               end
 
           result = @executor.exec(sandboxed_command, timeout: @timeout)

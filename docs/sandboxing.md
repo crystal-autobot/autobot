@@ -221,21 +221,22 @@ tools:
 
 **Options:**
 - `auto` - Auto-detect best available (recommended)
-  - Tries: autobot-server → bubblewrap → Docker
 - `bubblewrap` - Force bubblewrap (Linux only)
 - `docker` - Force Docker (all platforms)
 - `none` - Disable sandboxing (UNSAFE - tests only)
+
+**Note:** If `autobot-server` is installed, it is automatically used for faster batch operations regardless of sandbox config.
 
 ## Security Properties
 
 ### What Sandboxing Prevents
 
-✅ Reading system files (`/etc/passwd`, `/etc/shadow`)
-✅ Reading home directory (`~/.ssh/`, `~/.aws/credentials`)
-✅ Writing outside workspace
-✅ Accessing secrets in parent directories
-✅ Path traversal attacks (`../../../etc/passwd`)
-✅ Absolute path exploits (`/etc/passwd`)
+- ✅ Reading system files (`/etc/passwd`, `/etc/shadow`)
+- ✅ Reading home directory (`~/.ssh/`, `~/.aws/credentials`)
+- ✅ Writing outside workspace
+- ✅ Accessing secrets in parent directories
+- ✅ Path traversal attacks (`../../../etc/passwd`)
+- ✅ Absolute path exploits (`/etc/passwd`)
 
 ### Security Layers
 
@@ -257,10 +258,10 @@ tools:
 
 ### What Sandboxing Does NOT Prevent
 
-⚠️ Network attacks (agent has network access)
-⚠️ API key theft (main process has keys)
-⚠️ DoS via API calls
-⚠️ Social engineering (user approves actions)
+- ⚠️ Network attacks (agent has network access)
+- ⚠️ API key theft (main process has keys)
+- ⚠️ DoS via API calls
+- ⚠️ Social engineering (user approves actions)
 
 **Defense in depth:** Use API key scoping, rate limiting, and audit logs.
 

@@ -410,25 +410,24 @@ describe Autobot::CLI::Doctor do
   end
 
   describe ".check_sandbox_performance" do
-    it "suggests autobot-server on Linux when not installed" do
+    it "reports autobot-server status for bubblewrap" do
       with_doctor_io do |io|
         Autobot::CLI::Doctor.check_sandbox_performance(Autobot::Tools::Sandbox::Type::Bubblewrap)
 
         output = io.to_s
-        # Will show either "installed" or "not installed" depending on actual system
-        # Just verify the check runs and shows performance info
+        # Will show either "detected" or "not installed" depending on actual system
         output.should contain("autobot-server")
         output.should match(/~\d+ms\/op/)
       end
     end
 
-    it "notes autobot-server not applicable on Docker" do
+    it "reports autobot-server status for docker" do
       with_doctor_io do |io|
         Autobot::CLI::Doctor.check_sandbox_performance(Autobot::Tools::Sandbox::Type::Docker)
 
-        io.to_s.should contain("— Performance mode: Sandbox.exec")
-        io.to_s.should contain("~50ms/op")
-        io.to_s.should contain("not applicable on macOS/Windows")
+        output = io.to_s
+        output.should contain("autobot-server")
+        output.should match(/~\d+ms\/op/)
       end
     end
 
@@ -436,7 +435,6 @@ describe Autobot::CLI::Doctor do
       with_doctor_io do |io|
         Autobot::CLI::Doctor.check_sandbox_performance(Autobot::Tools::Sandbox::Type::None)
 
-        # Should not output anything for None type
         io.to_s.should_not contain("autobot-server")
       end
     end

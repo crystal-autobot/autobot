@@ -46,11 +46,11 @@ tools:
 
 ### What It Protects Against
 
-✅ Reading system files (`/etc/passwd`, `~/.ssh/`)
-✅ Writing outside workspace
-✅ Path traversal (`../../../etc/passwd`)
-✅ Absolute path exploits (`/etc/passwd`)
-✅ Symlink attacks
+- ✅ Reading system files (`/etc/passwd`, `~/.ssh/`)
+- ✅ Writing outside workspace
+- ✅ Path traversal (`../../../etc/passwd`)
+- ✅ Absolute path exploits (`/etc/passwd`)
+- ✅ Symlink attacks
 
 **For detailed information**, see [docs/sandboxing.md](sandboxing.md)
 
