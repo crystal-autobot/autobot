@@ -16,7 +16,23 @@ module Autobot::Channels
     UNDERSCORE_PREFIX  = "\x00US"
     SUFFIX             = "\x00"
 
-    HEADER_REGEX = Regex.new(%q(^#{1,6}\s+(.+)$), Regex::Options::MULTILINE)
+    HEADER_REGEX     = Regex.new(%q(^#{1,6}\s+(.+)$), Regex::Options::MULTILINE)
+    BLOCKQUOTE_REGEX = /^>\s*(.*)$/m
+    HR_REGEX         = /^[-*_]{3,}\s*$/m
+
+    CODE_BLOCK_REGEX     = /```(\w*)\n?([\s\S]*?)```/
+    INLINE_CODE_REGEX    = /`([^`]+)`/
+    UNDERSCORE_RUN_REGEX = /_{3,}/
+
+    LINK_REGEX            = /\[([^\]]+)\]\(([^)]+)\)/
+    BOLD_STAR_REGEX       = /\*\*(.+?)\*\*/
+    BOLD_UNDERSCORE_REGEX = /__(.+?)__/
+    ITALIC_REGEX          = /(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/
+    STRIKETHROUGH_REGEX   = /~~(.+?)~~/
+    BULLET_LIST_REGEX     = /^[-*]\s+/m
+
+    HTML_TAG_REGEX   = /<(\/?)(b|i|code|pre|a|s|u)(?:\s[^>]*)?>/
+    STRIP_HTML_REGEX = /<\/?(?:b|i|code|pre|a|s|u)(?:\s[^>]*)?>/
 
     def self.convert(text : String) : String
       return "" if text.empty?
@@ -31,8 +47,8 @@ module Autobot::Channels
 
       # Strip block elements (before HTML escape since > would be escaped)
       result = result.gsub(HEADER_REGEX, "\\1")
-      result = result.gsub(/^>\s*(.*)$/m, "\\1")
-      result = result.gsub(/^[-*_]{3,}\s*$/m, "")
+      result = result.gsub(BLOCKQUOTE_REGEX, "\\1")
+      result = result.gsub(HR_REGEX, "")
 
       result = escape_html(result)
       result = protect_underscore_runs(result, underscore_runs)
@@ -49,7 +65,7 @@ module Autobot::Channels
 
     def self.valid_html?(text : String) : Bool
       stack = [] of String
-      text.scan(/<(\/?)(b|i|code|pre|a|s|u)(?:\s[^>]*)?>/).each do |match|
+      text.scan(HTML_TAG_REGEX).each do |match|
         if match[1] == "/"
           return false if stack.empty? || stack.last != match[2]
           stack.pop
@@ -61,7 +77,7 @@ module Autobot::Channels
     end
 
     def self.strip_html(text : String) : String
-      text.gsub(/<\/?(?:b|i|code|pre|a|s|u)(?:\s[^>]*)?>/, "")
+      text.gsub(STRIP_HTML_REGEX, "")
     end
 
     def self.split_message(text : String) : Array(String)
@@ -70,7 +86,7 @@ module Autobot::Channels
     end
 
     private def self.extract_code_blocks(text : String, store : Array(String)) : String
-      text.gsub(/```(\w*)\n?([\s\S]*?)```/) do |_, match|
+      text.gsub(CODE_BLOCK_REGEX) do |_, match|
         store << build_code_block_html(match[1], escape_html(match[2]))
         "#{CODE_BLOCK_PREFIX}#{store.size - 1}#{SUFFIX}"
       end
@@ -85,14 +101,14 @@ module Autobot::Channels
     end
 
     private def self.extract_inline_code(text : String, store : Array(String)) : String
-      text.gsub(/`([^`]+)`/) do |_, match|
+      text.gsub(INLINE_CODE_REGEX) do |_, match|
         store << "<code>#{escape_html(match[1])}</code>"
         "#{INLINE_CODE_PREFIX}#{store.size - 1}#{SUFFIX}"
       end
     end
 
     private def self.protect_underscore_runs(text : String, store : Array(String)) : String
-      text.gsub(/_{3,}/) do |run|
+      text.gsub(UNDERSCORE_RUN_REGEX) do |run|
         store << run
         "#{UNDERSCORE_PREFIX}#{store.size - 1}#{SUFFIX}"
       end
@@ -108,12 +124,12 @@ module Autobot::Channels
 
     private def self.convert_inline_formatting(text : String) : String
       result = text
-      result = result.gsub(/\[([^\]]+)\]\(([^)]+)\)/, %(<a href="\\2">\\1</a>))
-      result = result.gsub(/\*\*(.+?)\*\*/, "<b>\\1</b>")
-      result = result.gsub(/__(.+?)__/, "<b>\\1</b>")
-      result = result.gsub(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/, "<i>\\1</i>")
-      result = result.gsub(/~~(.+?)~~/, "<s>\\1</s>")
-      result = result.gsub(/^[-*]\s+/m, "\u{2022} ")
+      result = result.gsub(LINK_REGEX, %(<a href="\\2">\\1</a>))
+      result = result.gsub(BOLD_STAR_REGEX, "<b>\\1</b>")
+      result = result.gsub(BOLD_UNDERSCORE_REGEX, "<b>\\1</b>")
+      result = result.gsub(ITALIC_REGEX, "<i>\\1</i>")
+      result = result.gsub(STRIKETHROUGH_REGEX, "<s>\\1</s>")
+      result = result.gsub(BULLET_LIST_REGEX, "\u{2022} ")
       result
     end
 
