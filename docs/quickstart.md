@@ -35,7 +35,7 @@ sudo install -m 0755 bin/autobot /usr/local/bin/autobot
 ```bash
 docker pull ghcr.io/crystal-autobot/autobot:latest
 docker run --rm -it \
-  -v ~/.config/autobot:/root/.config/autobot \
+  -v ./my-bot:/app \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   ghcr.io/crystal-autobot/autobot:latest gateway
 ```

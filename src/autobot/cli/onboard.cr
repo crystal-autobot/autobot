@@ -47,13 +47,11 @@ module Autobot
       }
 
       def self.run(config_path : String?) : Nil
-        # Determine config directory (use explicit path or check ./config.yml vs global)
+        # Determine config directory (use explicit path or current directory)
         base_dir = if config_path
                      Path[config_path].parent
-                   elsif File.exists?(Config::Loader::PROJECT_CONFIG_PATH)
-                     Config::Loader::PROJECT_CONFIG_PATH.parent
                    else
-                     Config::Loader::GLOBAL_CONFIG_PATH.parent
+                     Config::Loader::PROJECT_CONFIG_PATH.parent
                    end
 
         config_file = base_dir / "config.yml"
@@ -94,14 +92,8 @@ module Autobot
         File.chmod(env_file, 0o600)
         puts "✓ Created .env at #{env_file}"
 
-        # Determine workspace path (relative to config dir if local, absolute if global)
-        workspace_path = if base_dir == Config::Loader::GLOBAL_CONFIG_PATH.parent
-                           "~/.config/autobot/workspace"
-                         else
-                           "./workspace"
-                         end
-
         # Create config.yml with environment variable references
+        workspace_path = "./workspace"
         defaults = Config::AgentDefaults.new
         config_yaml = <<-YAML
         agents:
@@ -137,15 +129,10 @@ module Autobot
         File.chmod(config_file, 0o600)
         puts "✓ Created config at #{config_file}"
 
-        # Initialize data directories relative to base_dir
-        is_local = base_dir != Config::Loader::GLOBAL_CONFIG_PATH.parent
-        if is_local
-          {"sessions", "logs"}.each do |dir|
-            dir_path = base_dir / dir
-            Dir.mkdir_p(dir_path) unless Dir.exists?(dir_path)
-          end
-        else
-          Config::Loader.init_dirs
+        # Initialize data directories
+        {"sessions", "logs"}.each do |dir|
+          dir_path = base_dir / dir
+          Dir.mkdir_p(dir_path) unless Dir.exists?(dir_path)
         end
         puts "✓ Created data directories"
 
@@ -191,27 +178,25 @@ module Autobot
         skills_dir = workspace / "skills"
         Dir.mkdir_p(skills_dir) unless Dir.exists?(skills_dir)
 
-        # Create .gitignore if in a local directory
-        if base_dir != Config::Loader::GLOBAL_CONFIG_PATH.parent
-          gitignore_file = base_dir / ".gitignore"
-          unless File.exists?(gitignore_file)
-            gitignore_content = <<-GITIGNORE
-            # Secrets
-            .env
-            .env.*
+        # Create .gitignore
+        gitignore_file = base_dir / ".gitignore"
+        unless File.exists?(gitignore_file)
+          gitignore_content = <<-GITIGNORE
+          # Secrets
+          .env
+          .env.*
 
-            # Session data
-            sessions/
+          # Session data
+          sessions/
 
-            # Logs
-            logs/
+          # Logs
+          logs/
 
-            # Memory (optional - comment out if you want to commit)
-            workspace/memory/
-            GITIGNORE
-            File.write(gitignore_file, gitignore_content)
-            puts "✓ Created .gitignore"
-          end
+          # Memory (optional - comment out if you want to commit)
+          workspace/memory/
+          GITIGNORE
+          File.write(gitignore_file, gitignore_content)
+          puts "✓ Created .gitignore"
         end
 
         puts "\n#{LOGO.strip}"

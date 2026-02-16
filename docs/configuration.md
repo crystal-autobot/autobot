@@ -1,13 +1,12 @@
 # Configuration
 
-Default config path: `~/.config/autobot/config.yml`
+Default config path: `./config.yml`
 
 Config precedence:
 
 1. `--config <path>`
 2. `./config.yml`
-3. `~/.config/autobot/config.yml`
-4. Schema defaults
+3. Schema defaults
 
 ## Minimal Config
 
@@ -84,7 +83,7 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 ```yaml
 cron:
   enabled: true
-  store_path: "~/.config/autobot/cron.json"
+  store_path: "./cron.json"
 ```
 
 ## Gateway
@@ -124,7 +123,7 @@ agents:
     temperature: 0.7
     max_tool_iterations: 20
     memory_window: 50
-    workspace: "~/.config/autobot/workspace"
+    workspace: "./workspace"
 
 # Chat channels
 channels:
@@ -174,7 +173,7 @@ tools:
 # Cron scheduler
 cron:
   enabled: true
-  store_path: "~/.config/autobot/cron.json"
+  store_path: "./cron.json"
 
 # Gateway API server
 gateway:

@@ -111,7 +111,7 @@ ANTHROPIC_API_KEY=sk-ant-your-secret-key
 
 **File locations:**
 - ✅ `./autobot/.env` (outside workspace)
-- ✅ `~/.config/autobot/.env` (outside workspace)
+- ✅ `./.env` (outside workspace)
 - ❌ `./workspace/.env` (inside workspace - BLOCKED by validation)
 
 ### Log Sanitization
@@ -172,13 +172,13 @@ Summary: 1 errors, 1 warnings, 0 info
 
 ```bash
 # Check for ACCESS DENIED (security blocks)
-grep "ACCESS DENIED" ~/.config/autobot/logs/autobot.log
+grep "ACCESS DENIED" ./logs/autobot.log
 
 # Tool activity
-grep "Executing tool:" ~/.config/autobot/logs/autobot.log
+grep "Executing tool:" ./logs/autobot.log
 
 # Token usage
-grep "Tokens:" ~/.config/autobot/logs/autobot.log
+grep "Tokens:" ./logs/autobot.log
 ```
 
 **Log levels:**

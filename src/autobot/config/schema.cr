@@ -130,7 +130,7 @@ module Autobot::Config
 
   class AgentDefaults
     include YAML::Serializable
-    property workspace : String = "~/.config/autobot/workspace"
+    property workspace : String = "./workspace"
     property model : String = "anthropic/claude-sonnet-4-5"
     property max_tokens : Int32 = 8192
     property temperature : Float64 = 0.7
@@ -220,7 +220,7 @@ module Autobot::Config
   class CronConfig
     include YAML::Serializable
     property? enabled : Bool = true
-    property store_path : String = "~/.config/autobot/cron.json"
+    property store_path : String = "./cron.json"
 
     def initialize
     end
@@ -239,7 +239,7 @@ module Autobot::Config
     end
 
     def workspace_path : Path
-      workspace_str = agents.try(&.defaults.try(&.workspace)) || "~/.config/autobot/workspace"
+      workspace_str = agents.try(&.defaults.try(&.workspace)) || "./workspace"
       Path[workspace_str].expand(home: true)
     end
 
