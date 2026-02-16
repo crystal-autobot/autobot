@@ -66,7 +66,11 @@ module Autobot::Tools
           return "Error: Invalid parameters for tool '#{name}': #{errors.join("; ")}"
         end
 
-        Log.info { "Executing tool: #{name}" }
+        if path = params["path"]?.try(&.as_s?)
+          Log.info { "Executing tool: #{name} (#{path})" }
+        else
+          Log.info { "Executing tool: #{name}" }
+        end
         result = tool.execute(params)
 
         # Log based on result status

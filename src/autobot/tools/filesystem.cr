@@ -34,7 +34,6 @@ module Autobot
 
       def execute(params : Hash(String, JSON::Any)) : ToolResult
         path = params["path"].as_s
-        Log.debug { "Reading file: #{path}" }
         @executor.read_file(path)
       end
     end
