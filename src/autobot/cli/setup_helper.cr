@@ -1,7 +1,39 @@
 module Autobot
   module CLI
-    # Shared setup logic for tools and plugins
+    # Shared setup logic for tools, plugins, and startup validation
     module SetupHelper
+      # Validate configuration and fail on errors.
+      # Called by both gateway and agent to ensure consistent startup checks.
+      def self.validate_startup(config : Config::Config, config_path : String?) : Nil
+        resolved_path = Config::Loader.resolve_display_path(config_path)
+        issues = Config::Validator.validate(config, Path[resolved_path])
+
+        warnings = issues.select { |i| i.severity == Config::Validator::Severity::Warning }
+        unless warnings.empty?
+          STDERR.puts "\n⚠️  Configuration warnings:"
+          warnings.each { |warning| STDERR.puts "  • #{warning.message}" }
+          STDERR.puts ""
+        end
+
+        errors = issues.select { |i| i.severity == Config::Validator::Severity::Error }
+        unless errors.empty?
+          STDERR.puts "\n❌ Configuration errors:"
+          errors.each { |e| STDERR.puts "  • #{e.message}" }
+          STDERR.puts "\nRun 'autobot doctor' for detailed diagnostics."
+          exit 1
+        end
+      end
+
+      # Validate that a provider is configured, exit if not.
+      def self.validate_provider(config : Config::Config) : Nil
+        provider_config, _name = config.match_provider
+        unless provider_config
+          STDERR.puts "Error: No API key configured."
+          STDERR.puts "Set one in ~/.config/autobot/config.yml under providers section"
+          exit 1
+        end
+      end
+
       # Sets up tool registry with built-in tools and plugins
       def self.setup_tools(config : Config::Config, verbose : Bool = false)
         sandbox_config = config.tools.try(&.sandbox) || "auto"

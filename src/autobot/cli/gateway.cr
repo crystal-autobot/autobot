@@ -8,8 +8,8 @@ module Autobot
         config = Config::Loader.load(config_path)
 
         # Run security and configuration validation
-        validate_security(config, config_path)
-        validate_provider_config(config)
+        SetupHelper.validate_startup(config, config_path)
+        SetupHelper.validate_provider(config)
 
         puts LOGO.strip
         puts "Starting autobot gateway on port #{port}...\n"
@@ -45,41 +45,6 @@ module Autobot
 
         # Block main fiber
         sleep
-      end
-
-      private def self.validate_security(config : Config::Config, config_path : String?) : Nil
-        resolved_path = Config::Loader.resolve_display_path(config_path)
-        issues = Config::Validator.validate(config, Path[resolved_path])
-
-        # Show warnings (but continue)
-        warnings = issues.select { |i| i.severity == Config::Validator::Severity::Warning }
-        unless warnings.empty?
-          STDERR.puts "\n⚠️  Configuration warnings:"
-          warnings.each do |warning|
-            STDERR.puts "  • #{warning.message}"
-          end
-          STDERR.puts ""
-        end
-
-        # Fail on errors
-        errors = issues.select { |i| i.severity == Config::Validator::Severity::Error }
-        unless errors.empty?
-          STDERR.puts "\n❌ Configuration errors:"
-          errors.each do |e|
-            STDERR.puts "  • #{e.message}"
-          end
-          STDERR.puts "\nRun 'autobot doctor' for detailed diagnostics."
-          exit 1
-        end
-      end
-
-      private def self.validate_provider_config(config : Config::Config) : Nil
-        provider_config, _provider_name = config.match_provider
-        unless provider_config
-          STDERR.puts "Error: No API key configured."
-          STDERR.puts "Set one in ~/.config/autobot/config.yml under providers section"
-          exit 1
-        end
       end
 
       private def self.setup_tools(config : Config::Config)
