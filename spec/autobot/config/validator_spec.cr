@@ -41,8 +41,6 @@ describe Autobot::Config::Validator do
           api_key: "${ANTHROPIC_API_KEY}"
       tools:
         sandbox: "auto"
-        exec:
-          full_shell_access: false
       YAML
 
       Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
@@ -63,27 +61,6 @@ describe Autobot::Config::Validator do
       end
     ensure
       Autobot::Tools::Sandbox.detect_override = nil
-    end
-
-    it "detects mutually exclusive settings" do
-      config_yaml = <<-YAML
-      providers:
-        anthropic:
-          api_key: "${ANTHROPIC_API_KEY}"
-      tools:
-        sandbox: "auto"
-        exec:
-          full_shell_access: true
-      YAML
-
-      ValidatorSpecHelpers.with_temp_config(config_yaml) do |path|
-        config = Autobot::Config::Config.from_yaml(config_yaml)
-        issues = Autobot::Config::Validator.validate(config, path)
-
-        errors = issues.select { |i| i.severity == Autobot::Config::Validator::Severity::Error }
-        errors.size.should be > 0
-        errors.any?(&.message.includes?("mutually exclusive")).should be_true
-      end
     end
 
     it "detects plaintext secrets in config" do

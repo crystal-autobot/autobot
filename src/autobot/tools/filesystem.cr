@@ -1,79 +1,18 @@
 require "./result"
-require "../config/env"
+require "./sandbox_executor"
 
 module Autobot
   module Tools
-    def self.resolve_path(path : String, allowed_dir : Path? = nil) : Path
-      # If we have an allowed_dir and path is relative, resolve from allowed_dir
-      # Otherwise expand from current directory
-      resolved = if allowed_dir && !Path[path].absolute?
-                   canonical_dir = allowed_dir.expand(home: true)
-                   canonical_dir / path
-                 else
-                   Path[path].expand(home: true)
-                 end
-
-      # Always block .env files for security
-      if Config::Env.file?(resolved)
-        raise PermissionError.new("Access to .env files is always denied for security")
-      end
-
-      if dir = allowed_dir
-        canonical_dir = dir.expand(home: true)
-
-        # Resolve real paths to prevent symlink traversal
-        # For relative paths constructed from allowed_dir, we need to normalize before checking
-        resolved_str = resolved.to_s
-        canonical_str = canonical_dir.to_s
-
-        # If resolved was built from canonical_dir, normalize both paths for comparison
-        if !Path[path].absolute?
-          # Path was built from allowed_dir, so just normalize for comparison
-          resolved_real = Path[resolved_str].normalize.to_s
-          canonical_real = Path[canonical_str].normalize.to_s
-        else
-          # Absolute path - resolve to real path if it exists
-          resolved_real = resolve_to_real_path(resolved_str)
-          canonical_real = resolve_to_real_path(canonical_str)
-        end
-
-        unless path_within_directory?(resolved_real, canonical_real)
-          raise PermissionError.new("Access denied")
-        end
-      end
-
-      resolved
+    def self.resolve_path(path : String) : Path
+      Path[path].expand(home: true)
     end
-
-    private def self.resolve_to_real_path(path : String) : String
-      if File.exists?(path) || Dir.exists?(path)
-        File.realpath(path)
-      else
-        parent = File.dirname(path)
-        if File.exists?(parent)
-          File.realpath(parent) + "/" + File.basename(path)
-        else
-          path
-        end
-      end
-    rescue
-      path
-    end
-
-    private def self.path_within_directory?(path : String, directory : String) : Bool
-      path.starts_with?(directory + "/") || path == directory
-    end
-
-    class PermissionError < Exception; end
 
     # Tool to read file contents.
+    # Uses SandboxExecutor to ensure all operations are sandboxed.
     class ReadFileTool < Tool
       Log = ::Log.for("tools.read_file")
 
-      MAX_FILE_SIZE = 1_048_576 # 1 MB
-
-      def initialize(@allowed_dir : Path? = nil)
-        Log.debug { "ReadFileTool initialized with allowed_dir: #{@allowed_dir.inspect}" }
+      def initialize(@executor : SandboxExecutor)
       end
 
       def name : String
@@ -95,35 +34,15 @@ module Autobot
 
       def execute(params : Hash(String, JSON::Any)) : ToolResult
         path = params["path"].as_s
-        Log.debug { "Reading file: #{path} (allowed_dir: #{@allowed_dir.inspect})" }
-
-        file_path = Tools.resolve_path(path, @allowed_dir)
-
-        unless File.exists?(file_path.to_s)
-          return ToolResult.error("File not found: #{path}")
-        end
-        unless File.file?(file_path.to_s)
-          return ToolResult.error("Path is not a file: #{path}")
-        end
-
-        size = File.size(file_path.to_s)
-        if size > MAX_FILE_SIZE
-          return ToolResult.error("File too large (max #{MAX_FILE_SIZE} bytes)")
-        end
-
-        Log.info { "Reading: #{file_path}" }
-        content = File.read(file_path.to_s)
-        ToolResult.success(content)
-      rescue ex : PermissionError
-        ToolResult.access_denied("Access denied - file '#{path}' is outside workspace")
-      rescue ex
-        ToolResult.error("Cannot read file: #{ex.message}")
+        Log.debug { "Reading file: #{path}" }
+        @executor.read_file(path)
       end
     end
 
     # Tool to write content to a file.
+    # Uses SandboxExecutor to ensure all operations are sandboxed.
     class WriteFileTool < Tool
-      def initialize(@allowed_dir : Path? = nil)
+      def initialize(@executor : SandboxExecutor)
       end
 
       def name : String
@@ -147,22 +66,14 @@ module Autobot
       def execute(params : Hash(String, JSON::Any)) : ToolResult
         path = params["path"].as_s
         content = params["content"].as_s
-        file_path = Tools.resolve_path(path, @allowed_dir)
-
-        Dir.mkdir_p(File.dirname(file_path.to_s))
-        File.write(file_path.to_s, content)
-
-        ToolResult.success("Successfully wrote #{content.bytesize} bytes")
-      rescue ex : PermissionError
-        ToolResult.access_denied("Access denied - file '#{path}' is outside workspace")
-      rescue ex
-        ToolResult.error("Cannot write file: #{ex.message}")
+        @executor.write_file(path, content)
       end
     end
 
     # Tool to edit a file by replacing text.
+    # Uses SandboxExecutor to ensure all operations are sandboxed.
     class EditFileTool < Tool
-      def initialize(@allowed_dir : Path? = nil)
+      def initialize(@executor : SandboxExecutor)
       end
 
       def name : String
@@ -188,14 +99,19 @@ module Autobot
         path = params["path"].as_s
         old_text = params["old_text"].as_s
         new_text = params["new_text"].as_s
-        file_path = Tools.resolve_path(path, @allowed_dir)
 
-        unless File.exists?(file_path.to_s)
-          return ToolResult.error("File not found: #{path}")
-        end
+        read_result = @executor.read_file(path)
+        return read_result unless read_result.success?
 
-        content = File.read(file_path.to_s)
+        content = read_result.content
+        result = validate_and_replace(content, old_text, new_text)
+        return result unless result.is_a?(String)
 
+        write_result = @executor.write_file(path, result)
+        write_result.success? ? ToolResult.success("Successfully edited file") : write_result
+      end
+
+      private def validate_and_replace(content : String, old_text : String, new_text : String) : ToolResult | String
         unless content.includes?(old_text)
           return ToolResult.error("Text not found in file")
         end
@@ -205,14 +121,7 @@ module Autobot
           return ToolResult.error("Text appears #{count} times. Provide more context")
         end
 
-        new_content = content.sub(old_text, new_text)
-        File.write(file_path.to_s, new_content)
-
-        ToolResult.success("Successfully edited file")
-      rescue ex : PermissionError
-        ToolResult.access_denied("Access denied - file '#{path}' is outside workspace")
-      rescue ex
-        ToolResult.error("Cannot edit file: #{ex.message}")
+        content.sub(old_text, new_text)
       end
 
       private def count_occurrences(haystack : String, needle : String) : Int32
@@ -227,8 +136,9 @@ module Autobot
     end
 
     # Tool to list directory contents.
+    # Uses SandboxExecutor to ensure all operations are sandboxed.
     class ListDirTool < Tool
-      def initialize(@allowed_dir : Path? = nil)
+      def initialize(@executor : SandboxExecutor)
       end
 
       def name : String
@@ -250,32 +160,7 @@ module Autobot
 
       def execute(params : Hash(String, JSON::Any)) : ToolResult
         path = params["path"].as_s
-        dir_path = Tools.resolve_path(path, @allowed_dir)
-
-        unless Dir.exists?(dir_path.to_s)
-          return ToolResult.error("Directory not found: #{path}")
-        end
-
-        entries = Dir.entries(dir_path.to_s)
-          .reject { |e| e == "." || e == ".." }
-          .reject { |e| Config::Env.file?(e) } # Hide .env files
-          .sort!
-
-        if entries.empty?
-          return ToolResult.success("Directory is empty")
-        end
-
-        items = entries.map do |entry|
-          full = File.join(dir_path.to_s, entry)
-          prefix = Dir.exists?(full) ? "[dir]  " : "[file] "
-          "#{prefix}#{entry}"
-        end
-
-        ToolResult.success(items.join("\n"))
-      rescue ex : PermissionError
-        ToolResult.access_denied("Access denied - directory '#{path}' is outside workspace")
-      rescue ex
-        ToolResult.error("Cannot list directory: #{ex.message}")
+        @executor.list_dir(path)
       end
     end
   end

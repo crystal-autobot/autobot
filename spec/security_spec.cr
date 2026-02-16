@@ -6,6 +6,10 @@ require "../src/autobot/tools/web"
 require "../src/autobot/tools/rate_limiter"
 require "../src/autobot/log_sanitizer"
 
+private def create_test_executor
+  Autobot::Tools::SandboxExecutor.new(nil)
+end
+
 describe "Security Tests" do
   describe "BashTool command injection protection" do
     it "safely handles malicious arguments" do
@@ -14,7 +18,7 @@ describe "Security Tests" do
       File.write(script_path, "#!/bin/sh\necho \"Args: $@\"\n")
       File.chmod(script_path, 0o755)
 
-      tool = Autobot::Tools::BashTool.new(script_path, "test_tool", "Test tool")
+      tool = Autobot::Tools::BashTool.new(create_test_executor, script_path, "test_tool", "Test tool")
 
       # Test injection attempts
       malicious_inputs = [
@@ -47,6 +51,7 @@ describe "Security Tests" do
 
     it "allows sandbox: none without validation" do
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: "/tmp",
         sandbox_config: "none"
       )
@@ -58,6 +63,7 @@ describe "Security Tests" do
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
         working_dir: workspace,
         sandbox_config: "auto"
       )
@@ -74,33 +80,8 @@ describe "Security Tests" do
       Dir.delete(workspace) if Dir.exists?(workspace)
     end
 
-    it "blocks directory change commands when sandboxed" do
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        sandbox_config: "auto"
-      )
-
-      cd_attempts = [
-        "cd /etc && ls",
-        "cd .. && cat secrets.txt",
-        "pushd /tmp && cat file.txt",
-        "chdir /var && ls",
-      ]
-
-      cd_attempts.each do |cmd|
-        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
-        result.access_denied?.should be_true
-        result.content.should contain("Directory change commands are blocked")
-      end
-
-      Dir.delete(workspace) if Dir.exists?(workspace)
-    end
-
     it "blocks dangerous commands" do
-      tool = Autobot::Tools::ExecTool.new
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
 
       dangerous_commands = [
         "rm -rf /",
@@ -118,23 +99,6 @@ describe "Security Tests" do
         result.access_denied?.should be_true
         result.content.should contain("blocked")
       end
-    end
-  end
-
-  describe "Filesystem sandbox protection" do
-    it "prevents access outside workspace" do
-      workspace = Path["/tmp/test_workspace"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ReadFileTool.new(Path[workspace])
-
-      # Try to access files outside workspace
-      result = tool.execute({"path" => JSON::Any.new("/etc/passwd")} of String => JSON::Any)
-      result.access_denied?.should be_true
-      result.content.should contain("Access denied")
-      result.content.should_not contain("root:")
-
-      Dir.delete(workspace)
     end
   end
 
@@ -257,209 +221,15 @@ describe "Security Tests" do
     end
   end
 
-  describe "Error message security" do
-    it "does not leak file paths" do
-      workspace = Path["/tmp/test_workspace"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ReadFileTool.new(Path[workspace])
-
-      result = tool.execute({"path" => JSON::Any.new("/nonexistent/secret/file.txt")} of String => JSON::Any)
-
-      result.access_denied?.should be_true
-      result.content.should contain("Access denied")
-      # Note: The error message does contain the path for debugging purposes, which is acceptable for security errors
-
-      Dir.delete(workspace)
-    end
-  end
-
-  describe "Shell expansion protection" do
-    around_each do |example|
-      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
-      example.run
-    ensure
-      Autobot::Tools::Sandbox.detect_override = nil
-    end
-
-    it "blocks variable expansion when sandboxed" do
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        sandbox_config: "auto"
-      )
-
-      shell_expansion_attempts = [
-        "cat $HOME/.ssh/id_rsa",
-        "ls ${HOME}/../etc",
-        "echo `whoami`",
-        "cat $(echo /etc/passwd)",
-      ]
-
-      shell_expansion_attempts.each do |cmd|
-        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
-        result.access_denied?.should be_true
-        lower = result.content.downcase
-        (lower.includes?("expansion") || lower.includes?("blocked")).should be_true
-        result.content.should_not contain("root:")
-      end
-
-      Dir.delete(workspace) if Dir.exists?(workspace)
-    end
-  end
-
-  describe "Shell features blocking (full_shell_access: false)" do
-    around_each do |example|
-      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
-      example.run
-    ensure
-      Autobot::Tools::Sandbox.detect_override = nil
-    end
-
-    it "blocks arbitrary variable usage and assignments" do
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        sandbox_config: "auto",
-        full_shell_access: false
-      )
-
-      variable_attempts = [
-        "X=/etc/hosts; cat $X",        # Variable assignment + expansion
-        "FILE=/etc/passwd; cat $FILE", # Different variable
-        "cat $MY_VAR",                 # Arbitrary variable
-        "echo $PATH",                  # Even common vars blocked
-      ]
-
-      variable_attempts.each do |cmd|
-        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
-        result.access_denied?.should be_true
-        lower = result.content.downcase
-        (lower.includes?("expansion") || lower.includes?("chaining") || lower.includes?("not allowed")).should be_true
-      end
-
-      Dir.delete(workspace) if Dir.exists?(workspace)
-    end
-
-    it "blocks pipes and redirects" do
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-
-      tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        sandbox_config: "auto",
-        full_shell_access: false
-      )
-
-      shell_feature_attempts = [
-        "cat file.txt | grep pattern", # Pipe
-        "echo text > output.txt",      # Output redirect
-        "cat < input.txt",             # Input redirect
-        "ls && cat file",              # Command chain &&
-        "ls || cat file",              # Command chain ||
-        "ls; cat file",                # Command chain ;
-        "sleep 10 &",                  # Background
-      ]
-
-      shell_feature_attempts.each do |cmd|
-        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
-        result.access_denied?.should be_true
-        lower = result.content.downcase
-        (lower.includes?("not allowed") || lower.includes?("restricted")).should be_true
-      end
-
-      Dir.delete(workspace) if Dir.exists?(workspace)
-    end
-
-    it "allows simple commands in sandboxed mode" do
-      Autobot::Tools::Sandbox.detect_override = nil
-
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-      File.write("#{workspace}/test.txt", "content")
-
-      tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        sandbox_config: "none",
-        full_shell_access: false
-      )
-
-      safe_commands = [
-        "cat test.txt",
-        "ls",
-        "echo hello",
-      ]
-
-      safe_commands.each do |cmd|
-        result = tool.execute({"command" => JSON::Any.new(cmd)} of String => JSON::Any)
-        result.success?.should be_true
-      end
-
-      File.delete("#{workspace}/test.txt") if File.exists?("#{workspace}/test.txt")
-      Dir.delete(workspace) if Dir.exists?(workspace)
-    end
-
-    it "allows shell features when full_shell_access is enabled (without sandbox)" do
-      workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-      File.write("#{workspace}/test.txt", "line1\nline2")
-
-      tool = Autobot::Tools::ExecTool.new(
-        working_dir: workspace,
-        sandbox_config: "none",
-        full_shell_access: true
-      )
-
-      # Pipes should work when full_shell_access is enabled
-      result = tool.execute({"command" => JSON::Any.new("cat test.txt | head -1")} of String => JSON::Any)
-      result.success?.should be_true
-      result.content.should contain("line1")
-
-      File.delete("#{workspace}/test.txt") if File.exists?("#{workspace}/test.txt")
-      Dir.delete(workspace) if Dir.exists?(workspace)
-    end
-  end
-
   describe "Command timeout enforcement" do
     it "kills long-running commands" do
-      tool = Autobot::Tools::ExecTool.new(timeout: 2, sandbox_config: "none")
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, timeout: 2, sandbox_config: "none")
 
       # Command that would run forever
       result = tool.execute({"command" => JSON::Any.new("sleep 100")} of String => JSON::Any)
 
       result.success?.should be_true
       result.content.should contain("timed out")
-    end
-  end
-
-  describe "Configuration validation" do
-    it "rejects incompatible sandbox + full_shell_access" do
-      expect_raises(ArgumentError, /mutually exclusive/) do
-        Autobot::Tools::ExecTool.new(
-          sandbox_config: "auto",
-          full_shell_access: true
-        )
-      end
-    end
-
-    it "allows sandbox without full_shell_access" do
-      tool = Autobot::Tools::ExecTool.new(
-        sandbox_config: "auto",
-        full_shell_access: false
-      )
-      tool.should_not be_nil
-    end
-
-    it "allows full_shell_access without sandbox" do
-      tool = Autobot::Tools::ExecTool.new(
-        sandbox_config: "none",
-        full_shell_access: true
-      )
-      tool.should_not be_nil
     end
   end
 
@@ -484,27 +254,27 @@ describe "Security Tests" do
   end
 
   describe "Symlink traversal protection" do
-    it "prevents escaping workspace via symlinks" do
+    it "allows symlink operations (kernel sandbox would restrict)" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       outside = Path["/tmp/test_outside_#{Time.utc.to_unix}"].to_s
-      Dir.mkdir_p(workspace)
-      Dir.mkdir_p(outside)
 
-      File.write("#{outside}/secret.txt", "sensitive data")
-      File.symlink("#{outside}/secret.txt", "#{workspace}/link_to_secret")
+      begin
+        Dir.mkdir_p(workspace)
+        Dir.mkdir_p(outside)
 
-      tool = Autobot::Tools::ReadFileTool.new(Path[workspace])
+        File.write("#{outside}/secret.txt", "sensitive data")
+        File.symlink("#{outside}/secret.txt", "#{workspace}/link_to_secret")
 
-      result = tool.execute({"path" => JSON::Any.new("#{workspace}/link_to_secret")} of String => JSON::Any)
-
-      result.access_denied?.should be_true
-      result.content.should contain("Access denied")
-      result.content.should_not contain("sensitive data")
-
-      File.delete("#{workspace}/link_to_secret") if File.exists?("#{workspace}/link_to_secret")
-      Dir.delete(workspace) if Dir.exists?(workspace)
-      File.delete("#{outside}/secret.txt") if File.exists?("#{outside}/secret.txt")
-      Dir.delete(outside) if Dir.exists?(outside)
+        executor = Autobot::Tools::SandboxExecutor.new(nil)
+        tool = Autobot::Tools::ReadFileTool.new(executor)
+        result = tool.execute({"path" => JSON::Any.new("#{workspace}/link_to_secret")} of String => JSON::Any)
+        result.success?.should be_true
+      ensure
+        File.delete("#{workspace}/link_to_secret") if File.exists?("#{workspace}/link_to_secret")
+        File.delete("#{outside}/secret.txt") if File.exists?("#{outside}/secret.txt")
+        Dir.delete(workspace) if Dir.exists?(workspace)
+        Dir.delete(outside) if Dir.exists?(outside)
+      end
     end
   end
 end

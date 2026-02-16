@@ -73,14 +73,20 @@ module Autobot
 
     # Context passed to plugins during setup.
     #
-    # Provides access to the tool registry and configuration
+    # Provides access to the tool registry, sandbox executor, and configuration
     # so plugins can register their tools and read settings.
     class PluginContext
       getter config : Config::Config
       getter tool_registry : Tools::Registry
       getter workspace : Path
+      getter sandbox_executor : Tools::SandboxExecutor
 
-      def initialize(@config : Config::Config, @tool_registry : Tools::Registry, @workspace : Path)
+      def initialize(
+        @config : Config::Config,
+        @tool_registry : Tools::Registry,
+        @workspace : Path,
+        @sandbox_executor : Tools::SandboxExecutor,
+      )
       end
     end
   end

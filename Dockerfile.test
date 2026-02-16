@@ -1,0 +1,14 @@
+FROM crystallang/crystal:latest-alpine
+
+RUN apk add --no-cache bash bubblewrap
+
+# Build autobot
+COPY . /opt/autobot
+WORKDIR /opt/autobot
+RUN shards install && crystal build src/main.cr -o /usr/local/bin/autobot --release --no-debug
+
+# Create workspace
+RUN mkdir -p /tmp/workspace
+
+WORKDIR /opt/autobot
+CMD ["bash"]

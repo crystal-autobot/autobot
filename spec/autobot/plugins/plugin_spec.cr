@@ -61,10 +61,12 @@ describe Autobot::Plugins::PluginContext do
     registry = Autobot::Tools::Registry.new
     tmp = TestHelper.tmp_dir
 
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
     context = Autobot::Plugins::PluginContext.new(
       config: config,
       tool_registry: registry,
-      workspace: tmp
+      workspace: tmp,
+      sandbox_executor: executor
     )
 
     context.config.should eq(config)
@@ -111,7 +113,8 @@ describe Autobot::Plugins::Registry do
     config = Autobot::Config::Config.new
     tool_registry = Autobot::Tools::Registry.new
     tmp = TestHelper.tmp_dir
-    context = Autobot::Plugins::PluginContext.new(config: config, tool_registry: tool_registry, workspace: tmp)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
+    context = Autobot::Plugins::PluginContext.new(config: config, tool_registry: tool_registry, workspace: tmp, sandbox_executor: executor)
 
     registry.setup_all(context)
     plugin.setup_called?.should be_true
@@ -171,7 +174,8 @@ describe Autobot::Plugins::Loader do
     config = Autobot::Config::Config.new
     tool_registry = Autobot::Tools::Registry.new
     tmp = TestHelper.tmp_dir
-    context = Autobot::Plugins::PluginContext.new(config: config, tool_registry: tool_registry, workspace: tmp)
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
+    context = Autobot::Plugins::PluginContext.new(config: config, tool_registry: tool_registry, workspace: tmp, sandbox_executor: executor)
 
     Autobot::Plugins::Loader.load_all(registry, context)
     registry.size.should eq(2)

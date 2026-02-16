@@ -144,12 +144,10 @@ describe Autobot::CLI::Doctor do
   end
 
   describe ".check_security_settings" do
-    it "passes when settings are consistent" do
+    it "passes when sandbox is available" do
       config = make_config(<<-YAML
       tools:
         sandbox: "auto"
-        exec:
-          full_shell_access: false
       YAML
       )
 
@@ -158,28 +156,10 @@ describe Autobot::CLI::Doctor do
         errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
 
         errors.should eq(0)
-        io.to_s.should contain("✓ Security settings consistent")
+        io.to_s.should contain("✓ Sandbox available")
       end
     ensure
       Autobot::Tools::Sandbox.detect_override = nil
-    end
-
-    it "fails when sandbox and full_shell_access are both enabled" do
-      config = make_config(<<-YAML
-      tools:
-        sandbox: "auto"
-        exec:
-          full_shell_access: true
-      YAML
-      )
-
-      with_doctor_io do |io|
-        errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
-
-        errors.should eq(1)
-        io.to_s.should contain("✗ Conflicting")
-        io.to_s.should contain("mutually exclusive")
-      end
     end
   end
 

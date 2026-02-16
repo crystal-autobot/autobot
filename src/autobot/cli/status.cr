@@ -59,10 +59,12 @@ module Autobot
           # Plugins
           plugin_registry = Plugins::Registry.new
           tool_registry = Tools::Registry.new
+          executor = Tools::SandboxExecutor.new(nil)
           context = Plugins::PluginContext.new(
             config: config,
             tool_registry: tool_registry,
-            workspace: config.workspace_path
+            workspace: config.workspace_path,
+            sandbox_executor: executor
           )
           Plugins::Loader.load_all(plugin_registry, context)
           if plugin_registry.size > 0

@@ -1,5 +1,6 @@
 require "./base"
 require "./rate_limiter"
+require "./sandbox_executor"
 
 module Autobot::Tools
   # Registry for agent tools with rate limiting
@@ -9,10 +10,12 @@ module Autobot::Tools
     @tools : Hash(String, Tool)
     @rate_limiter : RateLimiter
     @session_key : String
+    @sandbox_executor : SandboxExecutor?
 
     def initialize(@session_key : String = "default")
       @tools = {} of String => Tool
       @rate_limiter = RateLimiter.new
+      @sandbox_executor = nil
     end
 
     # Register a tool
@@ -101,6 +104,16 @@ module Autobot::Tools
     def clear : Nil
       @tools.clear
       Log.info { "Cleared all tools from registry" }
+    end
+
+    # Set sandbox executor for plugin access
+    def sandbox_executor=(executor : SandboxExecutor?)
+      @sandbox_executor = executor
+    end
+
+    # Get sandbox executor
+    def sandbox_executor : SandboxExecutor?
+      @sandbox_executor
     end
   end
 end

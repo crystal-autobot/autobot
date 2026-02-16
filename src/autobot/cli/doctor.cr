@@ -144,17 +144,6 @@ module Autobot
       end
 
       def self.check_security_settings(config : Config::Config, errors : Int32) : Int32
-        sandbox_config = config.tools.try(&.sandbox) || "auto"
-        sandboxed = sandbox_config.downcase != "none"
-        full_shell = config.tools.try(&.exec.try(&.full_shell_access?))
-
-        if sandboxed && full_shell
-          report(Status::Fail, "Conflicting: sandbox + full_shell_access")
-          hint("These settings are mutually exclusive. Use sandbox: none for full shell access.")
-          return errors + 1
-        end
-        report(Status::Pass, "Security settings consistent")
-
         # Check sandbox availability
         errors = check_sandbox_availability(config, errors)
 
@@ -164,14 +153,12 @@ module Autobot
       def self.check_sandbox_availability(config : Config::Config, errors : Int32) : Int32
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
-        # Warn if sandbox is disabled
         if sandbox_config.downcase == "none"
           report(Status::Warn, "Sandbox disabled (sandbox: none)")
           hint("Enable sandboxing for better security ('auto', 'bubblewrap', or 'docker')")
           return errors
         end
 
-        # Check if sandbox tools are available when enabled
         unless Tools::Sandbox.available?
           report(Status::Fail, "Sandbox enabled but no sandbox tool found")
           hint("Install bubblewrap: sudo apt install bubblewrap")
@@ -181,6 +168,7 @@ module Autobot
 
         sandbox_type = Tools::Sandbox.detect
         report(Status::Pass, "Sandbox available (#{sandbox_type.to_s.downcase})")
+
         errors
       end
 

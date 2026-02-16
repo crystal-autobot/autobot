@@ -70,7 +70,6 @@ module Autobot
         lines << "  sandbox: \"auto\""
         lines << "  exec:"
         lines << "    timeout: 60"
-        lines << "    full_shell_access: false"
         lines << ""
 
         lines << "gateway:"

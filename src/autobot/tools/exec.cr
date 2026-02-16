@@ -1,6 +1,5 @@
 require "log"
 require "../constants"
-require "../config/env"
 require "./sandbox"
 
 module Autobot
@@ -73,27 +72,20 @@ module Autobot
         /\bltrace\s+/i, # library call tracer
       ]
 
-      # Shell feature patterns (for restricted mode without full_shell_access)
-      OUTPUT_REDIRECT_PATTERN = />\s*\S/
-      INPUT_REDIRECT_PATTERN  = /<\s*\S/
-      DIR_CHANGE_PATTERN      = /\b(cd|chdir|pushd|popd)\b/
-
       getter timeout : Int32
       getter working_dir : String?
       getter deny_patterns : Array(Regex)
       getter allow_patterns : Array(Regex)
-      getter? full_shell_access : Bool
       getter sandbox_type : Sandbox::Type
 
       def initialize(
+        @executor : SandboxExecutor,
         @timeout = DEFAULT_TIMEOUT,
         @working_dir : String? = nil,
         @deny_patterns = DEFAULT_DENY_PATTERNS,
         @allow_patterns = [] of Regex,
-        @full_shell_access = false,
         sandbox_config : String = "auto",
       )
-        validate_config!(sandbox_config)
         @sandbox_type = resolve_sandbox_type(sandbox_config)
         ensure_sandbox_available!
       end
@@ -144,13 +136,20 @@ module Autobot
       end
 
       private def run_command(command : String, cwd : String) : String
-        # Use sandbox when enabled
-        if sandboxed?
-          status, stdout_text, stderr_text = Sandbox.exec(command, Path[cwd], @timeout, MAX_OUTPUT_SIZE)
-          timed_out = status.exit_code == Sandbox::TIMEOUT_EXIT_CODE
-          build_command_result(stdout_text, stderr_text, status, timed_out)
+        workspace = @working_dir
+
+        if sandboxed? && workspace
+          relative_cwd = calculate_relative_path(cwd, workspace)
+
+          sandboxed_command = if relative_cwd == "." || relative_cwd.empty?
+                                command
+                              else
+                                "cd #{Sandbox.shell_escape(relative_cwd)} && #{command}"
+                              end
+
+          result = @executor.exec(sandboxed_command, timeout: @timeout)
+          result.success? ? result.content : "Error: #{result.content}"
         else
-          # Direct execution (no sandbox) for dev/testing
           run_command_direct(command, cwd)
         end
       end
@@ -256,11 +255,6 @@ module Autobot
       private def guard_command(command : String) : String?
         cmd = command.strip
 
-        # Always block .env file access
-        if Config::Env.command_references_file?(cmd)
-          return "Error: Access to .env files is blocked for security"
-        end
-
         @deny_patterns.each do |pattern|
           if pattern.matches?(cmd)
             return "Error: Command blocked by safety guard (dangerous pattern detected)"
@@ -273,78 +267,11 @@ module Autobot
           end
         end
 
-        if sandboxed?
-          # Block cd commands entirely - they change execution context
-          if cmd.match(DIR_CHANGE_PATTERN)
-            return "Error: Directory change commands are blocked when sandboxed"
-          end
-
-          # Always block shell expansion when sandboxed
-          # Variables can be used to construct paths and commands dynamically
-          if error = check_shell_expansion(cmd)
-            return error
-          end
-
-          # Block shell features when full_shell_access is disabled (secure default)
-          unless @full_shell_access
-            if error = check_shell_features(cmd)
-              return error
-            end
-          end
-        end
-
         nil
-      end
-
-      private def check_shell_expansion(command : String) : String?
-        # Block dangerous shell expansion that could bypass sandbox
-        return "Error: Shell expansion detected - $HOME not allowed" if command.includes?("$HOME")
-        return "Error: Shell expansion detected - ${} not allowed" if command.includes?("${")
-        return "Error: Shell expansion detected - $USER not allowed" if command.includes?("$USER")
-        return "Error: Shell expansion detected - $PATH not allowed" if command.includes?("$PATH")
-        return "Error: Shell expansion detected - backticks not allowed" if command.includes?("`")
-        return "Error: Shell expansion detected - $() not allowed" if command.includes?("$(")
-
-        # Block ALL variables when workspace restricted (they can bypass validation)
-        return "Error: Shell variables not allowed in restricted mode" if command.includes?("$")
-        nil
-      end
-
-      private def check_shell_features(command : String) : String?
-        return "Error: Pipes not allowed in restricted mode (use direct commands)" if command.includes?("|")
-        return "Error: Output redirection not allowed in restricted mode" if command.match(OUTPUT_REDIRECT_PATTERN)
-        return "Error: Input redirection not allowed in restricted mode" if command.match(INPUT_REDIRECT_PATTERN)
-        return "Error: Command chaining not allowed in restricted mode (use one command)" if command.includes?(";") || command.includes?("&&") || command.includes?("||")
-        return "Error: Background execution not allowed in restricted mode" if command.includes?("&")
-        nil
-      end
-
-      private def validate_config!(sandbox_config : String) : Nil
-        # Check for mutually exclusive settings based on CONFIG, not detected availability
-        sandbox_requested = sandbox_config.downcase != "none"
-
-        if sandbox_requested && @full_shell_access
-          raise ArgumentError.new(
-            "Invalid configuration: sandbox and full_shell_access are mutually exclusive. " \
-            "Sandboxing requires simple commands (no shell features). " \
-            "For full shell access (pipes, redirects), use sandbox: none."
-          )
-        end
       end
 
       private def resolve_sandbox_type(sandbox_config : String) : Sandbox::Type
-        case sandbox_config.downcase
-        when "bubblewrap"
-          Sandbox::Type::Bubblewrap
-        when "docker"
-          Sandbox::Type::Docker
-        when "none"
-          Sandbox::Type::None
-        when "auto"
-          Sandbox.detect
-        else
-          raise ArgumentError.new("Invalid sandbox config: #{sandbox_config}. Use 'auto', 'bubblewrap', 'docker', or 'none'")
-        end
+        Sandbox.resolve_type(sandbox_config)
       end
 
       private def ensure_sandbox_available! : Nil
@@ -356,6 +283,14 @@ module Autobot
 
       def sandboxed? : Bool
         @sandbox_type != Sandbox::Type::None
+      end
+
+      private def calculate_relative_path(cwd : String, workspace : String) : String
+        if cwd.starts_with?(workspace)
+          cwd[workspace.size..-1].lstrip('/')
+        else
+          "."
+        end
       end
 
       private def validate_working_dir(user_cwd : String) : String?

@@ -20,91 +20,43 @@ channels:
 
 ## 2. Kernel-Enforced Workspace Sandbox (REQUIRED FOR PRODUCTION)
 
-**System Requirements:**
-- **bubblewrap** (recommended) OR **Docker**
-- Workspace restrictions enforced at kernel level (mount namespaces)
-- No manual validation - guaranteed by operating system
+Autobot uses kernel-level sandboxing to restrict LLM file access to a designated workspace directory.
 
-### Installation
+### Quick Setup
 
-**Ubuntu/Debian:**
+**Linux (bubblewrap - recommended):**
 ```bash
-sudo apt install bubblewrap
+sudo apt install bubblewrap  # Ubuntu/Debian
+sudo dnf install bubblewrap  # Fedora
+sudo pacman -S bubblewrap    # Arch
 ```
 
-**Fedora:**
+**macOS/Windows (Docker):**
 ```bash
-sudo dnf install bubblewrap
+# Install Docker Desktop
+# https://docs.docker.com/engine/install/
 ```
-
-**Arch Linux:**
-```bash
-sudo pacman -S bubblewrap
-```
-
-**Or use Docker** (already provides sandboxing)
 
 ### Configuration
 
 ```yaml
 tools:
-  sandbox: "auto"  # auto|bubblewrap|docker|none (default: auto)
-  exec:
-    full_shell_access: false  # Default: false (SECURE - blocks shell features)
+  sandbox: auto  # auto | bubblewrap | docker | none (default)
 ```
-
-**Sandbox Options:**
-- `auto` - Automatically detect bubblewrap or Docker (default, recommended)
-- `bubblewrap` - Use bubblewrap explicitly (lightweight, ~100KB, works on Raspberry Pi)
-- `docker` - Use Docker containers explicitly
-- `none` - No sandbox, no workspace restrictions (development only, NOT for production)
-
-### How It Works
-
-**Kernel-level isolation** via Linux namespaces:
-
-```bash
-# Bubblewrap execution:
-bwrap \
-  --ro-bind /usr /usr          # System binaries (read-only)
-  --ro-bind /lib /lib          # System libraries (read-only)
-  --bind /workspace /workspace # YOUR workspace (read-write)
-  # Everything else: /etc, /home, /var - NOT MOUNTED
-  --unshare-all --share-net    # Isolated namespaces
-  -- sh -c "command"
-```
-
-**What this means:**
-- **Only workspace directory is visible** to commands
-- `/etc/passwd`, `/home`, system files **do not exist** inside sandbox
-- No symlink/hardlink/TOCTOU vulnerabilities - files outside workspace are invisible
-- Guaranteed protection by kernel, not application logic
 
 ### What It Protects Against
 
-✅ **Kernel-enforced protection** (workspace is the only writable mount):
-- Absolute paths outside workspace (`cat /etc/passwd` → file not found)
-- Relative traversal (`cd ../../../etc` → directory doesn't exist)
-- Symlinks pointing outside (`ln -s /etc/passwd link` → blocked by deny patterns)
-- All access attempts to files outside workspace
+- ✅ Reading system files (`/etc/passwd`, `~/.ssh/`)
+- ✅ Writing outside workspace
+- ✅ Path traversal (`../../../etc/passwd`)
+- ✅ Absolute path exploits (`/etc/passwd`)
+- ✅ Symlink attacks
 
-✅ **Defense-in-depth** (application-level blocks):
-- Directory change commands (`cd /etc && ls`)
-- Link creation (`ln -s`, `ln`, `cp -l`, `cp --link`)
-- Shell features (pipes, redirects, chaining) when `full_shell_access: false`
-- Dangerous commands (rm -rf, dd, curl | bash, etc.)
-
-**Shell Access Modes:**
-
-| Mode | Shell Features | Security | Use Case |
-|------|---------------|----------|----------|
-| `full_shell_access: false` | ❌ Blocked | 🔒 Maximum | Production (default) |
-| `full_shell_access: true` | ✅ Allowed | ⚠️ Reduced | Trusted environments |
+**For detailed information**, see [docs/sandboxing.md](sandboxing.md)
 
 ### Best Practices
 
 - ✅ Always use sandboxing in production (`sandbox: auto` or specific type)
-- ✅ Use `full_shell_access: false` (blocks pipes, redirects, command chaining)
 - ✅ Install bubblewrap for development (lightweight, fast)
 - ✅ Use Docker for production deployments
 - ✅ Keep workspace scoped to a dedicated directory, not your home folder
@@ -185,7 +137,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 **Security checks performed:**
 
 **❌ Errors (blocks deployment):**
-- Mutually exclusive settings (`restrict_to_workspace` + `full_shell_access`)
+- Sandbox enabled but not available
 - Plaintext secrets detected in `config.yml`
 - `.env` file permissions not 0600
 - `.env` file inside workspace directory

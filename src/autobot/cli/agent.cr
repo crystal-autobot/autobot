@@ -13,14 +13,11 @@ module Autobot
       ) : Nil
         config = Config::Loader.load(config_path)
 
-        # Validate that a provider is configured
-        provider_config, provider_name = config.match_provider
-        unless provider_config
-          STDERR.puts "Error: No API key configured."
-          STDERR.puts "Set one in ~/.config/autobot/config.yml under providers section"
-          exit 1
-        end
+        # Run the same startup validation as gateway
+        SetupHelper.validate_startup(config, config_path)
+        SetupHelper.validate_provider(config)
 
+        _provider_config, provider_name = config.match_provider
         Log.info { "Using provider: #{provider_name}, model: #{config.default_model}" }
 
         bus = Bus::MessageBus.new
