@@ -8,26 +8,20 @@
 
 ## Why Autobot?
 
-Inspired by [OpenClaw](https://github.com/zeroclaw-labs/zeroclaw) — rebuilt in [Crystal](https://crystal-lang.org) with security and efficiency first.
+Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://crystal-lang.org) with security and efficiency first.
 
 2.0MB binary, ~5MB RAM, boots in under 10ms, zero runtime dependencies. Run dozens of bots on a single machine — each with its own personality, workspace, and config.
 
 ## ✨ Features
-**🤖 Multi-Provider LLM** — Connect to Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, or self-hosted vLLM. Switch models with one config change.
 
-**💬 Chat Channels** — Built-in Telegram, Slack, and WhatsApp. Each channel gets allowlists, custom slash commands, and per-session rate limits.
-
-**🔒 Kernel-Enforced Sandbox** — Docker or bubblewrap isolation at the OS level. The LLM literally cannot see files outside its workspace — no regex, no path validation, just kernel namespaces.
-
-**🧠 Memory & Sessions** — JSONL sessions with memory consolidation. Long-term memory persists across conversations while keeping the context window efficient.
-
-**⏰ Cron Scheduler** — Schedule messages with cron expressions, intervals, or one-time triggers. Jobs auto-isolate by owner.
-
-**🔧 Extensible** — Plugin system, bash script auto-discovery as tools, markdown-based skills with frontmatter, custom macros, and subagents for parallel work.
-
-**📊 Full Observability** — Token tracking, credential sanitization, operation audit trails, and status-based logging. Know exactly what your bot does and costs.
-
-**🏃 Multi-Bot Ready** — Each bot lives in its own directory with isolated config, workspace, sessions, and logs. Spin up as many as you need — they share nothing.
+- **🤖 Multi-Provider LLM** — Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM
+- **💬 Chat Channels** — Telegram, Slack, WhatsApp with allowlists and custom slash commands
+- **🔒 Kernel Sandbox** — Docker/bubblewrap OS-level isolation, not regex path checks
+- **🧠 Memory** — JSONL sessions with consolidation and persistent long-term memory
+- **⏰ Cron** — Cron expressions, intervals, one-time triggers, per-owner isolation
+- **🔧 Extensible** — Plugins, bash auto-discovery, markdown skills, subagents
+- **📊 Observable** — Token tracking, credential sanitization, audit trails
+- **🏃 Multi-Bot** — Isolated directories per bot, run dozens on one machine
 
 <p align="center">
   <img src="assets/demo-telegram.jpg" alt="Telegram Chat" width="26%">
