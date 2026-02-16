@@ -51,11 +51,12 @@ module Autobot
       ) : Response
         effective_model = model || @model
         spec = resolve_spec(effective_model)
+        bare_model = strip_provider_prefix(effective_model)
 
         if anthropic_native?(spec, effective_model)
-          chat_anthropic(messages, tools, effective_model, max_tokens, temperature, spec)
+          chat_anthropic(messages, tools, bare_model, max_tokens, temperature, spec)
         else
-          chat_openai(messages, tools, effective_model, max_tokens, temperature, spec)
+          chat_openai(messages, tools, bare_model, max_tokens, temperature, spec)
         end
       rescue ex
         Log.error { "LLM request failed: #{ex.message}" }
@@ -152,11 +153,8 @@ module Autobot
         system_text = extract_system_prompt(messages)
         converted = convert_to_anthropic_messages(messages)
 
-        # Strip provider prefix for Anthropic API (e.g. "anthropic/claude-sonnet-4-5" -> "claude-sonnet-4-5")
-        bare_model = model.includes?("/") ? model.split("/", 2).last : model
-
         body = {
-          "model"       => JSON::Any.new(bare_model),
+          "model"       => JSON::Any.new(model),
           "messages"    => JSON::Any.new(converted),
           "max_tokens"  => JSON::Any.new(max_tokens.to_i64),
           "temperature" => JSON::Any.new(temperature),
@@ -328,6 +326,14 @@ module Autobot
       # -----------------------------------------------------------------
       # Shared helpers
       # -----------------------------------------------------------------
+      private def strip_provider_prefix(model : String) : String
+        return model unless model.includes?("/")
+
+        prefix = model.split("/", 2).first.downcase
+        known = PROVIDERS.any? { |spec| spec.name == prefix }
+        known ? model.split("/", 2).last : model
+      end
+
       private def anthropic_native?(spec : ProviderSpec?, model : String) : Bool
         return false if @gateway
         return false unless spec
