@@ -14,6 +14,10 @@ describe Autobot::Channels::MarkdownToTelegramHTML do
       Autobot::Channels::MarkdownToTelegramHTML.convert("a & b < c > d").should eq("a &amp; b &lt; c &gt; d")
     end
 
+    it "escapes double quotes" do
+      Autobot::Channels::MarkdownToTelegramHTML.convert("say \"hello\"").should eq("say &quot;hello&quot;")
+    end
+
     it "converts **bold** to <b> tags" do
       Autobot::Channels::MarkdownToTelegramHTML.convert("**bold text**").should eq("<b>bold text</b>")
     end
@@ -127,6 +131,13 @@ describe Autobot::Channels::MarkdownToTelegramHTML do
     it "leaves numbered lists as plain text" do
       input = "1. First\n2. Second"
       Autobot::Channels::MarkdownToTelegramHTML.convert(input).should eq("1. First\n2. Second")
+    end
+
+    it "escapes quotes in link URLs to prevent attribute injection" do
+      input = "[click](url\"onclick=\"alert)"
+      result = Autobot::Channels::MarkdownToTelegramHTML.convert(input)
+      # Quotes in URL are escaped, staying inside the href value
+      result.should eq(%(<a href="url&quot;onclick=&quot;alert">click</a>))
     end
 
     it "strips output" do

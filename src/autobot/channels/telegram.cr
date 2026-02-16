@@ -60,7 +60,7 @@ module Autobot::Channels
     end
 
     def self.escape_html(text : String) : String
-      text.gsub('&', "&amp;").gsub('<', "&lt;").gsub('>', "&gt;")
+      text.gsub('&', "&amp;").gsub('<', "&lt;").gsub('>', "&gt;").gsub('"', "&quot;")
     end
 
     def self.valid_html?(text : String) : Bool
