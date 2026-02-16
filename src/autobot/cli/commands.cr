@@ -17,7 +17,7 @@ module Autobot
     ║    ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═════╝  ╚═════╝    ╚═╝     ║
     ║                                                                   ║
     ║              ⚡ Crystal-Powered AI Agent Framework ⚡             ║
-    ║                   Fast • Secure • Efficient                       ║
+    ║                     Fast • Secure • Efficient                     ║
     ║                                                                   ║
     ╚═══════════════════════════════════════════════════════════════════╝
     LOGO
