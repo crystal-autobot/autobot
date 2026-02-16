@@ -54,6 +54,8 @@ module Autobot
       # Store reference in registry for plugin access
       registry.sandbox_executor = executor
 
+      ::Log.for("Tools").info { "Registered #{registry.size} tools: #{registry.tool_names.join(", ")}" }
+
       registry
     end
 
@@ -77,6 +79,9 @@ module Autobot
       registry.register(WebFetchTool.new)
 
       registry.sandbox_executor = executor
+
+      ::Log.for("Tools").info { "Registered #{registry.size} tools: #{registry.tool_names.join(", ")}" }
+
       registry
     end
 
