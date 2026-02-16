@@ -21,7 +21,6 @@ module Autobot::Tools
     # Register a tool
     def register(tool : Tool) : Nil
       @tools[tool.name] = tool
-      Log.info { "Registered tool: #{tool.name}" }
     end
 
     # Unregister a tool by name

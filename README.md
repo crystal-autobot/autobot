@@ -6,6 +6,19 @@
 
 <p align="center">Fast • Secure • Efficient</p>
 
+<table>
+  <tr>
+    <td align="center" width="30%">
+      <img src="assets/demo-telegram.jpg" alt="Telegram Chat" width="280"><br>
+      <em>Telegram Chat</em>
+    </td>
+    <td align="center" width="70%">
+      <img src="assets/demo-terminal.png" alt="Autobot Terminal" width="100%"><br>
+      <em>Terminal Output</em>
+    </td>
+  </tr>
+</table>
+
 ## Why Autobot?
 
 Inspired by [nanobot](https://github.com/HKUDS/nanobot) and [picoclaw](https://github.com/sipeed/picoclaw) — rebuilt in [Crystal](https://crystal-lang.org) with a security and efficiency first approach.
