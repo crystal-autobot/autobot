@@ -4,18 +4,35 @@
 
 <p align="center"><b>Ultra-efficient personal AI assistant powered by Crystal</b></p>
 
-<p align="center">Fast • Secure • Efficient</p>
+<p align="center">2MB binary · ~5MB RAM · <10ms startup · Zero runtime dependencies</p>
 
 ## Why Autobot?
 
-Inspired by [nanobot](https://github.com/HKUDS/nanobot) and [picoclaw](https://github.com/sipeed/picoclaw) — rebuilt in [Crystal](https://crystal-lang.org) with a security and efficiency first approach.
+Inspired by [OpenClaw](https://github.com/zeroclaw-labs/zeroclaw) — rebuilt in [Crystal](https://crystal-lang.org) with security and efficiency first.
 
-| What | How |
-|------|-----|
-| **🎯 Token Efficient** | Structured tool results • Memory consolidation • Minimal context overhead • Session management |
-| **📊 Observable** | Status-based logging • Credential sanitization • Token tracking • Operation audit trails |
-| **🔒 Secure** | Docker/bubblewrap isolation • OS-level workspace restrictions • No manual path validation • SSRF protection • Command guards |
-| **⚡ Lightweight** | Tiny binary • <50MB Docker • Zero runtime deps • <100ms startup • Streaming I/O |
+2.0MB binary, ~5MB RAM, boots in under 10ms, zero runtime dependencies. Run dozens of bots on a single machine — each with its own personality, workspace, and config.
+
+## ✨ Features
+**🤖 Multi-Provider LLM** — Connect to Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, or self-hosted vLLM. Switch models with one config change.
+
+**💬 Chat Channels** — Built-in Telegram, Slack, and WhatsApp. Each channel gets allowlists, custom slash commands, and per-session rate limits.
+
+**🔒 Kernel-Enforced Sandbox** — Docker or bubblewrap isolation at the OS level. The LLM literally cannot see files outside its workspace — no regex, no path validation, just kernel namespaces.
+
+**🧠 Memory & Sessions** — JSONL sessions with memory consolidation. Long-term memory persists across conversations while keeping the context window efficient.
+
+**⏰ Cron Scheduler** — Schedule messages with cron expressions, intervals, or one-time triggers. Jobs auto-isolate by owner.
+
+**🔧 Extensible** — Plugin system, bash script auto-discovery as tools, markdown-based skills with frontmatter, custom macros, and subagents for parallel work.
+
+**📊 Full Observability** — Token tracking, credential sanitization, operation audit trails, and status-based logging. Know exactly what your bot does and costs.
+
+**🏃 Multi-Bot Ready** — Each bot lives in its own directory with isolated config, workspace, sessions, and logs. Spin up as many as you need — they share nothing.
+
+<p align="center">
+  <img src="assets/demo-telegram.jpg" alt="Telegram Chat" width="26%">
+  <img src="assets/demo-terminal.png" alt="Autobot Terminal" width="73%">
+</p>
 
 ### 🛡️ Production-Grade Security
 
@@ -30,30 +47,6 @@ Autobot uses **kernel-enforced sandboxing** via Docker or bubblewrap — not app
 **Example:** When LLM tries `ls ../`, it fails at the OS level because parent directories aren't mounted. No regex patterns, no validation bypasses — just kernel namespaces.
 
 **→ [Security Architecture](docs/security.md)**
-
-## ✨ Features
-
-**Core Engine**
-- Multi-provider LLM (Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM)
-- JSONL sessions with memory consolidation
-- Built-in tools: file ops, shell exec, web search/fetch
-
-**Integrations**
-- Chat channels: Telegram, Slack, WhatsApp
-- Cron scheduler with expressions and intervals
-- Plugin system for custom tools
-- Bash script auto-discovery as tools
-
-**Advanced**
-- Skills: Markdown-based with frontmatter
-- Custom commands: macros or bash scripts
-- Subagents for parallel tasks
-- Full observability: tokens, files, operations
-
-<p align="center">
-  <img src="assets/demo-telegram.jpg" alt="Telegram Chat" width="26%">
-  <img src="assets/demo-terminal.png" alt="Autobot Terminal" width="73%">
-</p>
 
 ## 🚀 Quick Start
 
