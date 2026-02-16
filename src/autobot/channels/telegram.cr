@@ -302,6 +302,12 @@ module Autobot::Channels
         end
       end
 
+      unless allowed?(sender[:sender_id])
+        Log.warn { "Access denied for sender #{sender[:sender_id]} on telegram. Add to allow_from to grant access." }
+        send_reply(sender[:chat_id], access_denied_message(sender[:sender_id]))
+        return
+      end
+
       content, media_attachments = build_content_and_media(msg)
 
       Log.debug { "Message from #{sender[:sender_id]}: #{content}" }
@@ -414,7 +420,7 @@ module Autobot::Channels
     private def handle_command(text : String, chat_id : String, sender_id : String, first_name : String) : Nil
       unless allowed?(sender_id)
         Log.warn { "Unauthorized command attempt from #{sender_id}" }
-        send_reply(chat_id, "Access denied. Please contact the bot administrator.")
+        send_reply(chat_id, access_denied_message(sender_id))
         return
       end
 
@@ -652,6 +658,16 @@ module Autobot::Channels
 
     private def command_description(entry : Config::CustomCommandEntry, command_name : String) : String
       entry.description || command_name.gsub(/[_-]/, " ").capitalize
+    end
+
+    private def access_denied_message(sender_id : String) : String
+      if @allow_from.empty?
+        "This bot has no authorized users yet.\n" \
+        "Add your user ID to <code>allow_from</code> in config.yml to get started.\n\n" \
+        "Your ID: <code>#{MarkdownToTelegramHTML.escape_html(sender_id)}</code>"
+      else
+        "Access denied. You are not in the authorized users list."
+      end
     end
 
     private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
