@@ -6,19 +6,6 @@
 
 <p align="center">Fast • Secure • Efficient</p>
 
-<table>
-  <tr>
-    <td align="center" width="30%">
-      <img src="assets/demo-telegram.jpg" alt="Telegram Chat" width="280"><br>
-      <em>Telegram Chat</em>
-    </td>
-    <td align="center" width="70%">
-      <img src="assets/demo-terminal.png" alt="Autobot Terminal" width="100%"><br>
-      <em>Terminal Output</em>
-    </td>
-  </tr>
-</table>
-
 ## Why Autobot?
 
 Inspired by [nanobot](https://github.com/HKUDS/nanobot) and [picoclaw](https://github.com/sipeed/picoclaw) — rebuilt in [Crystal](https://crystal-lang.org) with a security and efficiency first approach.
@@ -62,6 +49,11 @@ Autobot uses **kernel-enforced sandboxing** via Docker or bubblewrap — not app
 - Custom commands: macros or bash scripts
 - Subagents for parallel tasks
 - Full observability: tokens, files, operations
+
+<p align="center">
+  <img src="assets/demo-telegram.jpg" alt="Telegram Chat" width="26%">
+  <img src="assets/demo-terminal.png" alt="Autobot Terminal" width="73%">
+</p>
 
 ## 🚀 Quick Start
 
