@@ -140,7 +140,6 @@ module Autobot::Config
   class ExecToolConfig
     include YAML::Serializable
     property timeout : Int32 = 60
-    property? full_shell_access : Bool = false
 
     def initialize
     end

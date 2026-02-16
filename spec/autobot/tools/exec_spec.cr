@@ -69,17 +69,6 @@ describe Autobot::Tools::ExecTool do
     FileUtils.rm_rf(tmp) if tmp
   end
 
-  it "rejects sandbox with full_shell_access" do
-    # When sandboxed with full_shell_access, should raise error
-    expect_raises(ArgumentError, /sandbox and full_shell_access are mutually exclusive/) do
-      Autobot::Tools::ExecTool.new(
-        executor: create_test_executor,
-        full_shell_access: true,
-        sandbox_config: "auto"
-      )
-    end
-  end
-
   it "has correct tool metadata" do
     tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
     tool.name.should eq("exec")

@@ -178,7 +178,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 ### What It Checks
 
 **❌ Errors** (blocks deployment):
-- Mutually exclusive settings (`restrict_to_workspace` + `full_shell_access`)
+- Sandbox enabled but not available
 - Plaintext secrets in `config.yml`
 - `.env` permissions (must be 0600)
 - `.env` inside workspace (exposes secrets)
@@ -245,12 +245,8 @@ ls -l .env
 
 ```yaml
 tools:
-  restrict_to_workspace: true  # ✓ Default
-  exec:
-    full_shell_access: false   # ✓ Default
+  sandbox: auto  # ✓ Default (auto-detect bubblewrap or Docker)
 ```
-
-**NEVER** enable both `restrict_to_workspace` and `full_shell_access` (mutually exclusive). `autobot doctor` will catch this.
 
 ### 3. Channel Authorization
 
@@ -402,7 +398,7 @@ autobot gateway --port 8080      # Custom port
 - ✓ .env files blocked from LLM
 - ✓ Symlink operations blocked
 - ✓ Localhost-only binding
-- ✓ Shell features disabled
+- ✓ Destructive commands blocked
 - ✓ File permissions enforced
 - ✓ Validation on startup
 

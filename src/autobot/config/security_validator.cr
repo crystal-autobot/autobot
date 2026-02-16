@@ -36,18 +36,6 @@ module Autobot::Config
     private def self.check_mutually_exclusive_settings(config : Config) : Array(Issue)
       issues = [] of Issue
 
-      sandbox_config = config.tools.try(&.sandbox) || "auto"
-      sandboxed = sandbox_config.downcase != "none"
-
-      if sandboxed && config.tools.try(&.exec.try(&.full_shell_access?))
-        issues << Issue.new(
-          severity: Severity::Error,
-          message: "CRITICAL: sandbox and full_shell_access are mutually exclusive. " \
-                   "Sandboxing requires simple commands (no shell features). " \
-                   "Use sandbox: none for full shell access."
-        )
-      end
-
       issues
     end
 

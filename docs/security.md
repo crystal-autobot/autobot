@@ -54,17 +54,9 @@ tools:
 
 **For detailed information**, see [docs/sandboxing.md](sandboxing.md)
 
-**Shell Access Modes:**
-
-| Mode | Shell Features | Security | Use Case |
-|------|---------------|----------|----------|
-| `full_shell_access: false` | ❌ Blocked | 🔒 Maximum | Production (default) |
-| `full_shell_access: true` | ✅ Allowed | ⚠️ Reduced | Trusted environments |
-
 ### Best Practices
 
 - ✅ Always use sandboxing in production (`sandbox: auto` or specific type)
-- ✅ Use `full_shell_access: false` (blocks pipes, redirects, command chaining)
 - ✅ Install bubblewrap for development (lightweight, fast)
 - ✅ Use Docker for production deployments
 - ✅ Keep workspace scoped to a dedicated directory, not your home folder
@@ -145,7 +137,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 **Security checks performed:**
 
 **❌ Errors (blocks deployment):**
-- Mutually exclusive settings (`restrict_to_workspace` + `full_shell_access`)
+- Sandbox enabled but not available
 - Plaintext secrets detected in `config.yml`
 - `.env` file permissions not 0600
 - `.env` file inside workspace directory

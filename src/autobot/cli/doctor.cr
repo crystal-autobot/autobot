@@ -144,17 +144,6 @@ module Autobot
       end
 
       def self.check_security_settings(config : Config::Config, errors : Int32) : Int32
-        sandbox_config = config.tools.try(&.sandbox) || "auto"
-        sandboxed = sandbox_config.downcase != "none"
-        full_shell = config.tools.try(&.exec.try(&.full_shell_access?))
-
-        if sandboxed && full_shell
-          report(Status::Fail, "Conflicting: sandbox + full_shell_access")
-          hint("These settings are mutually exclusive. Use sandbox: none for full shell access.")
-          return errors + 1
-        end
-        report(Status::Pass, "Security settings consistent")
-
         # Check sandbox availability
         errors = check_sandbox_availability(config, errors)
 

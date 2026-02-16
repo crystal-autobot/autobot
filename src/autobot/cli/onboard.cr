@@ -127,7 +127,6 @@ module Autobot
           sandbox: "auto"  # auto|bubblewrap|docker|none
           exec:
             timeout: 60
-            full_shell_access: false
 
         gateway:
           host: "127.0.0.1"

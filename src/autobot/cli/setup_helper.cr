@@ -10,7 +10,6 @@ module Autobot
           workspace: config.workspace_path,
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
           sandbox_config: sandbox_config,
-          full_shell_access: config.tools.try(&.exec.try(&.full_shell_access?)) || false,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           skills_dirs: [
             (config.workspace_path / "skills").to_s,

@@ -24,7 +24,6 @@ module Autobot
       exec_timeout : Int32 = ExecTool::DEFAULT_TIMEOUT,
       exec_deny_patterns : Array(Regex) = ExecTool::DEFAULT_DENY_PATTERNS,
       sandbox_config : String = "auto",
-      full_shell_access : Bool = false,
       brave_api_key : String? = nil,
       web_fetch_max_chars : Int32 = WebFetchTool::DEFAULT_MAX_CHARS,
       skills_dirs : Array(String) = [] of String,
@@ -48,7 +47,7 @@ module Autobot
       # Register tools
       register_filesystem_tools(registry, executor)
       register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
-        sandbox_config, full_shell_access, workspace)
+        sandbox_config, workspace)
       register_web_tools(registry, brave_api_key, web_fetch_max_chars)
       register_bash_tools(registry, executor, skills_dirs)
 
@@ -72,7 +71,7 @@ module Autobot
 
       register_filesystem_tools(registry, executor)
       register_exec_tool(registry, executor, exec_timeout, ExecTool::DEFAULT_DENY_PATTERNS,
-        sandbox_config, false, workspace)
+        sandbox_config, workspace)
 
       registry.register(WebSearchTool.new(api_key: brave_api_key))
       registry.register(WebFetchTool.new)
@@ -108,7 +107,6 @@ module Autobot
       timeout : Int32,
       deny_patterns : Array(Regex),
       sandbox_config : String,
-      full_shell_access : Bool,
       workspace : Path?,
     )
       registry.register(ExecTool.new(
@@ -117,7 +115,6 @@ module Autobot
         working_dir: workspace.try(&.to_s),
         deny_patterns: deny_patterns,
         sandbox_config: sandbox_config,
-        full_shell_access: full_shell_access,
       ))
     end
 

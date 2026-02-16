@@ -174,7 +174,6 @@ module Autobot::Agent
         - File operations outside workspace will fail (kernel-enforced)
         - Dangerous command patterns are blocked (rm -rf, curl | bash, etc.)
         - SSRF attempts are blocked (private IPs, cloud metadata)
-        - Restricted shell mode blocks pipes, redirects, and command chaining
         POLICY
       end
 
