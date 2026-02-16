@@ -29,7 +29,7 @@ module Autobot
         provider_config, _name = config.match_provider
         unless provider_config
           STDERR.puts "Error: No API key configured."
-          STDERR.puts "Set one in ~/.config/autobot/config.yml under providers section"
+          STDERR.puts "Set one in config.yml under providers section"
           exit 1
         end
       end

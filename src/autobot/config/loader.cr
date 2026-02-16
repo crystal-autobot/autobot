@@ -5,18 +5,24 @@ module Autobot::Config
   # Configuration loader with precedence:
   # 1. --config CLI flag
   # 2. ./config.yml (current directory)
-  # 3. ~/.config/autobot/config.yml
-  # 4. Default values from schema
+  # 3. Default values from schema
   class Loader
-    # Default config paths
-    GLOBAL_CONFIG_PATH  = Path.home / ".config" / "autobot" / "config.yml"
+    # Default config path (relative to current directory)
     PROJECT_CONFIG_PATH = Path["config.yml"]
+
+    # Config directory — set when config is loaded, defaults to current dir
+    @@config_dir : Path = Path["."]
+
+    def self.config_dir : Path
+      @@config_dir
+    end
 
     # Load configuration with proper precedence
     def self.load(config_path : String? = nil, *, validate : Bool = true) : Config
       path = resolve_config_path(config_path)
 
       if path && File.exists?(path)
+        @@config_dir = path.parent
         # Load .env file first (if exists)
         load_env_file(path.parent)
         load_from_file(path, validate: validate)
@@ -29,7 +35,7 @@ module Autobot::Config
 
     # Save configuration to file
     def self.save(config : Config, path : String? = nil) : Nil
-      save_path = Path[path || GLOBAL_CONFIG_PATH.to_s]
+      save_path = Path[path || (@@config_dir / "config.yml").to_s]
 
       # Create parent directory with restrictive permissions (user-only)
       unless Dir.exists?(save_path.parent)
@@ -43,9 +49,9 @@ module Autobot::Config
       Log.info { "Config saved to #{save_path}" }
     end
 
-    # Get default data directory
+    # Get default data directory (relative to config directory)
     def self.data_dir : Path
-      Path.home / ".config" / "autobot"
+      @@config_dir
     end
 
     # Get sessions directory
@@ -73,10 +79,7 @@ module Autobot::Config
       if config_path
         return config_path
       end
-      if File.exists?(PROJECT_CONFIG_PATH)
-        return PROJECT_CONFIG_PATH.to_s
-      end
-      GLOBAL_CONFIG_PATH.to_s
+      PROJECT_CONFIG_PATH.to_s
     end
 
     # Initialize autobot directories
@@ -139,11 +142,6 @@ module Autobot::Config
       # 2. Current directory ./config.yml
       if File.exists?(PROJECT_CONFIG_PATH)
         return PROJECT_CONFIG_PATH
-      end
-
-      # 3. Global ~/.config/autobot/config.yml
-      if File.exists?(GLOBAL_CONFIG_PATH)
-        return GLOBAL_CONFIG_PATH
       end
 
       nil

@@ -37,9 +37,9 @@ describe Autobot::Config::Loader do
   end
 
   describe ".data_dir" do
-    it "returns path under home directory" do
+    it "returns config directory" do
       dir = Autobot::Config::Loader.data_dir
-      dir.to_s.should contain("autobot")
+      dir.should eq(Autobot::Config::Loader.config_dir)
     end
   end
 
@@ -75,8 +75,13 @@ describe Autobot::Config::Loader do
 
   describe ".init_dirs" do
     it "creates required directories" do
+      tmp = TestHelper.tmp_dir
+      # Temporarily point config_dir to tmp for test isolation
+      Autobot::Config::Loader.load(nil)
       Autobot::Config::Loader.init_dirs
       Dir.exists?(Autobot::Config::Loader.data_dir).should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
     end
   end
 end

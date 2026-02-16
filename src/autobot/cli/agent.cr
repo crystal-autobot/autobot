@@ -1,8 +1,11 @@
 module Autobot
   module CLI
     module Agent
-      HISTORY_FILE      = Config::Loader.data_dir / "history" / "cli_history"
       MAX_HISTORY_LINES = 1000
+
+      def self.history_file : Path
+        Config::Loader.data_dir / "history" / "cli_history"
+      end
 
       def self.run(
         config_path : String?,
@@ -185,19 +188,19 @@ module Autobot
       end
 
       private def self.load_history : Array(String)
-        Dir.mkdir_p(HISTORY_FILE.parent) unless Dir.exists?(HISTORY_FILE.parent)
+        Dir.mkdir_p(history_file.parent) unless Dir.exists?(history_file.parent)
 
-        if File.exists?(HISTORY_FILE)
-          File.read_lines(HISTORY_FILE).last(MAX_HISTORY_LINES)
+        if File.exists?(history_file)
+          File.read_lines(history_file).last(MAX_HISTORY_LINES)
         else
           [] of String
         end
       end
 
       private def self.save_history(history : Array(String)) : Nil
-        Dir.mkdir_p(HISTORY_FILE.parent) unless Dir.exists?(HISTORY_FILE.parent)
+        Dir.mkdir_p(history_file.parent) unless Dir.exists?(history_file.parent)
         entries = history.last(MAX_HISTORY_LINES)
-        File.write(HISTORY_FILE, entries.join("\n") + "\n")
+        File.write(history_file, entries.join("\n") + "\n")
       end
     end
   end
