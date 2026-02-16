@@ -210,6 +210,15 @@ module Autobot::Agent
         - Custom skills: skills/{skill-name}/SKILL.md
 
         #{build_security_policy(workspace_path)}
+        ## Response Formatting
+        Use simple Markdown for formatting:
+        - **bold** for emphasis (use ** not __)
+        - `code` for inline code and ```language for code blocks
+        - _italic_ for secondary emphasis
+        - - for bullet lists (not nested)
+        - Avoid horizontal rules (---), complex tables, or HTML tags
+        - Keep responses concise, well-structured, and readable
+
         IMPORTANT: When responding to direct questions or conversations, reply directly with your text response.
         Only use the 'message' tool when you need to send a message to a specific chat channel.
         For normal conversation, just respond with text - do not call the message tool.

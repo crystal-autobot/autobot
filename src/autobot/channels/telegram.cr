@@ -4,13 +4,16 @@ require "uri"
 require "./base"
 
 module Autobot::Channels
-  # Converts markdown to Telegram-safe HTML.
+  # Converts Markdown to Telegram-safe HTML.
   #
-  # Telegram supports a limited subset of HTML:
-  # <b>, <i>, <code>, <pre>, <a>, <s>, <u>
+  # Telegram supports: <b>, <i>, <u>, <s>, <code>, <pre>, <a>, <blockquote>
+  # All <, >, & outside tags must be escaped. Code/pre cannot contain other tags.
   module MarkdownToTelegramHTML
+    TELEGRAM_MAX_LENGTH = 4096
+
     CODE_BLOCK_PREFIX  = "\x00CB"
     INLINE_CODE_PREFIX = "\x00IC"
+    UNDERSCORE_PREFIX  = "\x00US"
     SUFFIX             = "\x00"
 
     HEADER_REGEX = Regex.new(%q(^#{1,6}\s+(.+)$), Regex::Options::MULTILINE)
@@ -20,63 +23,143 @@ module Autobot::Channels
 
       code_blocks = [] of String
       inline_codes = [] of String
+      underscore_runs = [] of String
 
       result = text
+      result = extract_code_blocks(result, code_blocks)
+      result = extract_inline_code(result, inline_codes)
 
-      # 1. Extract and protect code blocks
-      result = result.gsub(/```[\w]*\n?([\s\S]*?)```/) do |_, match|
-        code_blocks << match[1]
-        "#{CODE_BLOCK_PREFIX}#{code_blocks.size - 1}#{SUFFIX}"
-      end
-
-      # 2. Extract and protect inline code
-      result = result.gsub(/`([^`]+)`/) do |_, match|
-        inline_codes << match[1]
-        "#{INLINE_CODE_PREFIX}#{inline_codes.size - 1}#{SUFFIX}"
-      end
-
-      # 3. Strip headers
+      # Strip block elements (before HTML escape since > would be escaped)
       result = result.gsub(HEADER_REGEX, "\\1")
-
-      # 4. Strip blockquotes
       result = result.gsub(/^>\s*(.*)$/m, "\\1")
+      result = result.gsub(/^[-*_]{3,}\s*$/m, "")
 
-      # 5. Escape HTML
       result = escape_html(result)
+      result = protect_underscore_runs(result, underscore_runs)
+      result = convert_inline_formatting(result)
+      result = restore_underscore_runs(result, underscore_runs)
+      result = restore_placeholders(result, inline_codes, code_blocks)
 
-      # 6. Links [text](url)
-      result = result.gsub(/\[([^\]]+)\]\(([^)]+)\)/, %(<a href="\\2">\\1</a>))
-
-      # 7. Bold **text** or __text__
-      result = result.gsub(/\*\*(.+?)\*\*/, "<b>\\1</b>")
-      result = result.gsub(/__(.+?)__/, "<b>\\1</b>")
-
-      # 8. Italic _text_ (avoid matching inside words)
-      result = result.gsub(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/, "<i>\\1</i>")
-
-      # 9. Strikethrough ~~text~~
-      result = result.gsub(/~~(.+?)~~/, "<s>\\1</s>")
-
-      # 10. Bullet lists
-      result = result.gsub(/^[-*]\s+/m, "\u{2022} ")
-
-      # 11. Restore inline code
-      inline_codes.each_with_index do |code, i|
-        escaped = escape_html(code)
-        result = result.gsub("#{INLINE_CODE_PREFIX}#{i}#{SUFFIX}", "<code>#{escaped}</code>")
-      end
-
-      # 12. Restore code blocks
-      code_blocks.each_with_index do |code, i|
-        escaped = escape_html(code)
-        result = result.gsub("#{CODE_BLOCK_PREFIX}#{i}#{SUFFIX}", "<pre><code>#{escaped}</code></pre>")
-      end
-
-      result
+      result.strip
     end
 
     def self.escape_html(text : String) : String
       text.gsub('&', "&amp;").gsub('<', "&lt;").gsub('>', "&gt;")
+    end
+
+    def self.valid_html?(text : String) : Bool
+      stack = [] of String
+      text.scan(/<(\/?)(b|i|code|pre|a|s|u)(?:\s[^>]*)?>/).each do |match|
+        if match[1] == "/"
+          return false if stack.empty? || stack.last != match[2]
+          stack.pop
+        else
+          stack << match[2]
+        end
+      end
+      stack.empty?
+    end
+
+    def self.strip_html(text : String) : String
+      text.gsub(/<\/?(?:b|i|code|pre|a|s|u)(?:\s[^>]*)?>/, "")
+    end
+
+    def self.split_message(text : String) : Array(String)
+      return [text] if text.size <= TELEGRAM_MAX_LENGTH
+      split_by_paragraphs(text)
+    end
+
+    private def self.extract_code_blocks(text : String, store : Array(String)) : String
+      text.gsub(/```(\w*)\n?([\s\S]*?)```/) do |_, match|
+        store << build_code_block_html(match[1], escape_html(match[2]))
+        "#{CODE_BLOCK_PREFIX}#{store.size - 1}#{SUFFIX}"
+      end
+    end
+
+    private def self.build_code_block_html(lang : String, escaped_code : String) : String
+      if lang.empty?
+        "<pre><code>#{escaped_code}</code></pre>"
+      else
+        "<pre><code class=\"language-#{escape_html(lang)}\">#{escaped_code}</code></pre>"
+      end
+    end
+
+    private def self.extract_inline_code(text : String, store : Array(String)) : String
+      text.gsub(/`([^`]+)`/) do |_, match|
+        store << "<code>#{escape_html(match[1])}</code>"
+        "#{INLINE_CODE_PREFIX}#{store.size - 1}#{SUFFIX}"
+      end
+    end
+
+    private def self.protect_underscore_runs(text : String, store : Array(String)) : String
+      text.gsub(/_{3,}/) do |run|
+        store << run
+        "#{UNDERSCORE_PREFIX}#{store.size - 1}#{SUFFIX}"
+      end
+    end
+
+    private def self.restore_underscore_runs(text : String, store : Array(String)) : String
+      result = text
+      store.each_with_index do |run, i|
+        result = result.gsub("#{UNDERSCORE_PREFIX}#{i}#{SUFFIX}", run)
+      end
+      result
+    end
+
+    private def self.convert_inline_formatting(text : String) : String
+      result = text
+      result = result.gsub(/\[([^\]]+)\]\(([^)]+)\)/, %(<a href="\\2">\\1</a>))
+      result = result.gsub(/\*\*(.+?)\*\*/, "<b>\\1</b>")
+      result = result.gsub(/__(.+?)__/, "<b>\\1</b>")
+      result = result.gsub(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/, "<i>\\1</i>")
+      result = result.gsub(/~~(.+?)~~/, "<s>\\1</s>")
+      result = result.gsub(/^[-*]\s+/m, "\u{2022} ")
+      result
+    end
+
+    private def self.restore_placeholders(text : String, inline_codes : Array(String), code_blocks : Array(String)) : String
+      result = text
+      inline_codes.each_with_index do |html, i|
+        result = result.gsub("#{INLINE_CODE_PREFIX}#{i}#{SUFFIX}", html)
+      end
+      code_blocks.each_with_index do |html, i|
+        result = result.gsub("#{CODE_BLOCK_PREFIX}#{i}#{SUFFIX}", html)
+      end
+      result
+    end
+
+    private def self.split_by_paragraphs(text : String) : Array(String)
+      chunks = [] of String
+      current = ""
+
+      text.split("\n\n").each do |para|
+        candidate = current.empty? ? para : "#{current}\n\n#{para}"
+        if candidate.size <= TELEGRAM_MAX_LENGTH
+          current = candidate
+        else
+          chunks << current unless current.empty?
+          current = accumulate_lines(para, chunks)
+        end
+      end
+
+      chunks << current unless current.empty?
+      chunks
+    end
+
+    private def self.accumulate_lines(para : String, chunks : Array(String)) : String
+      return para if para.size <= TELEGRAM_MAX_LENGTH
+
+      current = ""
+      para.split("\n").each do |line|
+        candidate = current.empty? ? line : "#{current}\n#{line}"
+        if candidate.size <= TELEGRAM_MAX_LENGTH
+          current = candidate
+        else
+          chunks << current unless current.empty?
+          current = line[0, TELEGRAM_MAX_LENGTH]
+        end
+      end
+      current
     end
   end
 
@@ -142,9 +225,16 @@ module Autobot::Channels
       stop_typing(message.chat_id)
 
       html = MarkdownToTelegramHTML.convert(message.content)
+      html = MarkdownToTelegramHTML.strip_html(html) unless MarkdownToTelegramHTML.valid_html?(html)
 
+      MarkdownToTelegramHTML.split_message(html).each do |chunk|
+        send_html_chunk(message.chat_id, chunk)
+      end
+    end
+
+    private def send_html_chunk(chat_id : String, html : String) : Nil
       result = api_request("sendMessage", {
-        "chat_id"    => message.chat_id,
+        "chat_id"    => chat_id,
         "text"       => html,
         "parse_mode" => "HTML",
       })
@@ -152,8 +242,8 @@ module Autobot::Channels
       unless result
         Log.warn { "HTML parse failed, falling back to plain text" }
         api_request("sendMessage", {
-          "chat_id" => message.chat_id,
-          "text"    => message.content,
+          "chat_id" => chat_id,
+          "text"    => MarkdownToTelegramHTML.strip_html(html),
         })
       end
     end
@@ -555,13 +645,19 @@ module Autobot::Channels
           Log.warn { "Telegram API #{method} failed: #{data["description"]?.try(&.as_s)}" }
         end
       else
-        Log.error { "Telegram API #{method} HTTP #{response.status_code}" }
+        Log.error { "Telegram API #{method} HTTP #{response.status_code}: #{parse_error_description(response.body)}" }
       end
 
       nil
     rescue ex
       Log.error { "Telegram API #{method} error: #{ex.message}" }
       nil
+    end
+
+    private def parse_error_description(body : String) : String
+      JSON.parse(body)["description"]?.try(&.as_s) || "unknown error"
+    rescue
+      "unparseable response"
     end
 
     private def api_get(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
