@@ -134,10 +134,16 @@ channels:
     allow_from: ["username1", "username2"]
     custom_commands:
       macros:
+        # Simple format (command name used as description)
         summarize: "Summarize the last conversation in 3 bullet points"
-        translate: "Translate the following to English"
+        # Rich format (with custom description shown in Telegram command menu)
+        translate:
+          prompt: "Translate the following to English"
+          description: "Translate text to English"
       scripts:
-        deploy: "/home/user/scripts/deploy.sh"
+        deploy:
+          path: "/home/user/scripts/deploy.sh"
+          description: "Deploy to production"
         status: "/home/user/scripts/check_status.sh"
 
   slack:

@@ -13,10 +13,72 @@ module Autobot::Config
     end
   end
 
+  # A custom command entry that supports both simple string and rich format.
+  #
+  # Simple format (backward compatible):
+  #   summarize: "Summarize the conversation"
+  #
+  # Rich format (with description):
+  #   summarize:
+  #     prompt: "Summarize the conversation"      # use "prompt" for macros
+  #     description: "Summarize the conversation"
+  #
+  #   deploy:
+  #     path: "/home/user/scripts/deploy.sh"       # use "path" for scripts
+  #     description: "Deploy application to production"
+  struct CustomCommandEntry
+    getter value : String
+    getter description : String?
+
+    def initialize(@value : String, @description : String? = nil)
+    end
+
+    def initialize(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
+      case node
+      when YAML::Nodes::Scalar
+        @value = node.value
+        @description = nil
+      when YAML::Nodes::Mapping
+        @value = ""
+        @description = nil
+        nodes = node.nodes
+        i = 0
+        while i < nodes.size - 1
+          key_node = nodes[i]
+          val_node = nodes[i + 1]
+          if key_node.is_a?(YAML::Nodes::Scalar) && val_node.is_a?(YAML::Nodes::Scalar)
+            case key_node.value
+            when "prompt", "path"
+              @value = val_node.value
+            when "description"
+              @description = val_node.value
+            end
+          end
+          i += 2
+        end
+      else
+        node.raise "Expected scalar or mapping for custom command entry"
+      end
+    end
+
+    def to_yaml(yaml : YAML::Nodes::Builder) : Nil
+      if desc = @description
+        yaml.mapping do
+          yaml.scalar "prompt"
+          yaml.scalar @value
+          yaml.scalar "description"
+          yaml.scalar desc
+        end
+      else
+        yaml.scalar @value
+      end
+    end
+  end
+
   class CustomCommandsConfig
     include YAML::Serializable
-    property macros : Hash(String, String) = {} of String => String
-    property scripts : Hash(String, String) = {} of String => String
+    property macros : Hash(String, CustomCommandEntry) = {} of String => CustomCommandEntry
+    property scripts : Hash(String, CustomCommandEntry) = {} of String => CustomCommandEntry
 
     def initialize
     end

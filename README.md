@@ -154,13 +154,18 @@ channels:
     custom_commands:
       macros:
         summarize: "Summarize our conversation in 3 bullet points"
-        translate: "Translate the following to English"
+        translate:
+          prompt: "Translate the following to English"
+          description: "Translate text to English"
       scripts:
-        deploy: "/home/user/scripts/deploy.sh"
+        deploy:
+          path: "/home/user/scripts/deploy.sh"
+          description: "Deploy to production"
         status: "/home/user/scripts/system_status.sh"
 ```
 
 Use `/summarize` or `/deploy` in Telegram to trigger them.
+Commands with a `description` show it in Telegram's command menu; otherwise the command name is used.
 
 </details>
 
