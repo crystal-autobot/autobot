@@ -469,11 +469,11 @@ module Autobot::Channels
         "/help - Show this help message",
       ]
 
-      @custom_commands.macros.each_key do |cmd|
-        lines << "/#{cmd} - Custom prompt macro"
+      @custom_commands.macros.each do |cmd, entry|
+        lines << "/#{cmd} - #{command_description(entry, cmd)}"
       end
-      @custom_commands.scripts.each_key do |cmd|
-        lines << "/#{cmd} - Run script"
+      @custom_commands.scripts.each do |cmd, entry|
+        lines << "/#{cmd} - #{command_description(entry, cmd)}"
       end
 
       lines << "\nSend me a text message to chat!"
@@ -486,7 +486,8 @@ module Autobot::Channels
     end
 
     private def handle_custom_command(command : String, args : String, chat_id : String, sender_id : String) : Nil
-      if prompt = @custom_commands.macros[command]?
+      if entry = @custom_commands.macros[command]?
+        prompt = entry.value
         content = args.empty? ? prompt : "#{prompt}\n\n#{args}"
         start_typing(chat_id)
         handle_message(
@@ -498,9 +499,9 @@ module Autobot::Channels
         return
       end
 
-      if script_path = @custom_commands.scripts[command]?
+      if entry = @custom_commands.scripts[command]?
         start_typing(chat_id)
-        execute_script(script_path, args, chat_id)
+        execute_script(entry.value, args, chat_id)
       end
     end
 
@@ -637,16 +638,20 @@ module Autobot::Channels
         {"command" => "help", "description" => "Show available commands"},
       ]
 
-      @custom_commands.macros.each_key do |cmd|
-        commands << {"command" => cmd, "description" => "Custom prompt macro"}
+      @custom_commands.macros.each do |cmd, entry|
+        commands << {"command" => cmd, "description" => command_description(entry, cmd)}
       end
-      @custom_commands.scripts.each_key do |cmd|
-        commands << {"command" => cmd, "description" => "Run script"}
+      @custom_commands.scripts.each do |cmd, entry|
+        commands << {"command" => cmd, "description" => command_description(entry, cmd)}
       end
 
       api_request("setMyCommands", {"commands" => commands.to_json})
     rescue ex
       Log.warn { "Failed to register bot commands: #{ex.message}" }
+    end
+
+    private def command_description(entry : Config::CustomCommandEntry, command_name : String) : String
+      entry.description || command_name.gsub(/[_-]/, " ").capitalize
     end
 
     private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?

@@ -46,7 +46,7 @@ describe Autobot::Config::Config do
       tg.try(&.allow_from).should eq(["user1", "user2"])
     end
 
-    it "parses custom commands" do
+    it "parses custom commands with simple string format" do
       yaml = <<-YAML
       channels:
         telegram:
@@ -62,8 +62,70 @@ describe Autobot::Config::Config do
       config = Autobot::Config::Config.from_yaml(yaml)
       cmds = config.channels.try(&.telegram.try(&.custom_commands))
       cmds.should_not be_nil
-      cmds.try(&.macros["summarize"]).should eq("Summarize the conversation")
-      cmds.try(&.scripts["deploy"]).should eq("/path/to/deploy.sh")
+      cmds.try(&.macros["summarize"]?.try(&.value)).should eq("Summarize the conversation")
+      cmds.try(&.macros["summarize"]?.try(&.description)).should be_nil
+      cmds.try(&.scripts["deploy"]?.try(&.value)).should eq("/path/to/deploy.sh")
+      cmds.try(&.scripts["deploy"]?.try(&.description)).should be_nil
+    end
+
+    it "parses custom commands with rich format including descriptions" do
+      yaml = <<-YAML
+      channels:
+        telegram:
+          enabled: true
+          token: "token"
+          custom_commands:
+            macros:
+              summarize:
+                prompt: "Summarize the conversation"
+                description: "Summarize chat in bullet points"
+            scripts:
+              deploy:
+                path: "/path/to/deploy.sh"
+                description: "Deploy to production"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      cmds = config.channels.try(&.telegram.try(&.custom_commands))
+      cmds.should_not be_nil
+      cmds.try(&.macros["summarize"]?.try(&.value)).should eq("Summarize the conversation")
+      cmds.try(&.macros["summarize"]?.try(&.description)).should eq("Summarize chat in bullet points")
+      cmds.try(&.scripts["deploy"]?.try(&.value)).should eq("/path/to/deploy.sh")
+      cmds.try(&.scripts["deploy"]?.try(&.description)).should eq("Deploy to production")
+    end
+
+    it "parses custom commands with mixed formats" do
+      yaml = <<-YAML
+      channels:
+        telegram:
+          enabled: true
+          token: "token"
+          custom_commands:
+            macros:
+              summarize: "Summarize the conversation"
+              translate:
+                prompt: "Translate the following to English"
+                description: "Translate text to English"
+            scripts:
+              deploy: "/path/to/deploy.sh"
+              status:
+                path: "/path/to/status.sh"
+                description: "Check system status"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      cmds = config.channels.try(&.telegram.try(&.custom_commands))
+      cmds.should_not be_nil
+
+      cmds.try(&.macros["summarize"]?.try(&.value)).should eq("Summarize the conversation")
+      cmds.try(&.macros["summarize"]?.try(&.description)).should be_nil
+      cmds.try(&.macros["translate"]?.try(&.value)).should eq("Translate the following to English")
+      cmds.try(&.macros["translate"]?.try(&.description)).should eq("Translate text to English")
+
+      cmds.try(&.scripts["deploy"]?.try(&.value)).should eq("/path/to/deploy.sh")
+      cmds.try(&.scripts["deploy"]?.try(&.description)).should be_nil
+      cmds.try(&.scripts["status"]?.try(&.value)).should eq("/path/to/status.sh")
+      cmds.try(&.scripts["status"]?.try(&.description)).should eq("Check system status")
     end
 
     it "parses agent defaults" do
@@ -187,6 +249,54 @@ describe Autobot::Config::TelegramConfig do
     tg.enabled?.should be_false
     tg.token.should eq("")
     tg.allow_from.should be_empty
+  end
+end
+
+describe Autobot::Config::CustomCommandEntry do
+  it "parses from a simple string" do
+    entry = Autobot::Config::CustomCommandEntry.from_yaml(%("hello world"))
+    entry.value.should eq("hello world")
+    entry.description.should be_nil
+  end
+
+  it "parses from a mapping with prompt key" do
+    yaml = <<-YAML
+    prompt: "Summarize the conversation"
+    description: "Summarize chat"
+    YAML
+
+    entry = Autobot::Config::CustomCommandEntry.from_yaml(yaml)
+    entry.value.should eq("Summarize the conversation")
+    entry.description.should eq("Summarize chat")
+  end
+
+  it "parses from a mapping with path key" do
+    yaml = <<-YAML
+    path: "/path/to/script.sh"
+    description: "Run a script"
+    YAML
+
+    entry = Autobot::Config::CustomCommandEntry.from_yaml(yaml)
+    entry.value.should eq("/path/to/script.sh")
+    entry.description.should eq("Run a script")
+  end
+
+  it "parses from a mapping without description" do
+    yaml = <<-YAML
+    prompt: "Do something"
+    YAML
+
+    entry = Autobot::Config::CustomCommandEntry.from_yaml(yaml)
+    entry.value.should eq("Do something")
+    entry.description.should be_nil
+  end
+end
+
+describe Autobot::Config::CustomCommandsConfig do
+  it "has empty defaults" do
+    config = Autobot::Config::CustomCommandsConfig.from_yaml("--- {}")
+    config.macros.should be_empty
+    config.scripts.should be_empty
   end
 end
 
