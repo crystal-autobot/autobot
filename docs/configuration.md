@@ -78,6 +78,29 @@ tools:
 
 When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.
 
+## MCP (Model Context Protocol)
+
+Connect to external MCP servers to give the LLM access to remote tools (Garmin, GitHub, etc.).
+
+```yaml
+mcp:
+  servers:
+    garmin:
+      command: "uvx"
+      args: ["--python", "3.12", "--from", "git+https://github.com/Taxuspt/garmin_mcp", "garmin-mcp"]
+      env:
+        GARMIN_EMAIL: "${GARMIN_EMAIL}"
+    github:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_TOKEN: "${GITHUB_TOKEN}"
+```
+
+Tools are auto-discovered at startup and registered as `mcp_{server}_{tool}`. MCP servers run unsandboxed (they need network access) but with isolated env vars.
+
+**-> [MCP Documentation](mcp.md)**
+
 ## Cron
 
 ```yaml
@@ -174,6 +197,20 @@ tools:
 cron:
   enabled: true
   store_path: "./cron.json"
+
+# MCP servers (external tool providers)
+mcp:
+  servers:
+    garmin:
+      command: "uvx"
+      args: ["--python", "3.12", "--from", "git+https://github.com/Taxuspt/garmin_mcp", "garmin-mcp"]
+      env:
+        GARMIN_EMAIL: "${GARMIN_EMAIL}"
+    github:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_TOKEN: "${GITHUB_TOKEN}"
 
 # Gateway API server
 gateway:

@@ -16,6 +16,7 @@ Autobot is organized around a message-driven agent loop.
 - `channels/*`: Channel adapters and message ingress/egress
 - `agent/*`: Main loop, context assembly, subagent support, memory hooks
 - `tools/*`: Built-in tool registry and tool implementations
+- `mcp/*`: MCP client, proxy tools, and setup for external tool servers
 - `plugins/*`: Plugin loader + lifecycle registry
 - `cron/*`: Scheduler and job model
 - `session/*`: JSONL-based session persistence

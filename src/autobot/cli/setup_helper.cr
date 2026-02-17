@@ -34,7 +34,8 @@ module Autobot
         end
       end
 
-      # Sets up tool registry with built-in tools and plugins
+      # Sets up tool registry with built-in tools, MCP servers, and plugins.
+      # Returns {tool_registry, plugin_registry, mcp_clients}.
       def self.setup_tools(config : Config::Config, verbose : Bool = false)
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
@@ -48,6 +49,12 @@ module Autobot
             (Config::Loader.skills_dir).to_s,
           ]
         )
+
+        # MCP servers (before plugins so plugins can see MCP tools)
+        mcp_clients = Mcp.setup(config, tool_registry)
+        if verbose && !mcp_clients.empty?
+          puts "✓ MCP: #{mcp_clients.size} server(s) connected"
+        end
 
         plugin_registry = Plugins::Registry.new
         executor = tool_registry.sandbox_executor || Tools::SandboxExecutor.new(nil)
@@ -65,7 +72,7 @@ module Autobot
           puts "✓ Tools: #{tool_registry.size} registered"
         end
 
-        {tool_registry, plugin_registry}
+        {tool_registry, plugin_registry, mcp_clients}
       end
     end
   end
