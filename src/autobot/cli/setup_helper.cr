@@ -50,11 +50,8 @@ module Autobot
           ]
         )
 
-        # MCP servers (before plugins so plugins can see MCP tools)
+        # MCP servers (started in background, tools register as they connect)
         mcp_clients = Mcp.setup(config, tool_registry)
-        if verbose && !mcp_clients.empty?
-          puts "✓ MCP: #{mcp_clients.size} server(s) connected"
-        end
 
         plugin_registry = Plugins::Registry.new
         executor = tool_registry.sandbox_executor || Tools::SandboxExecutor.new(nil)

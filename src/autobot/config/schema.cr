@@ -233,11 +233,13 @@ module Autobot::Config
   #     args: ["--python", "3.12", "garmin-mcp"]
   #     env:
   #       GARMIN_EMAIL: "${GARMIN_EMAIL}"
+  #     tools: ["get_activities*", "get_heart_rate*"]  # optional allowlist
   class McpServerConfig
     include YAML::Serializable
     property command : String = ""
     property args : Array(String) = [] of String
     property env : Hash(String, String) = {} of String => String
+    property tools : Array(String) = [] of String
 
     def initialize
     end

@@ -19,6 +19,16 @@ describe Autobot::Config::McpServerConfig do
     config.command.should eq("")
     config.args.should be_empty
     config.env.should be_empty
+    config.tools.should be_empty
+  end
+
+  it "parses tools allowlist" do
+    config = Autobot::Config::McpServerConfig.from_yaml(<<-YAML
+    command: "echo"
+    tools: ["get_activities", "get_heart_rate*"]
+    YAML
+    )
+    config.tools.should eq(["get_activities", "get_heart_rate*"])
   end
 end
 
@@ -56,6 +66,31 @@ describe Autobot::Config::Config do
   it "allows missing mcp section" do
     config = Autobot::Config::Config.from_yaml("--- {}")
     config.mcp.should be_nil
+  end
+end
+
+describe Autobot::Mcp do
+  describe ".tool_allowed?" do
+    it "allows all tools when allowlist is empty" do
+      Autobot::Mcp.tool_allowed?("anything", [] of String).should be_true
+    end
+
+    it "allows exact match" do
+      Autobot::Mcp.tool_allowed?("get_activities", ["get_activities", "get_steps"]).should be_true
+    end
+
+    it "rejects non-matching tool" do
+      Autobot::Mcp.tool_allowed?("delete_all", ["get_activities", "get_steps"]).should be_false
+    end
+
+    it "supports prefix matching with *" do
+      Autobot::Mcp.tool_allowed?("get_heart_rate_daily", ["get_heart_rate*"]).should be_true
+      Autobot::Mcp.tool_allowed?("get_steps", ["get_heart_rate*"]).should be_false
+    end
+
+    it "matches exact name even with * pattern present" do
+      Autobot::Mcp.tool_allowed?("list_workouts", ["get_*", "list_workouts"]).should be_true
+    end
   end
 end
 

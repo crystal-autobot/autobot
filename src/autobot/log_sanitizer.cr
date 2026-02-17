@@ -1,38 +1,31 @@
 module Autobot
   module LogSanitizer
+    URL_KEY_PARAMS = /([?&])(api_key|apikey|key|token)=([^&\s]+)/i
+    BEARER_TOKEN   = /Bearer\s+[A-Za-z0-9_\-\.]+/i
+    ANTHROPIC_KEY  = /sk-ant-[A-Za-z0-9_-]+/
+    OPENAI_KEY     = /sk-[A-Za-z0-9]{16,}/
+    AWS_KEY        = /AKIA[A-Z0-9]{16}/
+    TOKEN_VALUE    = /token[=:]\s*['"]*([A-Za-z0-9_\-\.]+)['"]*\b/i
+    PASSWORD_VALUE = /password[=:]\s*['"]*([^&\s'"]+)['"]*\b/i
+    AUTH_HEADER    = /Authorization:\s*([^\s]+)/i
+    API_KEY_HEADER = /x-api-key:\s*([^\s]+)/i
+    GENERIC_KEY    = /\b[A-Za-z0-9]+[-_]?[A-Za-z0-9]{20,}\b/
+
+    SENSITIVE_URL_PARAMS = {"api_key", "apikey", "key", "token", "secret", "password"}
+
     PATTERNS = [
-      # API key parameters in URLs (check early to catch before generic pattern)
-      {pattern: /([?&])(api_key|apikey|key|token)=([^&\s]+)/i, replacement: "\\1\\2=[REDACTED]"},
-
-      # Bearer tokens
-      {pattern: /Bearer\s+[A-Za-z0-9_\-\.]+/i, replacement: "Bearer [REDACTED]"},
-
-      # Anthropic API keys (sk-ant-)
-      {pattern: /sk-ant-[A-Za-z0-9_-]+/, replacement: "sk-ant-[REDACTED]"},
-
-      # OpenAI API keys (sk-)
-      {pattern: /sk-[A-Za-z0-9]{16,}/, replacement: "sk-[REDACTED]"},
-
-      # AWS keys
-      {pattern: /AKIA[A-Z0-9]{16}/, replacement: "AKIA[REDACTED]"},
-
-      # Generic tokens in key=value format
-      {pattern: /token[=:]\s*['"]*([A-Za-z0-9_\-\.]+)['"]*\b/i, replacement: "token=[REDACTED]"},
-
-      # Passwords in URLs or params
-      {pattern: /password[=:]\s*['"]*([^&\s'"]+)['"]*\b/i, replacement: "password=[REDACTED]"},
-
-      # Authorization headers with values
-      {pattern: /Authorization:\s*([^\s]+)/i, replacement: "Authorization: [REDACTED]"},
-
-      # X-API-Key headers
-      {pattern: /x-api-key:\s*([^\s]+)/i, replacement: "x-api-key: [REDACTED]"},
-
-      # Generic API keys (20+ chars, must be after specific patterns)
-      {pattern: /\b[A-Za-z0-9_-]{20,}\b/, replacement: "[REDACTED_KEY]"},
+      {pattern: URL_KEY_PARAMS, replacement: "\\1\\2=[REDACTED]"},
+      {pattern: BEARER_TOKEN, replacement: "Bearer [REDACTED]"},
+      {pattern: ANTHROPIC_KEY, replacement: "sk-ant-[REDACTED]"},
+      {pattern: OPENAI_KEY, replacement: "sk-[REDACTED]"},
+      {pattern: AWS_KEY, replacement: "AKIA[REDACTED]"},
+      {pattern: TOKEN_VALUE, replacement: "token=[REDACTED]"},
+      {pattern: PASSWORD_VALUE, replacement: "password=[REDACTED]"},
+      {pattern: AUTH_HEADER, replacement: "Authorization: [REDACTED]"},
+      {pattern: API_KEY_HEADER, replacement: "x-api-key: [REDACTED]"},
+      {pattern: GENERIC_KEY, replacement: "[REDACTED_KEY]"},
     ]
 
-    # Sanitize a log message by redacting sensitive patterns
     def self.sanitize(message : String) : String
       result = message
 
@@ -43,15 +36,13 @@ module Autobot
       result
     end
 
-    # Sanitize a URL by redacting query parameters that might contain secrets
     def self.sanitize_url(url : String) : String
       uri = URI.parse(url)
 
-      # Redact sensitive query parameters
       if query = uri.query
         sanitized_params = query.split('&').map do |param|
           key = param.split('=', 2).first
-          if key && {"api_key", "apikey", "key", "token", "secret", "password"}.includes?(key.downcase)
+          if key && SENSITIVE_URL_PARAMS.includes?(key.downcase)
             "#{key}=[REDACTED]"
           else
             param
@@ -62,11 +53,9 @@ module Autobot
 
       uri.to_s
     rescue
-      # If URL parsing fails, do basic sanitization
       sanitize(url)
     end
 
-    # Check if a string looks like it contains sensitive data
     def self.contains_sensitive_data?(text : String) : Bool
       PATTERNS.any?(&.[:pattern].matches?(text))
     end

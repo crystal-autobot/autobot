@@ -14,9 +14,9 @@ module Autobot
   module Mcp
     Log = ::Log.for("mcp")
 
-    # Spawns MCP server processes defined in config, discovers tools,
-    # and registers them in the tool registry.
-    # Returns the list of active clients for lifecycle management.
+    # Starts MCP server processes in the background without blocking startup.
+    # Returns the clients array immediately; servers connect and register
+    # their tools asynchronously as they become ready.
     # No-op when no MCP config exists.
     def self.setup(config : Config::Config, tool_registry : Tools::Registry) : Array(Client)
       clients = [] of Client
@@ -27,15 +27,43 @@ module Autobot
       servers = mcp_config.servers
       return clients if servers.empty?
 
-      servers.each do |server_name, server_config|
-        client = start_server(server_name, server_config)
-        next unless client
+      Log.info { "Starting #{servers.size} MCP server(s) in background" }
 
-        clients << client
-        register_tools(client, tool_registry)
+      spawn(name: "mcp-setup") do
+        start_all(servers, clients, tool_registry)
       end
 
       clients
+    end
+
+    # Starts all servers concurrently in the background,
+    # discovers tools, and registers them as they connect.
+    private def self.start_all(
+      servers : Hash(String, Config::McpServerConfig),
+      clients : Array(Client),
+      tool_registry : Tools::Registry,
+    ) : Nil
+      channel = Channel({Client, Config::McpServerConfig} | Nil).new
+
+      servers.each do |server_name, server_config|
+        spawn do
+          client = start_server(server_name, server_config)
+          channel.send(client ? {client, server_config} : nil)
+        end
+      end
+
+      servers.size.times do
+        result = channel.receive
+        next unless result
+
+        client, server_config = result
+        clients << client
+        register_tools(client, tool_registry, server_config.tools)
+      end
+
+      Log.info { "MCP setup complete: #{clients.size}/#{servers.size} server(s) connected" }
+    rescue ex
+      Log.error { "MCP background setup failed: #{ex.message}" }
     end
 
     # Gracefully stop all MCP client processes.
@@ -67,18 +95,42 @@ module Autobot
       nil
     end
 
-    private def self.register_tools(client : Client, registry : Tools::Registry) : Nil
+    private def self.register_tools(client : Client, registry : Tools::Registry, allowlist : Array(String)) : Nil
       tools = client.list_tools
+      registered = 0
 
       tools.each do |tool_json|
+        remote_name = tool_json["name"]?.try(&.as_s?) || "unknown"
+        next unless tool_allowed?(remote_name, allowlist)
+
         proxy = ProxyTool.from_mcp_tool(client, tool_json)
         registry.register(proxy)
+        registered += 1
         Log.info { "Registered MCP tool: #{proxy.name}" }
       end
 
-      Log.info { "[#{client.server_name}] #{tools.size} tools discovered" }
+      if allowlist.empty?
+        Log.info { "[#{client.server_name}] #{registered} tools registered" }
+      else
+        Log.info { "[#{client.server_name}] #{registered}/#{tools.size} tools registered (filtered)" }
+      end
     rescue ex
       Log.error { "[#{client.server_name}] Failed to discover tools: #{ex.message}" }
+    end
+
+    # Checks if a tool name matches the allowlist.
+    # Empty allowlist means all tools are allowed.
+    # Patterns ending with `*` match as prefixes.
+    def self.tool_allowed?(name : String, allowlist : Array(String)) : Bool
+      return true if allowlist.empty?
+
+      allowlist.any? do |pattern|
+        if pattern.ends_with?("*")
+          name.starts_with?(pattern.rchop("*"))
+        else
+          name == pattern
+        end
+      end
     end
   end
 end
