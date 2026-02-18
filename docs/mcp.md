@@ -5,11 +5,14 @@ Autobot can connect to external MCP servers to extend the LLM's capabilities wit
 ## How It Works
 
 1. On startup, autobot reads the `mcp.servers` section from `config.yml`
-2. For each server, it spawns the command as a child process
-3. Performs the MCP protocol handshake (initialize + notifications/initialized)
-4. Calls `tools/list` to discover available tools
-5. Registers each tool as `mcp_{server}_{tool}` in the tool registry
-6. The LLM sees these as native tools and can call them like any other
+2. All servers are started **in the background** — they do not block startup
+3. For each server, it spawns the command as a child process
+4. Performs the MCP protocol handshake (initialize + notifications/initialized)
+5. Calls `tools/list` to discover available tools
+6. Registers each tool as `mcp_{server}_{tool}` in the tool registry
+7. The LLM sees these as native tools and can call them like any other
+
+Since MCP servers connect asynchronously, tools become available shortly after startup rather than delaying it. Multiple servers are started concurrently.
 
 ## Configuration
 
@@ -38,6 +41,7 @@ Each server entry has:
 | `command` | string | Executable to spawn (must be in PATH) |
 | `args` | string[] | Command-line arguments |
 | `env` | map | Environment variables passed to the process |
+| `tools` | string[] | Tool allowlist (empty = all). Supports `*` prefix matching |
 
 Environment variables support `${VAR}` expansion from your `.env` file or shell environment.
 
