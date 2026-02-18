@@ -1,4 +1,4 @@
-require "../../spec_helper"
+require "../../../spec_helper"
 
 describe Autobot::Providers::ToolConverter do
   describe ".build_tool_config" do
@@ -16,7 +16,7 @@ describe Autobot::Providers::ToolConverter do
       result = Autobot::Providers::ToolConverter.build_tool_config(tools)
 
       result.should_not be_nil
-      config = result.not_nil!
+      config = result.as(JSON::Any)
       tool_specs = config["tools"].as_a
       tool_specs.size.should eq(1)
 
@@ -31,7 +31,7 @@ describe Autobot::Providers::ToolConverter do
 
       result = Autobot::Providers::ToolConverter.build_tool_config(tools)
 
-      config = result.not_nil!
+      config = result.as(JSON::Any)
       config["toolChoice"]["auto"].should_not be_nil
     end
 
@@ -43,7 +43,7 @@ describe Autobot::Providers::ToolConverter do
 
       result = Autobot::Providers::ToolConverter.build_tool_config(tools)
 
-      config = result.not_nil!
+      config = result.as(JSON::Any)
       config["tools"].as_a.size.should eq(2)
     end
 
@@ -70,7 +70,7 @@ describe Autobot::Providers::ToolConverter do
 
       result = Autobot::Providers::ToolConverter.build_tool_config(tools)
 
-      config = result.not_nil!
+      config = result.as(JSON::Any)
       input_schema = config["tools"][0]["toolSpec"]["inputSchema"]["json"]
       input_schema["type"].as_s.should eq("object")
       input_schema["properties"]["path"]["type"].as_s.should eq("string")

@@ -18,6 +18,7 @@ module Autobot::Config
       /AIzaSy[A-Za-z0-9_-]{33}/,   # Google API keys
       /sk-[a-z0-9]{32}/,           # OpenRouter keys
       /gsk_[A-Za-z0-9]{20,}/,      # Groq keys
+      /AKIA[A-Z0-9]{16}/,          # AWS access key IDs
     ]
 
     # Validate security configuration

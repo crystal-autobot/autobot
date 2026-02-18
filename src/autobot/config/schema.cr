@@ -300,7 +300,7 @@ module Autobot::Config
       model_str = (model || resolved_model).downcase
 
       # Bedrock is handled separately via match_bedrock
-      return {nil, nil} if model_str.includes?("bedrock")
+      return {nil, nil} if model_str.starts_with?("bedrock/")
 
       if p = providers
         {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm] %}
@@ -323,7 +323,7 @@ module Autobot::Config
     def match_bedrock(model : String? = nil) : BedrockProviderConfig?
       resolved_model = agents.try(&.defaults.try(&.model)) || "anthropic/claude-sonnet-4-5"
       model_str = (model || resolved_model).downcase
-      return nil unless model_str.includes?("bedrock")
+      return nil unless model_str.starts_with?("bedrock/")
 
       bedrock = providers.try(&.bedrock)
       return nil unless bedrock && bedrock.configured?

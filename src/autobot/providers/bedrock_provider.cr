@@ -67,7 +67,8 @@ module Autobot::Providers
       body = build_request_body(messages, tools, max_tokens, temperature)
       url = build_endpoint_url(effective_model)
 
-      Log.debug { "POST #{url} model=#{effective_model}" }
+      Log.info { "Bedrock: region=#{@region} model=#{effective_model}" }
+      Log.debug { "POST #{url}" }
       response_body = execute_request(url, body.to_json)
       parse_response(response_body)
     rescue ex
@@ -110,7 +111,15 @@ module Autobot::Providers
     private def build_guardrail_config : JSON::Any?
       id = @guardrail_id
       version = @guardrail_version
+
+      if id && !version
+        Log.warn { "guardrail_id is set but guardrail_version is missing — guardrails disabled" }
+        return nil
+      end
+
       return nil unless id && version
+
+      Log.info { "Bedrock guardrail: #{id} v#{version}" }
 
       JSON::Any.new({
         "guardrailIdentifier" => JSON::Any.new(id),
@@ -134,7 +143,19 @@ module Autobot::Providers
       response = client.post(url.request_target, headers: headers, body: body)
       Log.debug { "Response #{response.status_code} (#{response.body.size} bytes)" }
 
+      unless response.success?
+        Log.error { "Bedrock HTTP #{response.status_code}: #{response.body}" }
+        raise "HTTP #{response.status_code}: #{extract_error_message(response.body)}"
+      end
+
       response.body
+    end
+
+    private def extract_error_message(body : String) : String
+      json = JSON.parse(body)
+      json["message"]?.try(&.as_s?) || body[0, 200]
+    rescue
+      body[0, 200]
     end
 
     private def get_or_create_client(url : URI) : HTTP::Client

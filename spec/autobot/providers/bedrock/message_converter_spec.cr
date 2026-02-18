@@ -1,4 +1,4 @@
-require "../../spec_helper"
+require "../../../spec_helper"
 
 describe Autobot::Providers::MessageConverter do
   describe ".extract_system" do

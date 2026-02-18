@@ -215,6 +215,71 @@ describe Autobot::Config::Config do
       provider_config.should_not be_nil
       provider_name.should eq("anthropic")
     end
+
+    it "returns nil for bedrock models" do
+      yaml = <<-YAML
+      providers:
+        anthropic:
+          api_key: "ant-key"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      provider_config, provider_name = config.match_provider("bedrock/anthropic.claude-3")
+      provider_config.should be_nil
+      provider_name.should be_nil
+    end
+  end
+
+  describe "#match_bedrock" do
+    it "returns nil when no bedrock configured" do
+      config = empty_config
+      config.match_bedrock.should be_nil
+    end
+
+    it "returns nil for non-bedrock model" do
+      yaml = <<-YAML
+      providers:
+        bedrock:
+          access_key_id: "AKIAIOSFODNN7EXAMPLE"
+          secret_access_key: "secret"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      config.match_bedrock("anthropic/claude-3").should be_nil
+    end
+
+    it "returns config for bedrock model with prefix" do
+      yaml = <<-YAML
+      agents:
+        defaults:
+          model: "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"
+      providers:
+        bedrock:
+          access_key_id: "AKIAIOSFODNN7EXAMPLE"
+          secret_access_key: "secret"
+          region: "eu-west-1"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      bedrock = config.match_bedrock
+      bedrock.should_not be_nil
+      bedrock.try(&.region).should eq("eu-west-1")
+    end
+
+    it "returns nil when bedrock credentials are empty" do
+      yaml = <<-YAML
+      agents:
+        defaults:
+          model: "bedrock/anthropic.claude-3"
+      providers:
+        bedrock:
+          access_key_id: ""
+          secret_access_key: ""
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      config.match_bedrock.should be_nil
+    end
   end
 
   describe "#validate!" do
@@ -227,6 +292,18 @@ describe Autobot::Config::Config do
 
     it "passes when a provider has API key" do
       config = config_with_provider
+      config.validate! # should not raise
+    end
+
+    it "passes when only bedrock is configured" do
+      yaml = <<-YAML
+      providers:
+        bedrock:
+          access_key_id: "AKIAIOSFODNN7EXAMPLE"
+          secret_access_key: "secret"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
       config.validate! # should not raise
     end
   end
@@ -305,5 +382,48 @@ describe Autobot::Config::ProviderConfig do
     pc = Autobot::Config::ProviderConfig.from_yaml("--- {}")
     pc.api_key.should eq("")
     pc.api_base?.should be_nil
+  end
+end
+
+describe Autobot::Config::BedrockProviderConfig do
+  it "has empty defaults" do
+    cfg = Autobot::Config::BedrockProviderConfig.from_yaml("--- {}")
+    cfg.access_key_id.should eq("")
+    cfg.secret_access_key.should eq("")
+    cfg.region.should eq("us-east-1")
+    cfg.configured?.should be_false
+  end
+
+  it "is configured when credentials are present" do
+    yaml = <<-YAML
+    access_key_id: "AKIAIOSFODNN7EXAMPLE"
+    secret_access_key: "secret"
+    YAML
+
+    cfg = Autobot::Config::BedrockProviderConfig.from_yaml(yaml)
+    cfg.configured?.should be_true
+  end
+
+  it "is not configured when access_key_id is empty" do
+    yaml = <<-YAML
+    access_key_id: ""
+    secret_access_key: "secret"
+    YAML
+
+    cfg = Autobot::Config::BedrockProviderConfig.from_yaml(yaml)
+    cfg.configured?.should be_false
+  end
+
+  it "parses optional guardrail settings" do
+    yaml = <<-YAML
+    access_key_id: "AKIAIOSFODNN7EXAMPLE"
+    secret_access_key: "secret"
+    guardrail_id: "gr-123"
+    guardrail_version: "1"
+    YAML
+
+    cfg = Autobot::Config::BedrockProviderConfig.from_yaml(yaml)
+    cfg.guardrail_id.should eq("gr-123")
+    cfg.guardrail_version.should eq("1")
   end
 end

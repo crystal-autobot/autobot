@@ -162,6 +162,26 @@ describe Autobot::Providers::BedrockProvider do
       response.content.should eq("First part.\nSecond part.")
     end
 
+    it "parses content_filtered stop reason" do
+      json = <<-JSON
+      {
+        "output": {
+          "message": {
+            "role": "assistant",
+            "content": [{"text": "Content was filtered."}]
+          }
+        },
+        "stopReason": "content_filtered",
+        "usage": {"inputTokens": 5, "outputTokens": 3, "totalTokens": 8}
+      }
+      JSON
+
+      response = parse_response(json)
+
+      response.content.should eq("Content was filtered.")
+      response.finish_reason.should eq("content_filtered")
+    end
+
     it "parses response with missing usage" do
       json = <<-JSON
       {
@@ -224,6 +244,30 @@ describe Autobot::Providers::BedrockProvider do
     end
   end
 
+  describe "error message extraction" do
+    it "extracts message from JSON error body" do
+      body = %({"message": "Model not found"})
+      extract_error_message(body).should eq("Model not found")
+    end
+
+    it "returns truncated body for non-JSON errors" do
+      body = "Internal Server Error"
+      extract_error_message(body).should eq("Internal Server Error")
+    end
+
+    it "returns truncated body when JSON has no message field" do
+      body = %({"error": "something wrong"})
+      result = extract_error_message(body)
+      result.should contain("error")
+    end
+
+    it "truncates long error bodies" do
+      body = "x" * 300
+      result = extract_error_message(body)
+      result.size.should eq(200)
+    end
+  end
+
   describe "model prefix stripping" do
     it "strips bedrock/ prefix" do
       provider = Autobot::Providers::BedrockProvider.new(
@@ -240,62 +284,76 @@ describe Autobot::Providers::BedrockProvider do
   end
 end
 
+# Helper to test error message extraction logic
+private def extract_error_message(body : String) : String
+  json = JSON.parse(body)
+  json["message"]?.try(&.as_s?) || body[0, 200]
+rescue
+  body[0, 200]
+end
+
+STOP_REASON_MAP = {
+  "end_turn"             => "stop",
+  "tool_use"             => "tool_calls",
+  "max_tokens"           => "length",
+  "stop_sequence"        => "stop",
+  "guardrail_intervened" => "guardrail_intervened",
+  "content_filtered"     => "content_filtered",
+}
+
 # Helper to test response parsing without making HTTP calls.
-# Uses a simple approach: parse JSON and call the private parse method via a test wrapper.
 private def parse_response(json_str : String) : Autobot::Providers::Response
   json = JSON.parse(json_str)
 
-  # Check for error response
   if msg = json["message"]?.try(&.as_s?)
     return Autobot::Providers::Response.new(content: "Bedrock error: #{msg}", finish_reason: "error")
   end
 
-  output_message = json.dig("output", "message")
-  content_blocks = output_message["content"]?.try(&.as_a?) || [] of JSON::Any
-
-  text_parts = [] of String
-  tool_calls = [] of Autobot::Providers::ToolCall
-
-  content_blocks.each do |block|
-    if text = block["text"]?.try(&.as_s?)
-      text_parts << text
-    elsif tool_use = block["toolUse"]?
-      id = tool_use["toolUseId"]?.try(&.as_s?) || ""
-      name = tool_use["name"]?.try(&.as_s?) || ""
-      input = tool_use["input"]?.try(&.as_h?) || {} of String => JSON::Any
-      args = input.transform_values(&.as(JSON::Any))
-      tool_calls << Autobot::Providers::ToolCall.new(id: id, name: name, arguments: args)
-    end
-  end
-
-  usage_node = json["usage"]?
-  usage = if usage_node
-            input = usage_node["inputTokens"]?.try(&.as_i?) || 0
-            output = usage_node["outputTokens"]?.try(&.as_i?) || 0
-            Autobot::Providers::TokenUsage.new(
-              prompt_tokens: input,
-              completion_tokens: output,
-              total_tokens: usage_node["totalTokens"]?.try(&.as_i?) || (input + output),
-            )
-          else
-            Autobot::Providers::TokenUsage.new
-          end
-
-  stop_reason = json["stopReason"]?.try(&.as_s?)
-  stop_reason_map = {
-    "end_turn"             => "stop",
-    "tool_use"             => "tool_calls",
-    "max_tokens"           => "length",
-    "stop_sequence"        => "stop",
-    "guardrail_intervened" => "guardrail_intervened",
-    "content_filtered"     => "content_filtered",
-  }
-  finish_reason = stop_reason ? (stop_reason_map[stop_reason]? || stop_reason) : "stop"
+  content_blocks = json.dig("output", "message", "content").as_a? || [] of JSON::Any
+  text_parts, tool_calls = parse_content(content_blocks)
 
   Autobot::Providers::Response.new(
     content: text_parts.empty? ? nil : text_parts.join("\n"),
     tool_calls: tool_calls,
-    finish_reason: finish_reason,
-    usage: usage,
+    finish_reason: map_stop_reason(json["stopReason"]?.try(&.as_s?)),
+    usage: parse_usage(json["usage"]?),
   )
+end
+
+private def parse_content(blocks : Array(JSON::Any))
+  text_parts = [] of String
+  tool_calls = [] of Autobot::Providers::ToolCall
+
+  blocks.each do |block|
+    if text = block["text"]?.try(&.as_s?)
+      text_parts << text
+    elsif tool_use = block["toolUse"]?
+      tool_calls << parse_tool_use(tool_use)
+    end
+  end
+
+  {text_parts, tool_calls}
+end
+
+private def parse_tool_use(tool_use : JSON::Any) : Autobot::Providers::ToolCall
+  id = tool_use["toolUseId"]?.try(&.as_s?) || ""
+  name = tool_use["name"]?.try(&.as_s?) || ""
+  input = tool_use["input"]?.try(&.as_h?) || {} of String => JSON::Any
+  Autobot::Providers::ToolCall.new(id: id, name: name, arguments: input.transform_values(&.as(JSON::Any)))
+end
+
+private def parse_usage(node : JSON::Any?) : Autobot::Providers::TokenUsage
+  return Autobot::Providers::TokenUsage.new unless node
+  input = node["inputTokens"]?.try(&.as_i?) || 0
+  output = node["outputTokens"]?.try(&.as_i?) || 0
+  Autobot::Providers::TokenUsage.new(
+    prompt_tokens: input,
+    completion_tokens: output,
+    total_tokens: node["totalTokens"]?.try(&.as_i?) || (input + output),
+  )
+end
+
+private def map_stop_reason(reason : String?) : String
+  return "stop" unless reason
+  STOP_REASON_MAP[reason]? || reason
 end
