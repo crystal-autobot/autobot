@@ -17,7 +17,7 @@ module Autobot
         bus = Bus::MessageBus.new
         session_manager = Session::Manager.new(config.workspace_path)
 
-        tool_registry, plugin_registry = setup_tools(config)
+        tool_registry, plugin_registry, mcp_clients = setup_tools(config)
         cron_service = setup_cron(config)
         channel_manager = setup_channels(config, bus, session_manager)
 
@@ -31,6 +31,7 @@ module Autobot
           puts "\nShutting down..."
           agent_loop.stop
           cron_service.stop
+          Mcp.stop_all(mcp_clients)
           plugin_registry.stop_all
           channel_manager.stop
           bus.stop
@@ -48,12 +49,12 @@ module Autobot
       end
 
       private def self.setup_tools(config : Config::Config)
-        tool_registry, plugin_registry = SetupHelper.setup_tools(config, verbose: true)
+        tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config, verbose: true)
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
         log_sandbox_info(sandbox_config)
 
-        {tool_registry, plugin_registry}
+        {tool_registry, plugin_registry, mcp_clients}
       end
 
       private def self.setup_cron(config : Config::Config) : Cron::Service

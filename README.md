@@ -129,6 +129,7 @@ Autobot automatically detects and logs the sandbox method on startup — Docker 
 | [Security](docs/security.md) | Security model and best practices |
 | [Deployment](docs/deployment.md) | Production deployment with proper user/permissions |
 | [Architecture](docs/architecture.md) | System design and components |
+| [MCP Servers](docs/mcp.md) | Connect external MCP tool servers |
 | [Plugins](docs/plugins.md) | Building and using plugins |
 | [Development](docs/development.md) | Contributing and local setup |
 
@@ -203,6 +204,35 @@ agents:
     model: "anthropic/claude-sonnet-4-5"
     max_tokens: 8192
     temperature: 0.7
+```
+
+</details>
+
+<details>
+<summary><b>MCP Server Integration</b></summary>
+
+Connect external tools via MCP (Model Context Protocol):
+
+```yaml
+mcp:
+  servers:
+    github:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_TOKEN: "${GITHUB_TOKEN}"
+    garmin:
+      command: "uvx"
+      args: ["--python", "3.12", "--from", "git+https://github.com/Taxuspt/garmin_mcp", "garmin-mcp"]
+      env:
+        GARMIN_EMAIL: "${GARMIN_EMAIL}"
+```
+
+Tools are auto-discovered and available as `mcp_github_*`, `mcp_garmin_*`, etc.
+
+```bash
+autobot agent -m "list my recent garmin activities"
+autobot agent -m "show open issues in crystal-autobot/autobot"
 ```
 
 </details>

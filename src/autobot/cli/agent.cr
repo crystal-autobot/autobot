@@ -25,7 +25,7 @@ module Autobot
 
         bus = Bus::MessageBus.new
         session_manager = Session::Manager.new(config.workspace_path)
-        tool_registry, plugin_registry = SetupHelper.setup_tools(config)
+        tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config)
 
         if message
           run_single(config, bus, tool_registry, session_manager, session_id, message, markdown)
@@ -33,6 +33,7 @@ module Autobot
           run_interactive(config, bus, tool_registry, session_manager, session_id, markdown)
         end
       ensure
+        mcp_clients.try { |clients| Mcp.stop_all(clients) }
         plugin_registry.try(&.stop_all)
       end
 

@@ -226,6 +226,34 @@ module Autobot::Config
     end
   end
 
+  # Configuration for a single MCP server process.
+  #
+  #   garmin:
+  #     command: "uvx"
+  #     args: ["--python", "3.12", "garmin-mcp"]
+  #     env:
+  #       GARMIN_EMAIL: "${GARMIN_EMAIL}"
+  #     tools: ["get_activities*", "get_heart_rate*"]  # optional allowlist
+  class McpServerConfig
+    include YAML::Serializable
+    property command : String = ""
+    property args : Array(String) = [] of String
+    property env : Hash(String, String) = {} of String => String
+    property tools : Array(String) = [] of String
+
+    def initialize
+    end
+  end
+
+  # Top-level MCP configuration containing named server definitions.
+  class McpConfig
+    include YAML::Serializable
+    property servers : Hash(String, McpServerConfig) = {} of String => McpServerConfig
+
+    def initialize
+    end
+  end
+
   class Config
     include YAML::Serializable
     property agents : AgentsConfig?
@@ -234,6 +262,7 @@ module Autobot::Config
     property gateway : GatewayConfig?
     property tools : ToolsConfig?
     property cron : CronConfig?
+    property mcp : McpConfig?
 
     def initialize
     end
