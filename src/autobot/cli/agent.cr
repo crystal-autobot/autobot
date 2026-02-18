@@ -122,11 +122,6 @@ module Autobot
         session : Session::Session,
         message : String,
       ) : String
-        provider_config, _provider_name = config.match_provider
-        return "Error: No provider configured" unless provider_config
-
-        api_key = provider_config.api_key
-        api_base = provider_config.api_base?
         model = config.default_model
         agent_defaults = Config::AgentDefaults.new
         defaults = config.agents.try(&.defaults)
@@ -138,10 +133,7 @@ module Autobot
         tools = tool_registry.definitions
 
         begin
-          provider = Providers::HttpProvider.new(
-            api_key: api_key,
-            api_base: api_base
-          )
+          provider = SetupHelper.create_provider(config)
 
           response = provider.chat(
             messages: messages.map { |message_item|

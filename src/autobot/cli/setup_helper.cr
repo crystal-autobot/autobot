@@ -27,10 +27,33 @@ module Autobot
       # Validate that a provider is configured, exit if not.
       def self.validate_provider(config : Config::Config) : Nil
         provider_config, _name = config.match_provider
-        unless provider_config
+        bedrock_config = config.match_bedrock
+        unless provider_config || bedrock_config
           STDERR.puts "Error: No API key configured."
           STDERR.puts "Set one in config.yml under providers section"
           exit 1
+        end
+      end
+
+      # Creates the appropriate provider based on configuration.
+      def self.create_provider(config : Config::Config) : Providers::Provider
+        if bedrock = config.match_bedrock
+          Providers::BedrockProvider.new(
+            access_key_id: bedrock.access_key_id,
+            secret_access_key: bedrock.secret_access_key,
+            region: bedrock.region,
+            model: config.default_model,
+            session_token: bedrock.session_token,
+            guardrail_id: bedrock.guardrail_id,
+            guardrail_version: bedrock.guardrail_version,
+          )
+        else
+          provider_config, _name = config.match_provider
+          raise "No provider configured" unless provider_config
+          Providers::HttpProvider.new(
+            api_key: provider_config.api_key,
+            api_base: provider_config.api_base?,
+          )
         end
       end
 

@@ -4,6 +4,10 @@ shards:
     git: https://github.com/crystal-ameba/ameba.git
     version: 1.6.4
 
+  aws-sigv4:
+    path: ../aws-sigv4
+    version: 0.1.0
+
   crest:
     git: https://github.com/mamantoha/crest.git
     version: 1.6.2
