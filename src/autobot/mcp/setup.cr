@@ -14,11 +14,20 @@ module Autobot
   module Mcp
     Log = ::Log.for("mcp")
 
+    alias ClientFactory = Proc(String, Config::McpServerConfig, Client?)
+
     # Starts MCP server processes in the background without blocking startup.
     # Returns the clients array immediately; servers connect and register
     # their tools asynchronously as they become ready.
     # No-op when no MCP config exists.
-    def self.setup(config : Config::Config, tool_registry : Tools::Registry) : Array(Client)
+    #
+    # An optional `client_factory` can be injected for testing to bypass
+    # real subprocess spawning.
+    def self.setup(
+      config : Config::Config,
+      tool_registry : Tools::Registry,
+      client_factory : ClientFactory? = nil,
+    ) : Array(Client)
       clients = [] of Client
 
       mcp_config = config.mcp
@@ -30,7 +39,7 @@ module Autobot
       Log.info { "Starting #{servers.size} MCP server(s) in background" }
 
       spawn(name: "mcp-setup") do
-        start_all(servers, clients, tool_registry)
+        start_all(servers, clients, tool_registry, client_factory)
       end
 
       clients
@@ -42,12 +51,13 @@ module Autobot
       servers : Hash(String, Config::McpServerConfig),
       clients : Array(Client),
       tool_registry : Tools::Registry,
+      client_factory : ClientFactory? = nil,
     ) : Nil
       channel = Channel({Client, Config::McpServerConfig} | Nil).new
 
       servers.each do |server_name, server_config|
         spawn do
-          client = start_server(server_name, server_config)
+          client = start_server(server_name, server_config, client_factory)
           channel.send(client ? {client, server_config} : nil)
         end
       end
@@ -75,7 +85,15 @@ module Autobot
       end
     end
 
-    private def self.start_server(name : String, config : Config::McpServerConfig) : Client?
+    private def self.start_server(
+      name : String,
+      config : Config::McpServerConfig,
+      client_factory : ClientFactory? = nil,
+    ) : Client?
+      if factory = client_factory
+        return factory.call(name, config)
+      end
+
       if config.command.empty?
         Log.warn { "[#{name}] MCP server has no command configured, skipping" }
         return nil
