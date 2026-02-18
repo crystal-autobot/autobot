@@ -77,7 +77,7 @@ module Autobot
 
         begin
           process.signal(Signal::TERM)
-          sleep SHUTDOWN_GRACE
+          wait_for_termination(process)
           process.signal(Signal::KILL) unless process.terminated?
           process.wait
         rescue
@@ -120,6 +120,17 @@ module Autobot
         end
 
         extract_content(response)
+      end
+
+      private def wait_for_termination(process : Process) : Nil
+        elapsed = Time::Span.zero
+        poll_interval = 50.milliseconds
+
+        while elapsed < SHUTDOWN_GRACE
+          return if process.terminated?
+          sleep poll_interval
+          elapsed += poll_interval
+        end
       end
 
       private def perform_initialize : Nil
