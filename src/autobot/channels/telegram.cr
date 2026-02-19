@@ -1,5 +1,6 @@
 require "base64"
 require "http/client"
+require "http_proxy"
 require "json"
 require "uri"
 require "./base"
@@ -399,8 +400,12 @@ module Autobot::Channels
         return nil
       end
 
-      url = "#{TELEGRAM_API_BASE}/file/bot#{@token}/#{file_path}"
-      response = HTTP::Client.get(url)
+      uri = URI.parse(TELEGRAM_API_BASE)
+      client = HTTP::Client.new(uri)
+      apply_proxy(client)
+
+      response = client.get("/file/bot#{@token}/#{file_path}")
+      client.close
 
       if response.status_code == 200
         Base64.strict_encode(response.body.to_slice)
@@ -411,6 +416,17 @@ module Autobot::Channels
     rescue ex
       Log.error { "Error downloading telegram file: #{ex.message}" }
       nil
+    end
+
+    private def apply_proxy(client : HTTP::Client) : Nil
+      proxy_url = @proxy
+      return unless proxy_url
+
+      uri = URI.parse(proxy_url)
+      host = uri.host
+      return unless host
+
+      client.proxy = HTTP::Proxy::Client.new(host, uri.port || 8080)
     end
 
     private def append_voice_attachment(msg : JSON::Any, content_parts : Array(String), media_attachments : Array(Bus::MediaAttachment)) : Nil
