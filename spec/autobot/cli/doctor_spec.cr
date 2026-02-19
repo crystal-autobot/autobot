@@ -363,6 +363,66 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_web_search" do
+    it "skips when no tools configured" do
+      config = make_config("{}")
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_web_search(config)
+
+        io.to_s.should contain("— Web search (no BRAVE_API_KEY)")
+      end
+    end
+
+    it "passes when brave api key is configured" do
+      config = make_config(<<-YAML
+      tools:
+        web:
+          search:
+            api_key: "BSA-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_web_search(config)
+
+        io.to_s.should contain("✓ Web search available (brave)")
+      end
+    end
+
+    it "skips when api key is empty" do
+      config = make_config(<<-YAML
+      tools:
+        web:
+          search:
+            api_key: ""
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_web_search(config)
+
+        io.to_s.should contain("— Web search (no BRAVE_API_KEY)")
+      end
+    end
+
+    it "skips when api key is unresolved env var" do
+      config = make_config(<<-YAML
+      tools:
+        web:
+          search:
+            api_key: "${BRAVE_API_KEY}"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_web_search(config)
+
+        io.to_s.should contain("— Web search (no BRAVE_API_KEY)")
+      end
+    end
+  end
+
   describe ".check_gateway" do
     it "skips when gateway is not configured" do
       config = make_config("{}")
