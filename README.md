@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner-circuit-hex.svg" alt="crystal-autobot" width="100%">
+  <img src="docs/assets/banner-circuit-hex.svg" alt="crystal-autobot" width="100%">
 </p>
 
 <p align="center"><b>Ultra-efficient personal AI assistant powered by Crystal</b></p>
@@ -26,8 +26,8 @@ Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://cr
 - **🏃 Multi-Bot** — Isolated directories per bot, run dozens on one machine
 
 <p align="center">
-  <img src="assets/demo-telegram.jpg" alt="Telegram Chat" width="26%">
-  <img src="assets/demo-terminal.png" alt="Autobot Terminal" width="73%">
+  <img src="docs/assets/demo-telegram.jpg" alt="Telegram Chat" width="26%">
+  <img src="docs/assets/demo-terminal.png" alt="Autobot Terminal" width="73%">
 </p>
 
 ### 🛡️ Production-Grade Security
