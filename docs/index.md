@@ -47,7 +47,9 @@ Autobot uses **kernel-enforced sandboxing** via Docker or bubblewrap — not app
 - **No symlink exploits, TOCTOU, or path traversal** — kernel guarantees workspace isolation
 - **Process isolation** — LLM can't see or interact with host processes
 
-[Learn more about Security Architecture](security.md){ .md-button }
+[Learn more about Security](security.md){ .md-button }
+
+[Architecture Overview](architecture.md){ .md-button }
 
 ## Quick Start
 
