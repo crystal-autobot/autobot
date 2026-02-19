@@ -56,7 +56,7 @@ module Autobot
         if anthropic_native?(spec, effective_model)
           chat_anthropic(messages, tools, bare_model, max_tokens, temperature, spec)
         else
-          chat_openai(messages, tools, bare_model, max_tokens, temperature, spec)
+          chat_compatible(messages, tools, bare_model, max_tokens, temperature, spec)
         end
       rescue ex
         Log.error { "LLM request failed: #{ex.message}" }
@@ -65,12 +65,12 @@ module Autobot
       end
 
       # -----------------------------------------------------------------
-      # OpenAI-compatible request
+      # OpenAI-compatible (standard) request
       # -----------------------------------------------------------------
-      private def chat_openai(
+      private def chat_compatible(
         messages, tools, model, max_tokens, temperature, spec,
       ) : Response
-        body = build_openai_body(messages, tools, model, max_tokens, temperature, spec)
+        body = build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
         url = resolve_url(spec)
 
         headers = HTTP::Headers{
@@ -81,10 +81,10 @@ module Autobot
 
         Log.debug { "POST #{url} model=#{model}" }
         response = http_post(url, headers, body.to_json)
-        parse_openai_response(response.body)
+        parse_compatible_response(response.body)
       end
 
-      private def build_openai_body(messages, tools, model, max_tokens, temperature, spec)
+      private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
         body = {
           "model"       => JSON::Any.new(resolve_model_name(model, spec)),
           "messages"    => JSON::Any.new(messages.map { |message| JSON::Any.new(message.transform_values { |value| value }) }),
@@ -102,7 +102,7 @@ module Autobot
         body
       end
 
-      private def parse_openai_response(body : String) : Response
+      private def parse_compatible_response(body : String) : Response
         json = JSON.parse(body)
 
         if error = extract_error(json)
