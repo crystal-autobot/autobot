@@ -132,6 +132,7 @@ Autobot automatically detects and logs the sandbox method on startup — Docker 
 | [Deployment](docs/deployment.md) | Production deployment with proper user/permissions |
 | [Architecture](docs/architecture.md) | System design and components |
 | [Media](docs/media.md) | Image analysis and voice transcription |
+| [Web Search](docs/web-search.md) | Web search and URL fetching |
 | [MCP Servers](docs/mcp.md) | Connect external MCP tool servers |
 | [Plugins](docs/plugins.md) | Building and using plugins |
 | [Development](docs/development.md) | Contributing and local setup |

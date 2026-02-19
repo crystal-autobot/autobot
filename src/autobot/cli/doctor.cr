@@ -83,6 +83,9 @@ module Autobot
         # Voice transcription
         check_voice_transcription(config)
 
+        # Web search
+        check_web_search(config)
+
         # Gateway
         warnings = check_gateway(config, warnings)
 
@@ -284,6 +287,15 @@ module Autobot
         end
 
         report(Status::Skip, "Voice transcription (no openai/groq provider)")
+      end
+
+      def self.check_web_search(config : Config::Config) : Nil
+        api_key = config.tools.try(&.web.try(&.search.try(&.api_key)))
+        if api_key && !api_key.empty? && !api_key.includes?("${")
+          report(Status::Pass, "Web search available (brave)")
+        else
+          report(Status::Skip, "Web search (no BRAVE_API_KEY)")
+        end
       end
 
       def self.check_gateway(config : Config::Config, warnings : Int32) : Int32

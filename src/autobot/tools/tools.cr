@@ -128,6 +128,13 @@ module Autobot
       brave_api_key : String?,
       web_fetch_max_chars : Int32,
     )
+      has_search_key = brave_api_key && !brave_api_key.empty?
+      if has_search_key
+        ::Log.for("Tools").info { "Web search enabled (brave)" }
+      else
+        ::Log.for("Tools").info { "Web search unavailable (no BRAVE_API_KEY)" }
+      end
+
       registry.register(WebSearchTool.new(api_key: brave_api_key))
       registry.register(WebFetchTool.new(max_chars: web_fetch_max_chars))
       registry.register(MessageTool.new)
