@@ -10,7 +10,7 @@ permissions:
   packages: write
 
 jobs:
-  build-linux-amd64:
+  build-linux-x86_64:
     name: Linux x86_64
     runs-on: ubuntu-latest
     container:
@@ -26,11 +26,11 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: autobot-linux-amd64
+          name: autobot-linux-x86_64
           path: autobot
 
-  build-linux-arm64:
-    name: Linux arm64
+  build-linux-aarch64:
+    name: Linux aarch64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: autobot-linux-arm64
+          name: autobot-linux-aarch64
           path: autobot
 
   build-macos:
@@ -69,7 +69,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-linux-amd64, build-linux-arm64, build-macos]
+    needs: [build-linux-x86_64, build-linux-aarch64, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -169,7 +169,7 @@ jobs:
 
   docker-publish:
     name: Docker Image (Multi-arch)
-    needs: [build-linux-amd64, build-linux-arm64]
+    needs: [build-linux-x86_64, build-linux-aarch64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
