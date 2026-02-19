@@ -1,6 +1,8 @@
-# Image/Vision Support
+# Media Support
 
 Autobot supports image analysis by downloading images from chat channels, encoding them as base64, and sending them to the LLM as multimodal content blocks.
+
+Autobot also supports voice transcription — voice messages are automatically transcribed to text using Whisper API and included in the LLM context.
 
 ## How It Works
 
@@ -79,4 +81,62 @@ For Anthropic native, this is converted to:
   {"type": "text", "text": "Analyze this image"},
   {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "..."}}
 ]
+```
+
+---
+
+## Voice Transcription
+
+Voice and audio messages received via Telegram are automatically transcribed to text using the Whisper API before being sent to the LLM.
+
+### How It Works
+
+```
+Telegram voice -> Download OGG -> Transcriber (Whisper API) -> text in message content -> LLM
+```
+
+1. **Channel** receives a voice/audio message and downloads the file bytes
+2. **Transcriber** sends the audio to the Whisper API (OpenAI or Groq) and receives text
+3. The transcribed text replaces the `[voice message]` placeholder as `[voice transcription]: {text}`
+4. The LLM receives the transcription as regular text content
+
+### Configuration
+
+No extra configuration needed. Voice transcription is auto-enabled when a Whisper-capable provider (Groq or OpenAI) is configured:
+
+```yaml
+providers:
+  groq:
+    api_key: "${GROQ_API_KEY}"  # Voice transcription auto-enabled via Groq Whisper
+```
+
+Or:
+
+```yaml
+providers:
+  openai:
+    api_key: "${OPENAI_API_KEY}"  # Voice transcription auto-enabled via OpenAI Whisper
+```
+
+Groq is preferred when both are configured (faster, has free tier). If neither is configured, voice messages fall back to `[voice message]` text with no errors.
+
+### Supported Providers
+
+| Provider | Model | API Endpoint |
+|----------|-------|-------------|
+| Groq | `whisper-large-v3-turbo` | `api.groq.com/openai/v1/audio/transcriptions` |
+| OpenAI | `whisper-1` | `api.openai.com/v1/audio/transcriptions` |
+
+### Verification
+
+Run `autobot doctor` to check voice transcription status:
+
+```
+✓ Voice transcription available (groq)
+```
+
+Or if no provider is configured:
+
+```
+— Voice transcription (no openai/groq provider)
 ```

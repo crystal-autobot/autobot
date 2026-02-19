@@ -80,6 +80,9 @@ module Autobot
         # Channels
         warnings = check_channels(config, warnings)
 
+        # Voice transcription
+        check_voice_transcription(config)
+
         # Gateway
         warnings = check_gateway(config, warnings)
 
@@ -259,6 +262,28 @@ module Autobot
           report(Status::Pass, "WhatsApp configured")
           warnings
         end
+      end
+
+      def self.check_voice_transcription(config : Config::Config) : Nil
+        providers = config.providers
+        unless providers
+          report(Status::Skip, "Voice transcription (no openai/groq provider)")
+          return
+        end
+
+        Channels::Manager::WHISPER_PROVIDERS.each do |name|
+          provider = case name
+                     when "groq"   then providers.groq
+                     when "openai" then providers.openai
+                     else               nil
+                     end
+          if provider && !provider.api_key.empty?
+            report(Status::Pass, "Voice transcription available (#{name})")
+            return
+          end
+        end
+
+        report(Status::Skip, "Voice transcription (no openai/groq provider)")
       end
 
       def self.check_gateway(config : Config::Config, warnings : Int32) : Int32

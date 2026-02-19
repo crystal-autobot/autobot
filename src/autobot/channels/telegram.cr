@@ -210,6 +210,7 @@ module Autobot::Channels
       @proxy : String? = nil,
       @custom_commands : Config::CustomCommandsConfig = Config::CustomCommandsConfig.new,
       @session_manager : Session::Manager? = nil,
+      @transcriber : Transcriber? = nil,
     )
       super("telegram", @bus, @allow_from)
     end
@@ -388,6 +389,13 @@ module Autobot::Channels
     end
 
     private def download_telegram_file(file_id : String) : String?
+      bytes = download_telegram_file_bytes(file_id)
+      return nil unless bytes
+
+      Base64.strict_encode(bytes)
+    end
+
+    private def download_telegram_file_bytes(file_id : String) : Bytes?
       result = api_request("getFile", {"file_id" => file_id})
       return nil unless result
 
@@ -408,7 +416,7 @@ module Autobot::Channels
       client.close
 
       if response.status_code == 200
-        Base64.strict_encode(response.body.to_slice)
+        response.body.to_slice.dup
       else
         Log.warn { "Failed to download file: HTTP #{response.status_code}" }
         nil
@@ -429,11 +437,25 @@ module Autobot::Channels
       client.proxy = HTTP::Proxy::Client.new(host, uri.port || 8080)
     end
 
+    private def transcribe_file(file_id : String) : String?
+      transcriber = @transcriber
+      return nil unless transcriber
+
+      bytes = download_telegram_file_bytes(file_id)
+      return nil unless bytes
+
+      transcriber.transcribe(bytes)
+    end
+
     private def append_voice_attachment(msg : JSON::Any, content_parts : Array(String), media_attachments : Array(Bus::MediaAttachment)) : Nil
       if voice = msg["voice"]?
         file_id = voice["file_id"].as_s
         media_attachments << Bus::MediaAttachment.new(type: "voice", url: file_id, mime_type: voice["mime_type"]?.try(&.as_s) || "audio/ogg")
-        content_parts << "[voice message]" if content_parts.empty?
+
+        if content_parts.empty?
+          text = transcribe_file(file_id)
+          content_parts << (text ? "[voice transcription]: #{text}" : "[voice message]")
+        end
       end
     end
 
@@ -441,8 +463,12 @@ module Autobot::Channels
       if audio = msg["audio"]?
         file_id = audio["file_id"].as_s
         media_attachments << Bus::MediaAttachment.new(type: "voice", url: file_id, mime_type: audio["mime_type"]?.try(&.as_s) || "audio/mpeg")
-        title = audio["title"]?.try(&.as_s) || "audio"
-        content_parts << "[audio: #{title}]" if content_parts.empty?
+
+        if content_parts.empty?
+          title = audio["title"]?.try(&.as_s) || "audio"
+          text = transcribe_file(file_id)
+          content_parts << (text ? "[voice transcription]: #{text}" : "[audio: #{title}]")
+        end
       end
     end
 

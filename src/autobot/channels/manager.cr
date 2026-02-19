@@ -4,6 +4,7 @@ require "./slack"
 require "./whatsapp"
 require "../config/schema"
 require "../bus/queue"
+require "../transcriber"
 
 module Autobot::Channels
   # Manages chat channels and coordinates message routing.
@@ -15,9 +16,13 @@ module Autobot::Channels
   class Manager
     Log = ::Log.for("channels.manager")
 
+    WHISPER_PROVIDERS = ["groq", "openai"]
+
     getter channels : Hash(String, Channel) = {} of String => Channel
+    getter transcriber : Transcriber? = nil
 
     def initialize(@config : Config::Config, @bus : Bus::MessageBus, @session_manager : Session::Manager? = nil)
+      @transcriber = detect_transcriber
       init_channels
     end
 
@@ -74,6 +79,26 @@ module Autobot::Channels
       @channels.keys
     end
 
+    private def detect_transcriber : Transcriber?
+      providers = @config.providers
+      return nil unless providers
+
+      WHISPER_PROVIDERS.each do |name|
+        provider = case name
+                   when "groq"   then providers.groq
+                   when "openai" then providers.openai
+                   else               nil
+                   end
+        if provider && !provider.api_key.empty?
+          Log.info { "Voice transcription enabled (#{name})" }
+          return Transcriber.new(api_key: provider.api_key, provider: name)
+        end
+      end
+
+      Log.info { "Voice transcription unavailable (no openai/groq provider)" }
+      nil
+    end
+
     private def init_channels : Nil
       return unless channels_config = @config.channels
 
@@ -87,6 +112,7 @@ module Autobot::Channels
             proxy: telegram_config.proxy?,
             custom_commands: custom_cmds,
             session_manager: @session_manager,
+            transcriber: @transcriber,
           )
           Log.info { "Telegram channel enabled" }
         end

@@ -289,6 +289,80 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_voice_transcription" do
+    it "skips when no providers configured" do
+      config = make_config("{}")
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("— Voice transcription (no openai/groq provider)")
+      end
+    end
+
+    it "passes when groq is configured" do
+      config = make_config(<<-YAML
+      providers:
+        groq:
+          api_key: "gsk-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("✓ Voice transcription available (groq)")
+      end
+    end
+
+    it "passes when openai is configured" do
+      config = make_config(<<-YAML
+      providers:
+        openai:
+          api_key: "sk-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("✓ Voice transcription available (openai)")
+      end
+    end
+
+    it "prefers groq over openai" do
+      config = make_config(<<-YAML
+      providers:
+        groq:
+          api_key: "gsk-test-key"
+        openai:
+          api_key: "sk-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("✓ Voice transcription available (groq)")
+      end
+    end
+
+    it "skips when provider has empty api_key" do
+      config = make_config(<<-YAML
+      providers:
+        openai:
+          api_key: ""
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("— Voice transcription (no openai/groq provider)")
+      end
+    end
+  end
+
   describe ".check_gateway" do
     it "skips when gateway is not configured" do
       config = make_config("{}")

@@ -32,6 +32,15 @@ Supported provider blocks:
 - `openrouter`
 - `vllm` (local/hosted OpenAI-compatible endpoint)
 
+## Voice Transcription
+
+Voice messages are automatically transcribed using the Whisper API when a supported provider is configured. No extra settings needed — the API key is reused from the provider config.
+
+- **Groq** (preferred — faster, free tier): uses `whisper-large-v3-turbo`
+- **OpenAI**: uses `whisper-1`
+
+If neither Groq nor OpenAI is configured, voice messages fall back to `[voice message]` text.
+
 ## Channels
 
 **Security Note:** `allow_from` is deny-by-default for security.
