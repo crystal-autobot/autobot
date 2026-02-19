@@ -13,7 +13,7 @@ Autobot is organized around a message-driven agent loop.
 
 ## Core Components
 
-- `channels/*`: Channel adapters, message ingress/egress, and media download ([vision](vision.md))
+- `channels/*`: Channel adapters, message ingress/egress, and media download ([media](media.md))
 - `agent/*`: Main loop, context assembly (including multimodal), subagent support, memory hooks
 - `tools/*`: Built-in tool registry and tool implementations
 - `mcp/*`: MCP client, proxy tools, and setup for external tool servers

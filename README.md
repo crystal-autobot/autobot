@@ -17,6 +17,7 @@ Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://cr
 - **🤖 Multi-Provider LLM** — Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM
 - **💬 Chat Channels** — Telegram, Slack, WhatsApp with allowlists and custom slash commands
 - **👁️ Vision** — Send photos via Telegram and get AI-powered image analysis
+- **🎤 Voice** — Voice messages auto-transcribed via Whisper (Groq/OpenAI)
 - **🔒 Kernel Sandbox** — Docker/bubblewrap OS-level isolation, not regex path checks
 - **🧠 Memory** — JSONL sessions with consolidation and persistent long-term memory
 - **⏰ Cron** — Cron expressions, intervals, one-time triggers, per-owner isolation
@@ -130,7 +131,7 @@ Autobot automatically detects and logs the sandbox method on startup — Docker 
 | [Security](docs/security.md) | Security model and best practices |
 | [Deployment](docs/deployment.md) | Production deployment with proper user/permissions |
 | [Architecture](docs/architecture.md) | System design and components |
-| [Vision](docs/vision.md) | Image analysis via chat channels |
+| [Media](docs/media.md) | Image analysis and voice transcription |
 | [MCP Servers](docs/mcp.md) | Connect external MCP tool servers |
 | [Plugins](docs/plugins.md) | Building and using plugins |
 | [Development](docs/development.md) | Contributing and local setup |
