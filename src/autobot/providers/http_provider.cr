@@ -60,6 +60,7 @@ module Autobot
         end
       rescue ex
         Log.error { "LLM request failed: #{ex.message}" }
+        Log.debug { ex.inspect_with_backtrace }
         Response.new(content: "Error calling LLM: #{ex.message}", finish_reason: "error")
       end
 
@@ -104,9 +105,8 @@ module Autobot
       private def parse_openai_response(body : String) : Response
         json = JSON.parse(body)
 
-        if error = json["error"]?
-          msg = error["message"]?.try(&.as_s?) || error.to_json
-          return Response.new(content: "API error: #{msg}", finish_reason: "error")
+        if error = extract_error(json)
+          return Response.new(content: "API error: #{error}", finish_reason: "error")
         end
 
         choice = json["choices"][0]
@@ -278,6 +278,16 @@ module Autobot
         return nil unless json["type"]?.try(&.as_s?) == "error"
         msg = json["error"]?.try { |error| error["message"]?.try(&.as_s?) } || body
         Response.new(content: "API error: #{msg}", finish_reason: "error")
+      end
+
+      # Extracts an error message from an OpenAI-compatible response.
+      # Handles both standard `{"error": {...}}` and array-wrapped
+      # `[{"error": {...}}]` formats (e.g. Google Gemini).
+      private def extract_error(json : JSON::Any) : String?
+        root = json.as_a?.try(&.first?) || json
+        error = root["error"]?
+        return nil unless error
+        error["message"]?.try(&.as_s?) || error.to_json
       end
 
       private def parse_anthropic_content_blocks(content_blocks : Array(JSON::Any)) : {Array(String), Array(ToolCall)}
