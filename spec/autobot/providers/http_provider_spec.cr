@@ -12,6 +12,10 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
     parse_compatible_response(body)
   end
 
+  def test_convert_content_for_anthropic(content : JSON::Any) : JSON::Any
+    convert_content_for_anthropic(content)
+  end
+
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
@@ -180,6 +184,76 @@ describe Autobot::Providers::HttpProvider do
       response = provider.test_parse_compatible_response(body)
       response.finish_reason.should eq("stop")
       response.content.should eq("hello")
+    end
+  end
+
+  describe "#convert_content_for_anthropic" do
+    provider = TestableHttpProvider.new(api_key: api_key)
+
+    it "passes string content through unchanged" do
+      content = JSON::Any.new("Hello world")
+      result = provider.test_convert_content_for_anthropic(content)
+      result.as_s.should eq("Hello world")
+    end
+
+    it "passes text blocks through unchanged" do
+      blocks = JSON::Any.new([
+        JSON::Any.new({
+          "type" => JSON::Any.new("text"),
+          "text" => JSON::Any.new("Hello"),
+        } of String => JSON::Any),
+      ])
+
+      result = provider.test_convert_content_for_anthropic(blocks)
+      arr = result.as_a
+      arr.size.should eq(1)
+      arr[0]["type"].as_s.should eq("text")
+      arr[0]["text"].as_s.should eq("Hello")
+    end
+
+    it "converts image_url blocks to Anthropic image format" do
+      blocks = JSON::Any.new([
+        JSON::Any.new({
+          "type"      => JSON::Any.new("image_url"),
+          "image_url" => JSON::Any.new({
+            "url" => JSON::Any.new("data:image/jpeg;base64,aW1hZ2VieXRlcw=="),
+          } of String => JSON::Any),
+        } of String => JSON::Any),
+      ])
+
+      result = provider.test_convert_content_for_anthropic(blocks)
+      arr = result.as_a
+      arr.size.should eq(1)
+
+      img = arr[0]
+      img["type"].as_s.should eq("image")
+      img["source"]["type"].as_s.should eq("base64")
+      img["source"]["media_type"].as_s.should eq("image/jpeg")
+      img["source"]["data"].as_s.should eq("aW1hZ2VieXRlcw==")
+    end
+
+    it "converts mixed text and image blocks" do
+      blocks = JSON::Any.new([
+        JSON::Any.new({
+          "type" => JSON::Any.new("text"),
+          "text" => JSON::Any.new("Analyze this"),
+        } of String => JSON::Any),
+        JSON::Any.new({
+          "type"      => JSON::Any.new("image_url"),
+          "image_url" => JSON::Any.new({
+            "url" => JSON::Any.new("data:image/png;base64,cG5nZGF0YQ=="),
+          } of String => JSON::Any),
+        } of String => JSON::Any),
+      ])
+
+      result = provider.test_convert_content_for_anthropic(blocks)
+      arr = result.as_a
+      arr.size.should eq(2)
+
+      arr[0]["type"].as_s.should eq("text")
+      arr[1]["type"].as_s.should eq("image")
+      arr[1]["source"]["media_type"].as_s.should eq("image/png")
+      arr[1]["source"]["data"].as_s.should eq("cG5nZGF0YQ==")
     end
   end
 end

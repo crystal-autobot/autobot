@@ -248,8 +248,48 @@ module Autobot
       private def build_anthropic_regular_message(role : String, content : JSON::Any) : JSON::Any
         JSON::Any.new({
           "role"    => JSON::Any.new(role),
-          "content" => content,
+          "content" => convert_content_for_anthropic(content),
         } of String => JSON::Any)
+      end
+
+      private def convert_content_for_anthropic(content : JSON::Any) : JSON::Any
+        return content unless blocks = content.as_a?
+
+        converted = blocks.map do |block|
+          if block["type"]?.try(&.as_s?) == "image_url"
+            convert_image_url_to_anthropic(block)
+          else
+            block
+          end
+        end
+
+        JSON::Any.new(converted)
+      end
+
+      private def convert_image_url_to_anthropic(block : JSON::Any) : JSON::Any
+        url = block["image_url"]?.try { |image_url| image_url["url"]?.try(&.as_s?) } || ""
+
+        media_type, data = parse_data_uri(url)
+
+        JSON::Any.new({
+          "type"   => JSON::Any.new("image"),
+          "source" => JSON::Any.new({
+            "type"       => JSON::Any.new("base64"),
+            "media_type" => JSON::Any.new(media_type),
+            "data"       => JSON::Any.new(data),
+          } of String => JSON::Any),
+        } of String => JSON::Any)
+      end
+
+      private def parse_data_uri(url : String) : {String, String}
+        if url.starts_with?("data:") && url.includes?(";base64,")
+          parts = url.split(";base64,", 2)
+          media_type = parts[0].lchop("data:")
+          data = parts[1]
+          {media_type, data}
+        else
+          {"image/jpeg", url}
+        end
       end
 
       private def convert_tools_to_anthropic(tools) : Array(JSON::Any)

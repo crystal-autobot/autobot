@@ -1,4 +1,6 @@
+require "base64"
 require "http/client"
+require "http_proxy"
 require "json"
 require "uri"
 require "./base"
@@ -195,6 +197,7 @@ module Autobot::Channels
     TELEGRAM_API_BASE = "https://api.telegram.org"
     POLL_TIMEOUT      =  30
     TYPING_INTERVAL   = 4.0
+    MAX_IMAGE_SIZE    = 20 * 1024 * 1024 # 20 MB
 
     @offset : Int64 = 0_i64
     @bot_username : String = ""
@@ -375,10 +378,55 @@ module Autobot::Channels
       if photos = msg["photo"]?.try(&.as_a?)
         if last_photo = photos.last?
           file_id = last_photo["file_id"].as_s
-          media_attachments << Bus::MediaAttachment.new(type: "photo", url: file_id, mime_type: "image/jpeg")
+          image_data = download_telegram_file(file_id)
+          media_attachments << Bus::MediaAttachment.new(
+            type: "photo", url: file_id, mime_type: "image/jpeg", data: image_data,
+          )
           content_parts << "[photo]" if content_parts.empty?
         end
       end
+    end
+
+    private def download_telegram_file(file_id : String) : String?
+      result = api_request("getFile", {"file_id" => file_id})
+      return nil unless result
+
+      file_path = result["file_path"]?.try(&.as_s)
+      return nil unless file_path
+
+      file_size = result["file_size"]?.try(&.as_i64?) || 0_i64
+      if file_size > MAX_IMAGE_SIZE
+        Log.warn { "File too large (#{file_size} bytes), skipping download" }
+        return nil
+      end
+
+      uri = URI.parse(TELEGRAM_API_BASE)
+      client = HTTP::Client.new(uri)
+      apply_proxy(client)
+
+      response = client.get("/file/bot#{@token}/#{file_path}")
+      client.close
+
+      if response.status_code == 200
+        Base64.strict_encode(response.body.to_slice)
+      else
+        Log.warn { "Failed to download file: HTTP #{response.status_code}" }
+        nil
+      end
+    rescue ex
+      Log.error { "Error downloading telegram file: #{ex.message}" }
+      nil
+    end
+
+    private def apply_proxy(client : HTTP::Client) : Nil
+      proxy_url = @proxy
+      return unless proxy_url
+
+      uri = URI.parse(proxy_url)
+      host = uri.host
+      return unless host
+
+      client.proxy = HTTP::Proxy::Client.new(host, uri.port || 8080)
     end
 
     private def append_voice_attachment(msg : JSON::Any, content_parts : Array(String), media_attachments : Array(Bus::MediaAttachment)) : Nil

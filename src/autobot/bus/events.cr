@@ -40,12 +40,16 @@ module Autobot::Bus
     property mime_type : String?
     property size_bytes : Int64?
 
+    @[JSON::Field(ignore: true)]
+    property data : String?
+
     def initialize(
       @type : String,
       @url : String? = nil,
       @file_path : String? = nil,
       @mime_type : String? = nil,
       @size_bytes : Int64? = nil,
+      @data : String? = nil,
     )
     end
   end
