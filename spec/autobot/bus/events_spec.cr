@@ -103,4 +103,29 @@ describe Autobot::Bus::MediaAttachment do
     parsed.file_path.should eq("/tmp/doc.pdf")
     parsed.mime_type.should eq("application/pdf")
   end
+
+  it "excludes data field from JSON serialization" do
+    media = Autobot::Bus::MediaAttachment.new(
+      type: "photo",
+      url: "file_id_123",
+      mime_type: "image/jpeg",
+      data: "base64encodeddata"
+    )
+
+    media.data.should eq("base64encodeddata")
+
+    json = media.to_json
+    json.should_not contain("data")
+    json.should_not contain("base64encodeddata")
+
+    parsed = Autobot::Bus::MediaAttachment.from_json(json)
+    parsed.data.should be_nil
+    parsed.type.should eq("photo")
+    parsed.url.should eq("file_id_123")
+  end
+
+  it "defaults data to nil" do
+    media = Autobot::Bus::MediaAttachment.new(type: "photo")
+    media.data.should be_nil
+  end
 end

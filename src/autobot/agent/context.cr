@@ -54,15 +54,9 @@ module Autobot::Agent
         end
 
         # Add current user message
-        content = current_message
-        if media && !media.empty?
-          media_info = media.map { |media_item| "[#{media_item.type}: #{media_item.file_path || media_item.url}]" }.join("\n")
-          content = "#{content}\n\nMedia:\n#{media_info}"
-        end
-
         messages << {
           "role"    => JSON::Any.new(Constants::ROLE_USER),
-          "content" => JSON::Any.new(content),
+          "content" => build_user_content(current_message, media),
         }
 
         messages
@@ -227,6 +221,45 @@ module Autobot::Agent
         When remembering something important, write to memory/MEMORY.md
         To recall past events, grep memory/HISTORY.md
         IDENTITY
+      end
+
+      private def build_user_content(text : String, media : Array(Bus::MediaAttachment)?) : JSON::Any
+        if media && media.any?(&.data)
+          return build_multimodal_content(text, media)
+        end
+
+        content = text
+        if media && !media.empty?
+          media_info = media.map { |attachment| "[#{attachment.type}: #{attachment.file_path || attachment.url}]" }.join("\n")
+          content = "#{content}\n\nMedia:\n#{media_info}"
+        end
+        JSON::Any.new(content)
+      end
+
+      private def build_multimodal_content(text : String, media : Array(Bus::MediaAttachment)) : JSON::Any
+        blocks = [] of JSON::Any
+
+        blocks << JSON::Any.new({
+          "type" => JSON::Any.new("text"),
+          "text" => JSON::Any.new(text),
+        } of String => JSON::Any) unless text.empty?
+
+        media.each do |attachment|
+          if image_data = attachment.data
+            blocks << build_image_block(image_data, attachment.mime_type || "image/jpeg")
+          end
+        end
+
+        JSON::Any.new(blocks)
+      end
+
+      private def build_image_block(data : String, mime_type : String) : JSON::Any
+        JSON::Any.new({
+          "type"      => JSON::Any.new("image_url"),
+          "image_url" => JSON::Any.new({
+            "url" => JSON::Any.new("data:#{mime_type};base64,#{data}"),
+          } of String => JSON::Any),
+        } of String => JSON::Any)
       end
 
       private def load_bootstrap_files : String
