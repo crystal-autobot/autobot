@@ -44,6 +44,7 @@ Fetches a URL and extracts readable text content. Supports HTML (with tag stripp
 **Returns:** JSON with URL, status code, extracted text, and metadata.
 
 **Features:**
+
 - Follows redirects (max 5 hops)
 - HTML tag stripping with entity decoding
 - JSON pretty-printing

@@ -7,11 +7,13 @@ Autobot implements a two-layer memory system with automatic consolidation to man
 ## Overview
 
 As conversations grow, sending all previous messages to the LLM becomes:
+
 - **Expensive** - More tokens = higher costs
 - **Slow** - Larger context = slower responses
 - **Limited** - Eventually hits model context limits (200K tokens for Claude)
 
 Memory consolidation solves this by:
+
 1. **Summarizing** old messages into compact memory
 2. **Keeping** only recent messages in full context
 3. **Archiving** important facts for later retrieval
@@ -24,6 +26,7 @@ Memory consolidation solves this by:
 **Location:** `workspace/memory/MEMORY.md`
 
 Stores important facts that should persist across sessions:
+
 - User information (location, preferences, habits)
 - Project context (tech stack, architecture decisions)
 - Important decisions and outcomes
@@ -37,6 +40,7 @@ Stores important facts that should persist across sessions:
 **Location:** `workspace/memory/HISTORY.md`
 
 Append-only log of consolidated conversation summaries:
+
 - Each entry is 2-5 sentences with timestamp
 - Grep-searchable for finding past discussions
 - Contains enough detail to recall context
@@ -88,6 +92,7 @@ end
 ```
 
 **Benefits:**
+
 - Agent continues processing immediately
 - No blocking wait for LLM response
 - User sees faster response times
@@ -105,11 +110,13 @@ agents:
 ```
 
 **When to use:**
+
 - Long-running conversations
 - Want searchable history
 - Need persistent facts across sessions
 
 **Behavior:**
+
 - Consolidates after N messages
 - Keeps last 10 messages in full context
 - Archives older messages as summaries
@@ -123,12 +130,14 @@ agents:
 ```
 
 **When to use:**
+
 - Short conversations (under 50 messages)
 - Testing/development
 - Want full message history always available
 - Don't want LLM-generated summaries
 
 **Behavior:**
+
 - No consolidation happens
 - Keeps only last 10 messages (simple trim)
 - No MEMORY.md or HISTORY.md updates
@@ -143,12 +152,14 @@ agents:
 ```
 
 **Lower values (20-40):**
+
 - More frequent consolidation
 - Smaller context windows
 - Lower costs per request
 - More aggressive summarization
 
 **Higher values (80-150):**
+
 - Less frequent consolidation
 - Larger context windows
 - More detailed recent history
@@ -181,6 +192,7 @@ workspace/
 ```
 
 **Permissions:**
+
 - `memory/` directory: `0o700` (user-only access)
 - `MEMORY.md`: `0o600` (user read/write only)
 - `HISTORY.md`: `0o600` (user read/write only)
@@ -283,6 +295,7 @@ The LLM automatically reads this file at the start of each conversation.
 ### Consolidation not happening
 
 **Check:**
+
 1. Is `memory_window` set to 0? (disabled)
 2. Have you exceeded the window size?
 3. Check logs for consolidation errors
@@ -301,6 +314,7 @@ agents:
 **Cause:** Consolidation is CPU/network intensive
 
 **Solution:** Consolidation already runs in parallel (non-blocking). If still slow:
+
 - Increase `memory_window` to consolidate less often
 - Use faster model for consolidation
 - Check network latency to LLM provider
@@ -328,6 +342,7 @@ chmod 600 workspace/memory/*.md
 **Cause:** `memory_window` set too high, or individual messages are very large
 
 **Solution:**
+
 - Lower `memory_window` to 30-40
 - Break up very long messages into smaller chunks
 - Consider disabling and manually managing conversation length

@@ -95,6 +95,7 @@ docker run --rm alpine:latest echo "Sandbox ready"
 ```
 
 **Why Docker on macOS?**
+
 - macOS sandbox-exec only restricts writes, NOT reads
 - Can't prevent reading `/etc/passwd`, `~/.ssh/`, etc.
 - Docker provides full read+write isolation
@@ -119,6 +120,7 @@ tools:
 ```
 
 **Options:**
+
 - `auto` - Auto-detect best available (recommended)
 - `bubblewrap` - Force bubblewrap (Linux only)
 - `docker` - Force Docker (all platforms)

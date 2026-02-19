@@ -7,6 +7,7 @@ Security-first deployment for Autobot with production-ready examples.
 ## System Requirements
 
 **Sandboxing (required for workspace restrictions):**
+
 - **bubblewrap** (recommended for development/Pi):
   ```bash
   # Ubuntu/Debian
@@ -178,6 +179,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 ### What It Checks
 
 **❌ Errors** (blocks deployment):
+
 - Sandbox enabled but not available
 - Plaintext secrets in `config.yml`
 - `.env` permissions (must be 0600)
@@ -185,6 +187,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 - No LLM provider configured
 
 **⚠️ Warnings** (review recommended):
+
 - Gateway bound to 0.0.0.0 (network exposure)
 - Empty channel allowlists
 - Missing `.env` file
@@ -216,6 +219,7 @@ sudo systemctl reload nginx
 ```
 
 **Key features** (from template):
+
 - TLS 1.2+ with strong ciphers
 - Security headers (HSTS, X-Frame-Options, CSP)
 - WebSocket support

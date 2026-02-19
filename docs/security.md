@@ -70,6 +70,7 @@ tools:
 Built-in protection against Server-Side Request Forgery:
 
 **Blocked automatically:**
+
 - Private IP ranges (10.x, 192.168.x, 172.16-31.x)
 - Localhost/loopback (127.x, ::1)
 - Cloud metadata endpoints (169.254.169.254)
@@ -88,11 +89,13 @@ Built-in protection against Server-Side Request Forgery:
 Autobot enforces strict `.env` file protection:
 
 **Automatic blocks (LLM cannot access):**
+
 - `.env` files blocked in ReadFileTool (read, list directory)
 - `.env` files blocked in ExecTool (commands like `cat .env`)
 - Pattern matching: `.env`, `.env.local`, `.env.production`, `secrets.env`, etc.
 
 **Configuration validation (`autobot doctor`):**
+
 - ❌ Error: Plaintext secrets in `config.yml`
 - ❌ Error: `.env` permissions not 0600
 - ❌ Error: `.env` inside workspace (exposes to LLM)
@@ -110,6 +113,7 @@ ANTHROPIC_API_KEY=sk-ant-your-secret-key
 ```
 
 **File locations:**
+
 - ✅ `./autobot/.env` (outside workspace)
 - ✅ `./.env` (outside workspace)
 - ❌ `./workspace/.env` (inside workspace - BLOCKED by validation)
@@ -117,6 +121,7 @@ ANTHROPIC_API_KEY=sk-ant-your-secret-key
 ### Log Sanitization
 
 **Automatic log sanitization** redacts:
+
 - API keys (sk-ant-, sk-, AKIA, etc.)
 - Bearer tokens
 - OAuth tokens
@@ -137,6 +142,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 **Security checks performed:**
 
 **❌ Errors (blocks deployment):**
+
 - Sandbox enabled but not available
 - Plaintext secrets detected in `config.yml`
 - `.env` file permissions not 0600
@@ -144,6 +150,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 - No LLM provider configured
 
 **⚠️ Warnings (review recommended):**
+
 - Gateway bound to 0.0.0.0 (network exposure)
 - Channel authorization not configured (empty `allow_from`)
 - Missing `.env` file
@@ -162,6 +169,7 @@ Summary: 1 errors, 1 warnings, 0 info
 ```
 
 **Integration:**
+
 - Run automatically on `autobot gateway` startup
 - Exit code 1 on errors (stops deployment)
 - Use `--strict` in CI/CD pipelines to catch warnings
@@ -182,6 +190,7 @@ grep "Tokens:" ./logs/autobot.log
 ```
 
 **Log levels:**
+
 - `INFO` - Successful operations
 - `WARN` - Failed operations or ACCESS DENIED
 - `ERROR` - Exceptions and critical failures
@@ -191,12 +200,14 @@ grep "Tokens:" ./logs/autobot.log
 ## 7. File Permissions (AUTOMATIC)
 
 Autobot automatically sets restrictive permissions on sensitive files:
+
 - **Config files:** `0600` (user read/write only)
 - **Session files:** `0600` (user read/write only)
 - **Cron store:** `0600` (user read/write only)
 - **Directories:** `0700` (user access only)
 
 **Validation:**
+
 - `autobot doctor` checks `.env` permissions (must be 0600)
 - Automatic enforcement on file creation
 
@@ -205,6 +216,7 @@ Autobot automatically sets restrictive permissions on sensitive files:
 ## 8. Cron Job Isolation (AUTOMATIC)
 
 Jobs are automatically isolated by owner (channel:chat_id):
+
 - Users can only list/remove their own jobs
 - Cross-user tampering prevented
 
@@ -213,6 +225,7 @@ Jobs are automatically isolated by owner (channel:chat_id):
 ## 9. Rate Limiting (PER-SESSION)
 
 Rate limits are enforced per-session to prevent:
+
 - One user exhausting limits for others
 - Abuse of expensive operations (web search, LLM calls)
 
@@ -221,12 +234,14 @@ Rate limits are enforced per-session to prevent:
 ## 10. Isolate Runtime
 
 **Recommended deployment:**
+
 - Run with least-privileged user account
 - Use containerization (Docker) or systemd service boundaries
 - Bind gateway to localhost only (`host: 127.0.0.1`) unless external access needed
 - Use reverse proxy with TLS for external access
 
 **Production security checklist:**
+
 - [ ] `autobot doctor --strict` passes
 - [ ] Dedicated user account (not root)
 - [ ] `.env` permissions (0600)
@@ -242,5 +257,6 @@ Rate limits are enforced per-session to prevent:
 ## 11. Known Limitations
 
 **WhatsApp Bridge:** WebSocket connection has no authentication (ws://).
+
 - **Mitigation:** Only run bridge on localhost
 - **TODO:** HMAC/JWT authentication in future release

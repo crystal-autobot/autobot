@@ -35,6 +35,7 @@ All providers work with vision — the internal format uses OpenAI-compatible `i
 ## Configuration
 
 No additional configuration is needed. Vision works automatically when:
+
 - The channel is enabled and configured
 - The LLM model supports multimodal/vision input
 
@@ -59,6 +60,7 @@ channels:
 ### MediaAttachment.data
 
 The `data` field on `MediaAttachment` uses `@[JSON::Field(ignore: true)]` to keep base64 image data out of JSON serialization. This means:
+
 - Session files (JSONL) stay small — no multi-MB base64 strings
 - Past images are not re-sent on subsequent turns
 - The field is only populated for the current inbound message
