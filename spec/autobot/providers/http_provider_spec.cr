@@ -8,6 +8,10 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
     strip_provider_prefix(model)
   end
 
+  def test_parse_compatible_response(body : String) : Autobot::Providers::Response
+    parse_compatible_response(body)
+  end
+
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
@@ -142,6 +146,40 @@ describe Autobot::Providers::HttpProvider do
       provider = TestableHttpProvider.new(api_key: api_key, model: "gpt-4o")
       provider.chat(messages, model: "anthropic/claude-sonnet-4-5")
       provider.last_api_model.should eq("claude-sonnet-4-5")
+    end
+  end
+
+  describe "#parse_compatible_response error handling" do
+    provider = TestableHttpProvider.new(api_key: api_key)
+
+    it "parses standard error object" do
+      body = %({"error":{"message":"Invalid model","type":"invalid_request_error"}})
+      response = provider.test_parse_compatible_response(body)
+      response.finish_reason.should eq("error")
+      response.content.should eq("API error: Invalid model")
+    end
+
+    it "parses array-wrapped error (e.g. Google Gemini)" do
+      body = %([{"error":{"code":404,"message":"model not found","status":"NOT_FOUND"}}])
+      response = provider.test_parse_compatible_response(body)
+      response.finish_reason.should eq("error")
+      response.content.should eq("API error: model not found")
+    end
+
+    it "falls back to JSON when error has no message" do
+      body = %({"error":{"code":500}})
+      response = provider.test_parse_compatible_response(body)
+      response.finish_reason.should eq("error")
+      response.content.should_not be_nil
+      response.content.to_s.should contain("API error:")
+      response.content.to_s.should contain("500")
+    end
+
+    it "parses successful response normally" do
+      body = %({"choices":[{"message":{"content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}})
+      response = provider.test_parse_compatible_response(body)
+      response.finish_reason.should eq("stop")
+      response.content.should eq("hello")
     end
   end
 end

@@ -56,20 +56,21 @@ module Autobot
         if anthropic_native?(spec, effective_model)
           chat_anthropic(messages, tools, bare_model, max_tokens, temperature, spec)
         else
-          chat_openai(messages, tools, bare_model, max_tokens, temperature, spec)
+          chat_compatible(messages, tools, bare_model, max_tokens, temperature, spec)
         end
       rescue ex
         Log.error { "LLM request failed: #{ex.message}" }
+        Log.debug { ex.inspect_with_backtrace }
         Response.new(content: "Error calling LLM: #{ex.message}", finish_reason: "error")
       end
 
       # -----------------------------------------------------------------
-      # OpenAI-compatible request
+      # OpenAI-compatible (standard) request
       # -----------------------------------------------------------------
-      private def chat_openai(
+      private def chat_compatible(
         messages, tools, model, max_tokens, temperature, spec,
       ) : Response
-        body = build_openai_body(messages, tools, model, max_tokens, temperature, spec)
+        body = build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
         url = resolve_url(spec)
 
         headers = HTTP::Headers{
@@ -80,10 +81,10 @@ module Autobot
 
         Log.debug { "POST #{url} model=#{model}" }
         response = http_post(url, headers, body.to_json)
-        parse_openai_response(response.body)
+        parse_compatible_response(response.body)
       end
 
-      private def build_openai_body(messages, tools, model, max_tokens, temperature, spec)
+      private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
         body = {
           "model"       => JSON::Any.new(resolve_model_name(model, spec)),
           "messages"    => JSON::Any.new(messages.map { |message| JSON::Any.new(message.transform_values { |value| value }) }),
@@ -101,12 +102,11 @@ module Autobot
         body
       end
 
-      private def parse_openai_response(body : String) : Response
+      private def parse_compatible_response(body : String) : Response
         json = JSON.parse(body)
 
-        if error = json["error"]?
-          msg = error["message"]?.try(&.as_s?) || error.to_json
-          return Response.new(content: "API error: #{msg}", finish_reason: "error")
+        if error = extract_error(json)
+          return Response.new(content: "API error: #{error}", finish_reason: "error")
         end
 
         choice = json["choices"][0]
@@ -278,6 +278,16 @@ module Autobot
         return nil unless json["type"]?.try(&.as_s?) == "error"
         msg = json["error"]?.try { |error| error["message"]?.try(&.as_s?) } || body
         Response.new(content: "API error: #{msg}", finish_reason: "error")
+      end
+
+      # Extracts an error message from an OpenAI-compatible response.
+      # Handles both standard `{"error": {...}}` and array-wrapped
+      # `[{"error": {...}}]` formats (e.g. Google Gemini).
+      private def extract_error(json : JSON::Any) : String?
+        root = json.as_a?.try(&.first?) || json
+        error = root["error"]?
+        return nil unless error
+        error["message"]?.try(&.as_s?) || error.to_json
       end
 
       private def parse_anthropic_content_blocks(content_blocks : Array(JSON::Any)) : {Array(String), Array(ToolCall)}
