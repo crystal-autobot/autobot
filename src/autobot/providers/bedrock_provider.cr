@@ -92,6 +92,10 @@ module Autobot::Providers
 
       if tool_config = ToolConverter.build_tool_config(tools)
         body["toolConfig"] = tool_config
+        tool_count = tool_config["tools"]?.try(&.as_a?.try(&.size)) || 0
+        Log.debug { "Bedrock toolConfig: #{tool_count} tools" }
+      else
+        Log.debug { "Bedrock: no tools in request (input=#{tools.try(&.size) || 0})" }
       end
 
       if guardrail_config = build_guardrail_config

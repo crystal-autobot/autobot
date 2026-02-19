@@ -31,6 +31,7 @@ Supported provider blocks:
 - `gemini`
 - `openrouter`
 - `vllm` (local/hosted OpenAI-compatible endpoint)
+- `bedrock` (AWS Bedrock via Converse API) — **[Bedrock docs](bedrock.md)**
 
 ## Voice Transcription
 
@@ -149,6 +150,12 @@ providers:
   vllm:
     api_base: "http://localhost:8000"
     api_key: "token"
+  bedrock:
+    access_key_id: "${AWS_ACCESS_KEY_ID}"
+    secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+    region: "${AWS_REGION}"
+    # guardrail_id: "abc123"
+    # guardrail_version: "1"
 
 # Agent defaults
 agents:
