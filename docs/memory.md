@@ -402,4 +402,4 @@ Only recent messages remain in the active session file.
 
 - [Configuration Guide](deployment.md) - Full config options
 - [Security Guide](security.md) - File permissions and isolation
-- [Architecture Overview](../README.md) - System design
+- [Architecture Overview](architecture.md) - System design

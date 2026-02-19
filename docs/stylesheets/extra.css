@@ -1,0 +1,45 @@
+.hero {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.hero-banner {
+  max-width: 100%;
+  height: auto;
+}
+
+.hero p strong {
+  font-size: 1.3rem;
+}
+
+.demo-screenshots {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 1.5rem 0;
+}
+
+.demo-img {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.demo-screenshots .demo-img:first-child {
+  max-width: 26%;
+}
+
+.demo-screenshots .demo-img:last-child {
+  max-width: 73%;
+}
+
+@media (max-width: 768px) {
+  .demo-screenshots {
+    flex-direction: column;
+    align-items: center;
+  }
+  .demo-screenshots .demo-img:first-child,
+  .demo-screenshots .demo-img:last-child {
+    max-width: 100%;
+  }
+}
