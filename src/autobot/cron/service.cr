@@ -1,5 +1,6 @@
 require "json"
 require "uuid"
+require "cron_parser"
 require "./types"
 
 module Autobot
@@ -14,6 +15,7 @@ module Autobot
       @on_job : JobCallback?
       @store : CronStore?
       @running : Bool = false
+      @timer_generation : Int64 = 0
 
       def initialize(@store_path : Path, @on_job : JobCallback? = nil)
       end
@@ -214,48 +216,22 @@ module Autobot
           every = schedule.every_ms
           (every && every > 0) ? current_ms + every : nil
         when .cron?
-          parse_cron_next(schedule.expr, schedule.tz)
+          parse_cron_next(schedule.expr, schedule.tz, current_ms)
         else
           nil
         end
       end
 
-      # Simple cron expression parser for 5-field expressions: MIN HOUR DOM MON DOW.
-      # Supports fixed values and wildcards (*). Does not support ranges, steps, or lists.
-      private def parse_cron_next(expr : String?, tz : String? = nil) : Int64?
+      # Parse a cron expression and return the next run time in ms.
+      # Delegates to the cron_parser shard which supports:
+      # *, fixed values, ranges (1-5), steps (*/5), lists (1,15,30),
+      # combos (1-30/10), named months/days, and @hourly/@daily etc.
+      private def parse_cron_next(expr : String?, tz : String? = nil, after_ms : Int64? = nil) : Int64?
         return nil unless expr
-
-        parts = expr.split(/\s+/)
-        return nil unless parts.size == 5
-
-        now = Time.utc
-        min_field = parts[0]
-        hour_field = parts[1]
-
-        # Start from next minute, snapped to :00 seconds
-        candidate = now + 1.minute
-        candidate = Time.utc(candidate.year, candidate.month, candidate.day,
-          candidate.hour, candidate.minute, 0)
-
-        if min_field == "*" && hour_field == "*"
-          # Every minute — next minute is always a match
-          return candidate.to_unix_ms
-        end
-
-        if min_field != "*" && hour_field == "*"
-          # Fixed minute, any hour — find next hour with that minute
-          minute = min_field.to_i
-          target = Time.utc(now.year, now.month, now.day, now.hour, minute, 0)
-          target += 1.hour if target <= now
-          return target.to_unix_ms
-        end
-
-        # Fixed hour (and possibly fixed minute)
-        minute = min_field == "*" ? 0 : min_field.to_i
-        hour = hour_field.to_i
-        target = Time.utc(now.year, now.month, now.day, hour, minute, 0)
-        target += 1.day if target <= now
-        target.to_unix_ms
+        base_time = after_ms ? Time.unix_ms(after_ms) : Time.utc
+        CronParser.new(expr).next(base_time).to_unix_ms
+      rescue ArgumentError
+        nil
       end
 
       private def get_next_wake_ms : Int64?
@@ -268,11 +244,13 @@ module Autobot
         next_wake = get_next_wake_ms
         return unless next_wake && @running
 
+        @timer_generation += 1
+        generation = @timer_generation
         delay_ms = {0_i64, next_wake - now_ms}.max
 
         spawn do
           sleep delay_ms.milliseconds
-          on_timer if @running
+          on_timer if @running && generation == @timer_generation
         rescue ex
           Log.error { "Cron timer error: #{ex.message}" }
           arm_timer if @running
@@ -290,9 +268,9 @@ module Autobot
 
         due_jobs.each do |job|
           execute_job(job)
+          save_store
         end
 
-        save_store
         arm_timer
       end
 

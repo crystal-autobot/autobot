@@ -1,8 +1,12 @@
 module Autobot
   module CLI
     module CronCmd
-      TABLE_FORMAT = "%-10s %-20s %-20s %-10s %-20s"
-      TABLE_WIDTH  = 82
+      TABLE_FORMAT     = "%-10s %-20s %-20s %-10s %-20s"
+      TABLE_WIDTH      = 82
+      COLUMN_MAX_WIDTH = 20
+      TIME_FORMAT      = "%Y-%m-%d %H:%M"
+      NIL_PLACEHOLDER  = "-"
+      MS_PER_SECOND    = 1000
 
       def self.list(config_path : String?, include_all : Bool) : Nil
         service = cron_service
@@ -18,10 +22,10 @@ module Autobot
 
         jobs.each do |job|
           sched = format_schedule(job.schedule)
-          next_run = format_next_run(service.compute_next_run_for(job))
+          next_run = format_time_ms(service.compute_next_run_for(job))
           status = job.enabled? ? "enabled" : "disabled"
 
-          puts TABLE_FORMAT % [job.id, job.name[0, 20], sched[0, 20], status, next_run]
+          puts TABLE_FORMAT % [job.id, job.name[0, COLUMN_MAX_WIDTH], sched[0, COLUMN_MAX_WIDTH], status, next_run]
         end
       end
 
@@ -39,11 +43,12 @@ module Autobot
         puts "Name:     #{job.name}"
         puts "Status:   #{status}"
         puts "Schedule: #{format_schedule(job.schedule)}"
-        puts "Next Run: #{format_next_run(service.compute_next_run_for(job))}"
+        puts "Next Run: #{format_time_ms(service.compute_next_run_for(job))}"
+        puts "Last Run: #{format_time_ms(job.state.last_run_at_ms)}"
         puts "Message:  #{job.payload.message}"
         puts "Deliver:  #{job.payload.deliver?}"
-        puts "Channel:  #{job.payload.channel || "-"}"
-        puts "To:       #{job.payload.to || "-"}"
+        puts "Channel:  #{job.payload.channel || NIL_PLACEHOLDER}"
+        puts "To:       #{job.payload.to || NIL_PLACEHOLDER}"
       end
 
       def self.add(
@@ -127,7 +132,7 @@ module Autobot
         case schedule.kind
         when .every?
           every = schedule.every_ms
-          every ? "every #{every // 1000}s" : "every ?"
+          every ? "every #{every // MS_PER_SECOND}s" : "every ?"
         when .cron?
           schedule.expr || ""
         when .at?
@@ -137,11 +142,11 @@ module Autobot
         end
       end
 
-      private def self.format_next_run(next_run_at_ms : Int64?) : String
-        if ms = next_run_at_ms
-          Time.unix_ms(ms).to_s("%Y-%m-%d %H:%M")
+      private def self.format_time_ms(time_ms : Int64?) : String
+        if ms = time_ms
+          Time.unix_ms(ms).to_s(TIME_FORMAT)
         else
-          "-"
+          NIL_PLACEHOLDER
         end
       end
     end

@@ -352,6 +352,118 @@ describe Autobot::Cron::Service do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "computes next run relative to last_run, not now" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "relative",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* * * * *"),
+        message: "tick"
+      )
+
+      # Simulate last run 5 minutes ago
+      five_min_ago = Time.utc.to_unix_ms - 300_000
+      job.state = job.state.copy(last_run_at_ms: five_min_ago)
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      # Next run should be ~4 minutes ago (next minute after last_run),
+      # not in the future
+      next_run_ms = next_run.as(Int64)
+      next_run_ms.should be < Time.utc.to_unix_ms
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "cron job becomes due when next occurrence is in the past" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "due_check",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* * * * *"),
+        message: "check"
+      )
+
+      # Simulate last run 2 minutes ago
+      two_min_ago = Time.utc.to_unix_ms - 120_000
+      job.state = job.state.copy(last_run_at_ms: two_min_ago)
+
+      now = Time.utc.to_unix_ms
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      # Job should be due: now >= next_run
+      (now >= next_run.as(Int64)).should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "cron job is not due immediately after running" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "just_ran",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* * * * *"),
+        message: "check"
+      )
+
+      # Simulate last run just now
+      job.state = job.state.copy(last_run_at_ms: Time.utc.to_unix_ms)
+
+      now = Time.utc.to_unix_ms
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      # Job should NOT be due yet (next run is ~1 minute from now)
+      (now >= next_run.as(Int64)).should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "supports step expressions like */5" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "every_5min",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "*/5 * * * *"),
+        message: "five"
+      )
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      (next_time.minute % 5).should eq(0)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "supports range expressions like 9-17" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "work_hours",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "0 9-17 * * *"),
+        message: "work"
+      )
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      next_time.hour.should be >= 9
+      next_time.hour.should be <= 17
+      next_time.minute.should eq(0)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "returns nil for invalid expression" do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")

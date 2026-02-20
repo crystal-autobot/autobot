@@ -49,11 +49,16 @@ module Autobot
             ),
             "every_seconds" => PropertySchema.new(
               type: "integer",
-              description: "Interval in seconds (for recurring tasks)"
+              description: "Interval in seconds (for recurring tasks). Minimum: 1. " \
+                           "Prefer this for sub-minute intervals."
             ),
             "cron_expr" => PropertySchema.new(
               type: "string",
-              description: "Cron expression like '0 9 * * *' (for scheduled tasks)"
+              description: "Standard 5-field cron: MIN(0-59) HOUR(0-23) DOM(1-31) MON(1-12) DOW(0-6). " \
+                           "Supports: * (any), ranges (9-17), steps (*/5), lists (1,15,30). " \
+                           "All values must be integers. Minimum granularity: 1 minute. " \
+                           "Examples: '*/5 * * * *' (every 5 min), '0 9 * * 1-5' (weekdays 9am). " \
+                           "For sub-minute intervals use every_seconds instead."
             ),
             "at" => PropertySchema.new(
               type: "string",
