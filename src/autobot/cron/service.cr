@@ -218,8 +218,8 @@ module Autobot
         end
       end
 
-      # Simple cron expression parser for common patterns.
-      # Supports: "MIN HOUR * * *" format. For full cron, a library would be needed.
+      # Simple cron expression parser for 5-field expressions: MIN HOUR DOM MON DOW.
+      # Supports fixed values and wildcards (*). Does not support ranges, steps, or lists.
       private def parse_cron_next(expr : String?, tz : String? = nil) : Int64?
         return nil unless expr
 
@@ -227,13 +227,32 @@ module Autobot
         return nil unless parts.size == 5
 
         now = Time.utc
-        minute = parts[0] == "*" ? now.minute : parts[0].to_i
-        hour = parts[1] == "*" ? now.hour : parts[1].to_i
+        min_field = parts[0]
+        hour_field = parts[1]
 
-        # Calculate next occurrence
+        # Start from next minute, snapped to :00 seconds
+        candidate = now + 1.minute
+        candidate = Time.utc(candidate.year, candidate.month, candidate.day,
+          candidate.hour, candidate.minute, 0)
+
+        if min_field == "*" && hour_field == "*"
+          # Every minute — next minute is always a match
+          return candidate.to_unix_ms
+        end
+
+        if min_field != "*" && hour_field == "*"
+          # Fixed minute, any hour — find next hour with that minute
+          minute = min_field.to_i
+          target = Time.utc(now.year, now.month, now.day, now.hour, minute, 0)
+          target += 1.hour if target <= now
+          return target.to_unix_ms
+        end
+
+        # Fixed hour (and possibly fixed minute)
+        minute = min_field == "*" ? 0 : min_field.to_i
+        hour = hour_field.to_i
         target = Time.utc(now.year, now.month, now.day, hour, minute, 0)
-        target = target + 1.day if target <= now
-
+        target += 1.day if target <= now
         target.to_unix_ms
       end
 

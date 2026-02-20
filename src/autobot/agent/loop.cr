@@ -218,7 +218,7 @@ module Autobot::Agent
     end
 
     # Tools excluded from background turns (cron jobs, subagent work).
-    BACKGROUND_EXCLUDED_TOOLS = ["cron", "spawn"]
+    BACKGROUND_EXCLUDED_TOOLS = ["spawn"]
 
     # Run the tool execution loop and return the final content, tools used, and total tokens.
     private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String, background : Bool = false) : {String?, Array(String), Int32}
@@ -280,7 +280,14 @@ module Autobot::Agent
     private def build_cron_prompt(msg : Bus::InboundMessage) : String
       job_id = msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)
       Log.info { "Cron turn: job=#{job_id}" }
-      msg.content
+
+      <<-PROMPT
+      This is a scheduled cron execution (job: #{job_id}). The job is already running — do NOT create new cron jobs.
+      Execute the task below, then stop.
+      Use `cron remove` with job_id "#{job_id}" only if the task is complete and monitoring should stop.
+
+      Task: #{msg.content}
+      PROMPT
     end
 
     # Update spawn, cron, and message tool contexts for current session.

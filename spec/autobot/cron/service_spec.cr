@@ -264,6 +264,110 @@ describe Autobot::Cron::Service do
     end
   end
 
+  describe "cron expression scheduling" do
+    it "schedules * * * * * to the next minute" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      now = Time.utc
+      job = service.add_job(
+        name: "every_min",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* * * * *"),
+        message: "ping"
+      )
+
+      next_run = job.state.next_run_at_ms
+      next_run.should_not be_nil
+
+      # Should be within 2 minutes from now (next minute boundary)
+      diff_ms = next_run.as(Int64) - now.to_unix_ms
+      diff_ms.should be > 0
+      diff_ms.should be <= 120_000
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "schedules fixed minute with wildcard hour" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      now = Time.utc
+      job = service.add_job(
+        name: "on_the_half",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "30 * * * *"),
+        message: "half past"
+      )
+
+      next_run = job.state.next_run_at_ms
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      next_time.minute.should eq(30)
+      next_time.should be > now
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "schedules fixed hour and minute" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      now = Time.utc
+      job = service.add_job(
+        name: "daily_9am",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "0 9 * * *"),
+        message: "morning"
+      )
+
+      next_run = job.state.next_run_at_ms
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      next_time.hour.should eq(9)
+      next_time.minute.should eq(0)
+      next_time.should be > now
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "schedules wildcard minute with fixed hour" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      now = Time.utc
+      job = service.add_job(
+        name: "noon_start",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* 12 * * *"),
+        message: "noon"
+      )
+
+      next_run = job.state.next_run_at_ms
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      next_time.hour.should eq(12)
+      next_time.minute.should eq(0)
+      next_time.should be > now
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns nil for invalid expression" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "bad_expr",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "invalid"),
+        message: "nope"
+      )
+
+      job.state.next_run_at_ms.should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
   it "loads existing store from disk" do
     tmp = TestHelper.tmp_dir
     store_path = tmp / "cron.json"

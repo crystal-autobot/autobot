@@ -49,7 +49,7 @@ end
 
 describe Autobot::Agent::Loop do
   describe "#build_cron_prompt" do
-    it "includes the original message" do
+    it "includes the task message" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)
       msg = Autobot::Bus::InboundMessage.new(
@@ -65,7 +65,7 @@ describe Autobot::Agent::Loop do
       FileUtils.rm_rf(tmp) if tmp
     end
 
-    it "returns the original message content" do
+    it "includes the job ID" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)
       msg = Autobot::Bus::InboundMessage.new(
@@ -76,7 +76,40 @@ describe Autobot::Agent::Loop do
       )
 
       prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should eq("Check something")
+      prompt.should contain("abc12345")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "instructs not to create new cron jobs" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "cron:xyz789",
+        chat_id: "telegram:user1",
+        content: "Monitor file"
+      )
+
+      prompt = loop_inst.test_build_cron_prompt(msg)
+      prompt.should contain("do NOT create new cron jobs")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "includes cron remove instruction with job ID" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "cron:stop123",
+        chat_id: "telegram:user1",
+        content: "Check state"
+      )
+
+      prompt = loop_inst.test_build_cron_prompt(msg)
+      prompt.should contain("cron remove")
+      prompt.should contain("stop123")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

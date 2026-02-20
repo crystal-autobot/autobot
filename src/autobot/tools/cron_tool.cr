@@ -28,7 +28,8 @@ module Autobot
 
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
-        "When fired, triggers a full agent turn with all tools. Response is auto-delivered to the user. " \
+        "Each firing triggers a single agent turn — the `message` is the turn's prompt. " \
+        "Response is auto-delivered to the user. " \
         "Actions: add, list, remove. " \
         "Always confirm with the user before add or remove."
       end
@@ -43,7 +44,8 @@ module Autobot
             ),
             "message" => PropertySchema.new(
               type: "string",
-              description: "Self-contained instruction for the agent turn. Include specific tool names and parameters (e.g. 'Use web_search to find latest news about X. Notify the user with a summary.')"
+              description: "Single-execution instruction — what to do on THIS firing, not the schedule. " \
+                           "Write as a direct action with specific tool names. "
             ),
             "every_seconds" => PropertySchema.new(
               type: "integer",
