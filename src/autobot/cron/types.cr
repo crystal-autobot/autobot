@@ -11,6 +11,7 @@ module Autobot
     enum PayloadKind
       SystemEvent
       AgentTurn
+      Exec
     end
 
     enum JobStatus
@@ -42,8 +43,9 @@ module Autobot
       property? deliver : Bool = false
       property channel : String? = nil
       property to : String? = nil
+      property command : String? = nil
 
-      def initialize(@kind = PayloadKind::AgentTurn, @message = "", @deliver = false, @channel = nil, @to = nil)
+      def initialize(@kind = PayloadKind::AgentTurn, @message = "", @deliver = false, @channel = nil, @to = nil, @command = nil)
       end
     end
 
@@ -54,8 +56,9 @@ module Autobot
       property last_run_at_ms : Int64? = nil
       property last_status : JobStatus? = nil
       property last_error : String? = nil
+      property last_output : String? = nil
 
-      def initialize(@last_run_at_ms = nil, @last_status = nil, @last_error = nil)
+      def initialize(@last_run_at_ms = nil, @last_status = nil, @last_error = nil, @last_output = nil)
       end
 
       # Create a copy with selectively overridden fields.
@@ -63,11 +66,13 @@ module Autobot
         last_run_at_ms : Int64? | Nil = @last_run_at_ms,
         last_status : JobStatus? | Nil = @last_status,
         last_error : String? | Nil = @last_error,
+        last_output : String? | Nil = @last_output,
       ) : CronJobState
         CronJobState.new(
           last_run_at_ms: last_run_at_ms,
           last_status: last_status,
           last_error: last_error,
+          last_output: last_output,
         )
       end
     end

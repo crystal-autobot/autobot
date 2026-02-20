@@ -76,7 +76,19 @@ module Autobot
           nil
         end
 
-        cron_service = Cron::Service.new(cron_store_path, on_job: on_job)
+        on_exec = ->(job : Cron::CronJob, output : String) do
+          channel = job.payload.channel
+          chat_id = job.payload.to
+          if channel && chat_id && !chat_id.empty?
+            bus.publish_outbound(Bus::OutboundMessage.new(
+              channel: channel,
+              chat_id: chat_id,
+              content: output,
+            ))
+          end
+        end
+
+        cron_service = Cron::Service.new(cron_store_path, on_job: on_job, on_exec: on_exec)
         cron_service.start
 
         cron_jobs = cron_service.list_jobs.size
