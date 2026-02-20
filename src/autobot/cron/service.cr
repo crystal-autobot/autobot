@@ -86,26 +86,6 @@ module Autobot
         job
       end
 
-      # Update the state of a job.
-      def set_state(job_id : String, state : JSON::Any) : Bool
-        store.jobs.each do |job|
-          if job.id == job_id
-            job.state = job.state.copy(state: state)
-            save_store
-            return true
-          end
-        end
-        false
-      end
-
-      # Get the state of a job.
-      def get_state(job_id : String) : JSON::Any?
-        store.jobs.each do |job|
-          return job.state.state if job.id == job_id
-        end
-        nil
-      end
-
       # Remove a job by ID.
       # If owner is provided, only removes job if it matches the owner.
       def remove_job(job_id : String, owner : String? = nil) : Bool

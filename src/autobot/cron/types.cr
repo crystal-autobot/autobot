@@ -55,9 +55,8 @@ module Autobot
       property last_run_at_ms : Int64? = nil
       property last_status : JobStatus? = nil
       property last_error : String? = nil
-      property state : JSON::Any? = nil
 
-      def initialize(@next_run_at_ms = nil, @last_run_at_ms = nil, @last_status = nil, @last_error = nil, @state = nil)
+      def initialize(@next_run_at_ms = nil, @last_run_at_ms = nil, @last_status = nil, @last_error = nil)
       end
 
       # Create a copy with selectively overridden fields.
@@ -67,14 +66,12 @@ module Autobot
         last_run_at_ms : Int64? | Nil = @last_run_at_ms,
         last_status : JobStatus? | Nil = @last_status,
         last_error : String? | Nil = @last_error,
-        state : JSON::Any? | Nil = @state,
       ) : CronJobState
         CronJobState.new(
           next_run_at_ms: next_run_at_ms,
           last_run_at_ms: last_run_at_ms,
           last_status: last_status,
           last_error: last_error,
-          state: state
         )
       end
     end

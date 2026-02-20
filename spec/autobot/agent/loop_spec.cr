@@ -65,7 +65,7 @@ describe Autobot::Agent::Loop do
       FileUtils.rm_rf(tmp) if tmp
     end
 
-    it "includes job_id for set_state" do
+    it "returns the original message content" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)
       msg = Autobot::Bus::InboundMessage.new(
@@ -76,112 +76,7 @@ describe Autobot::Agent::Loop do
       )
 
       prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should contain("job_id=`abc12345`")
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
-    end
-
-    it "injects previous state when available" do
-      tmp = TestHelper.tmp_dir
-      cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
-
-      job = cron.add_job(
-        name: "stateful",
-        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
-        message: "Check steps"
-      )
-
-      state = JSON::Any.new({"step_count" => JSON::Any.new(5000_i64)})
-      cron.set_state(job.id, state)
-
-      loop_inst = create_test_loop(workspace: tmp, cron_service: cron)
-      msg = Autobot::Bus::InboundMessage.new(
-        channel: Autobot::Constants::CHANNEL_SYSTEM,
-        sender_id: "cron:#{job.id}",
-        chat_id: "telegram:user1",
-        content: "Check steps"
-      )
-
-      prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should contain("Previous state")
-      prompt.should contain("step_count")
-      prompt.should contain("5000")
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
-    end
-
-    it "omits state section when no previous state" do
-      tmp = TestHelper.tmp_dir
-      cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
-
-      job = cron.add_job(
-        name: "no_state",
-        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
-        message: "Check something"
-      )
-
-      loop_inst = create_test_loop(workspace: tmp, cron_service: cron)
-      msg = Autobot::Bus::InboundMessage.new(
-        channel: Autobot::Constants::CHANNEL_SYSTEM,
-        sender_id: "cron:#{job.id}",
-        chat_id: "telegram:user1",
-        content: "Check something"
-      )
-
-      prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should_not contain("Previous state")
-      prompt.should_not contain("CHANGED")
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
-    end
-
-    it "includes comparison instruction when state exists" do
-      tmp = TestHelper.tmp_dir
-      cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
-
-      job = cron.add_job(
-        name: "compare",
-        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
-        message: "Monitor"
-      )
-
-      cron.set_state(job.id, JSON::Any.new({"val" => JSON::Any.new(1_i64)}))
-
-      loop_inst = create_test_loop(workspace: tmp, cron_service: cron)
-      msg = Autobot::Bus::InboundMessage.new(
-        channel: Autobot::Constants::CHANNEL_SYSTEM,
-        sender_id: "cron:#{job.id}",
-        chat_id: "telegram:user1",
-        content: "Monitor"
-      )
-
-      prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should contain("CHANGED")
-      prompt.should contain("previous state")
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
-    end
-
-    it "instructs to use same keys for consistency" do
-      tmp = TestHelper.tmp_dir
-      cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
-
-      job = cron.add_job(
-        name: "keys",
-        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
-        message: "Test"
-      )
-
-      loop_inst = create_test_loop(workspace: tmp, cron_service: cron)
-      msg = Autobot::Bus::InboundMessage.new(
-        channel: Autobot::Constants::CHANNEL_SYSTEM,
-        sender_id: "cron:#{job.id}",
-        chat_id: "telegram:user1",
-        content: "Test"
-      )
-
-      prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should contain("same keys")
+      prompt.should eq("Check something")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

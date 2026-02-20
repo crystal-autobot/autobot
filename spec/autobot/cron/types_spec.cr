@@ -63,41 +63,23 @@ describe Autobot::Cron::CronPayload do
 end
 
 describe Autobot::Cron::CronJobState do
-  it "creates with nil state by default" do
+  it "creates with nil fields by default" do
     state = Autobot::Cron::CronJobState.new
-    state.state.should be_nil
     state.next_run_at_ms.should be_nil
     state.last_run_at_ms.should be_nil
     state.last_status.should be_nil
   end
 
-  it "stores arbitrary JSON state" do
-    data = JSON::Any.new({"steps" => JSON::Any.new(5000_i64), "active" => JSON::Any.new(true)})
-    state = Autobot::Cron::CronJobState.new(state: data)
-    state.state.should eq(data)
-  end
-
-  it "serializes state to JSON and back" do
-    data = JSON::Any.new({"temperature" => JSON::Any.new(22.5)})
+  it "serializes to JSON and back" do
     state = Autobot::Cron::CronJobState.new(
       next_run_at_ms: 1700000000000_i64,
       last_status: Autobot::Cron::JobStatus::Ok,
-      state: data
     )
 
     json = state.to_json
     restored = Autobot::Cron::CronJobState.from_json(json)
     restored.next_run_at_ms.should eq(1700000000000_i64)
     restored.last_status.should eq(Autobot::Cron::JobStatus::Ok)
-    restored.state.should eq(data)
-  end
-
-  it "handles nil state in serialization" do
-    state = Autobot::Cron::CronJobState.new(next_run_at_ms: 1000_i64)
-    json = state.to_json
-    restored = Autobot::Cron::CronJobState.from_json(json)
-    restored.state.should be_nil
-    restored.next_run_at_ms.should eq(1000_i64)
   end
 end
 
@@ -135,19 +117,16 @@ describe Autobot::Cron::CronJob do
     restored.payload.message.should eq("Good morning!")
   end
 
-  it "serializes job with state and owner" do
-    state_data = JSON::Any.new({"count" => JSON::Any.new(10_i64)})
+  it "serializes job with owner" do
     job = Autobot::Cron::CronJob.new(
       id: "s1",
-      name: "stateful",
-      state: Autobot::Cron::CronJobState.new(state: state_data),
+      name: "owned",
       owner: "telegram:user123"
     )
 
     json = job.to_json
     restored = Autobot::Cron::CronJob.from_json(json)
     restored.owner.should eq("telegram:user123")
-    restored.state.state.should eq(state_data)
   end
 end
 

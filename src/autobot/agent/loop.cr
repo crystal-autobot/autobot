@@ -199,7 +199,7 @@ module Autobot::Agent
         background: is_cron
       )
 
-      final_content, tools_used, _total_tokens = run_tool_loop(messages, session.key)
+      final_content, tools_used, _total_tokens = run_tool_loop(messages, session.key, background: is_cron)
       final_content ||= "Background task completed."
 
       if is_cron
@@ -224,7 +224,7 @@ module Autobot::Agent
     end
 
     # Run the tool execution loop and return the final content, tools used, and total tokens.
-    private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String?, Array(String), Int32}
+    private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String, background : Bool = false) : {String?, Array(String), Int32}
       final_content : String? = nil
       tools_used = [] of String
       total_tokens = 0
@@ -279,29 +279,10 @@ module Autobot::Agent
     end
 
     # Build prompt for cron-triggered agent turns.
-    # Injects the job's persisted state so the agent can compare with current data.
     private def build_cron_prompt(msg : Bus::InboundMessage) : String
       job_id = msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)
-      state = @cron_service.try(&.get_state(job_id))
-
-      if state
-        state_preview = truncate(state.to_json, LONG_MESSAGE_PREVIEW_LENGTH)
-        Log.info { "Cron turn: job=#{job_id}, state=#{state_preview}" }
-      else
-        Log.info { "Cron turn: job=#{job_id}, state=(none)" }
-      end
-
-      prompt = String.build do |io|
-        io << msg.content
-        if state
-          io << "\n\nPrevious state: "
-          io << state.to_json
-          io << "\nOnly notify via `message` if values CHANGED vs previous state."
-        end
-        io << "\nAlways call `cron` with action=`set_state`, job_id=`#{job_id}`, state={...}. Use same keys as previous state."
-      end
-
-      prompt
+      Log.info { "Cron turn: job=#{job_id}" }
+      msg.content
     end
 
     # Update spawn, cron, and message tool contexts for current session.

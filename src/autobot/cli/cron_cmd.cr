@@ -42,9 +42,6 @@ module Autobot
         puts "Deliver:  #{job.payload.deliver?}"
         puts "Channel:  #{job.payload.channel || "-"}"
         puts "To:       #{job.payload.to || "-"}"
-        if state = job.state.state
-          puts "State:    #{state.to_json}"
-        end
       end
 
       def self.add(

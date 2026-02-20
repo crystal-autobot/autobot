@@ -240,9 +240,7 @@ module Autobot::Agent
         Only use the 'message' tool when you need to send a message to a specific chat channel.
         For normal conversation, just respond with text - do not call the message tool.
 
-        For delayed/scheduled tasks, always use `cron` tool (never `exec sleep`).
-        Cron jobs trigger a full agent turn. Use `set_state` to persist data between runs.
-        Cron turns never auto-deliver — use the `message` tool to notify the user when needed.
+        For delayed/scheduled tasks, use `cron` tool (never `exec sleep`).
 
         Always be helpful, accurate, and concise. When using tools, think step by step.
         When remembering something important, write to memory/MEMORY.md

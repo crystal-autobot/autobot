@@ -28,8 +28,10 @@ module Autobot
 
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
-        "When fired, the message triggers a full agent turn with all tools. " \
-        "Actions: add, list, remove, set_state."
+        "When fired, triggers a full agent turn with all tools. " \
+        "Cron turns never auto-deliver — use `message` tool to notify. " \
+        "Actions: add, list, remove. " \
+        "Always confirm with the user before add or remove."
       end
 
       def parameters : ToolSchema
@@ -37,7 +39,7 @@ module Autobot
           properties: {
             "action" => PropertySchema.new(
               type: "string",
-              enum_values: ["add", "list", "remove", "set_state"],
+              enum_values: ["add", "list", "remove"],
               description: "Action to perform"
             ),
             "message" => PropertySchema.new(
@@ -58,11 +60,7 @@ module Autobot
             ),
             "job_id" => PropertySchema.new(
               type: "string",
-              description: "Job ID (for remove, set_state)"
-            ),
-            "state" => PropertySchema.new(
-              type: "object",
-              description: "State data to persist for this job (for set_state). Saved to the job and injected on next run."
+              description: "Job ID (for remove)"
             ),
           },
           required: ["action"]
@@ -79,8 +77,6 @@ module Autobot
           list_jobs
         when "remove"
           remove_job(params)
-        when "set_state"
-          set_state(params)
         else
           ToolResult.error("Unknown action: #{action}")
         end
@@ -144,20 +140,6 @@ module Autobot
           ToolResult.success("Removed job #{job_id}")
         else
           ToolResult.error("Job #{job_id} not found or access denied")
-        end
-      end
-
-      private def set_state(params : Hash(String, JSON::Any)) : ToolResult
-        job_id = params["job_id"]?.try(&.as_s)
-        return ToolResult.error("job_id is required for set_state") unless job_id
-
-        state = params["state"]?
-        return ToolResult.error("state is required for set_state") unless state
-
-        if @cron.set_state(job_id, state)
-          ToolResult.success("State updated for job #{job_id}")
-        else
-          ToolResult.error("Job #{job_id} not found")
         end
       end
 
