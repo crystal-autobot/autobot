@@ -29,11 +29,18 @@ Runs repeatedly at a fixed interval.
 
 ### Cron Expression (`cron_expr`)
 
-Standard 5-field cron syntax: `MIN HOUR DOM MON DOW`
+Standard 5-field cron syntax: `MIN(0-59) HOUR(0-23) DOM(1-31) MON(1-12) DOW(0-6)`
+
+Supports: `*` (any), ranges (`9-17`), steps (`*/5`), lists (`1,15,30`), combos (`1-30/10`), named months (`jan`-`dec`), named days (`mon`-`sun`), and shortcuts (`@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`).
+
+All values must be integers. Minimum granularity is 1 minute — for sub-minute intervals, use `every_seconds`.
 
 ```
 "Send me a morning briefing at 9am"
 → cron_expr: "0 9 * * *"
+
+"Every 5 minutes during work hours on weekdays"
+→ cron_expr: "*/5 9-17 * * 1-5"
 ```
 
 ### One-Time (`at`)
@@ -77,8 +84,9 @@ graph LR
 
 Cron turns use a minimal system prompt and exclude certain tools to prevent unintended behavior:
 
-- **`cron`** — excluded to prevent jobs from creating more jobs
 - **`spawn`** — excluded to prevent background task proliferation
+
+The `cron` tool is available in background turns so jobs can self-remove when their task is complete (e.g., "monitor X until condition Y, then stop").
 
 ---
 
