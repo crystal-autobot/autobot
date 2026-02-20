@@ -125,6 +125,37 @@ module Autobot
         removed
       end
 
+      # Update a job's schedule and/or message in place.
+      # Returns the updated job, or nil if not found / access denied.
+      def update_job(
+        job_id : String,
+        owner : String? = nil,
+        schedule : CronSchedule? = nil,
+        message : String? = nil,
+      ) : CronJob?
+        store.jobs.each do |job|
+          if job.id == job_id
+            return nil if owner && job.owner != owner
+
+            job.schedule = schedule if schedule
+            if msg = message
+              job.payload = CronPayload.new(
+                kind: job.payload.kind,
+                message: msg,
+                deliver: job.payload.deliver?,
+                channel: job.payload.channel,
+                to: job.payload.to,
+              )
+            end
+            job.updated_at_ms = now_ms
+            save_store
+            arm_timer
+            return job
+          end
+        end
+        nil
+      end
+
       # Enable or disable a job.
       def enable_job(job_id : String, enabled : Bool = true) : CronJob?
         store.jobs.each do |job|

@@ -83,6 +83,19 @@ module Autobot
           CronCmd.list(options[:config_path], options[:cron_all])
         when "add"
           handle_cron_add(options)
+        when "update"
+          handle_cron_update(options)
+        when "clear"
+          CronCmd.clear(options[:config_path])
+        when "help"
+          print_cron_help
+        else
+          handle_cron_job_command(subcommand, options)
+        end
+      end
+
+      private def self.handle_cron_job_command(subcommand : String, options) : Nil
+        case subcommand
         when "show"
           CronCmd.show(options[:config_path], require_job_id(options[:args]))
         when "remove"
@@ -91,15 +104,20 @@ module Autobot
           CronCmd.enable(options[:config_path], require_job_id(options[:args]), subcommand == "enable")
         when "run"
           CronCmd.run_job(options[:config_path], require_job_id(options[:args]), options[:cron_force])
-        when "clear"
-          CronCmd.clear(options[:config_path])
-        when "help"
-          print_cron_help
         else
           STDERR.puts "Unknown cron subcommand: #{subcommand}"
           STDERR.puts "Run 'autobot cron help' for usage."
           exit 1
         end
+      end
+
+      private def self.handle_cron_update(options) : Nil
+        job_id = require_job_id(options[:args])
+        CronCmd.update(
+          options[:config_path], job_id,
+          options[:message] || options[:cron_message],
+          options[:cron_every], options[:cron_expr], options[:cron_at]
+        )
       end
 
       private def self.handle_cron_add(options) : Nil
@@ -222,6 +240,7 @@ module Autobot
         puts "  list              List scheduled jobs (use -a to include disabled)"
         puts "  show <job_id>     Show full job details including message"
         puts "  add               Add a new job (requires -n, -m, and a schedule)"
+        puts "  update <job_id>   Update a job's schedule or message"
         puts "  remove <job_id>   Remove a job"
         puts "  enable <job_id>   Enable a job"
         puts "  disable <job_id>  Disable a job"
@@ -254,7 +273,7 @@ module Autobot
         puts "  doctor    Check configuration and security (use --strict for warnings as errors)"
         puts "  agent     Interact with the agent (single message or interactive)"
         puts "  gateway   Start the gateway server"
-        puts "  cron      Manage scheduled tasks (list|show|add|remove|enable|disable|run|clear)"
+        puts "  cron      Manage scheduled tasks (list|show|add|update|remove|enable|disable|run|clear)"
         puts "  status    Show system status"
         puts "  version   Show version info"
         puts "  help      Show this help\n\n"
