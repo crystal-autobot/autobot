@@ -158,7 +158,7 @@ module Autobot::Agent
       )
 
       # Execute agent loop and get response
-      final_content, tools_used = execute_agent_loop(messages, session.key)
+      final_content, tools_used, _total_tokens = execute_agent_loop(messages, session.key)
 
       # Save to session
       save_to_session(session, msg.content, final_content, tools_used)
@@ -199,12 +199,12 @@ module Autobot::Agent
         background: is_cron
       )
 
-      final_content, tools_used, total_tokens = run_tool_loop(messages, session.key)
+      final_content, tools_used, _total_tokens = run_tool_loop(messages, session.key)
       final_content ||= "Background task completed."
 
       if is_cron
         notified = tools_used.includes?("message")
-        Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, notified=#{notified}, tools=#{tools_used}, tokens=#{total_tokens}" }
+        Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, notified=#{notified}, tools=#{tools_used}" }
       end
 
       unless is_cron
@@ -324,12 +324,14 @@ module Autobot::Agent
     end
 
     # Execute the agent loop with tool calls
-    private def execute_agent_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String, Array(String)}
+    private def execute_agent_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String, Array(String), Int32}
       final_content : String? = nil
       tools_used = [] of String
+      total_tokens = 0
 
       @max_iterations.times do
         response = call_llm(messages)
+        total_tokens += response.usage.total_tokens
 
         if response.has_tool_calls?
           messages = process_tool_calls(messages, response, tools_used, session_key)
@@ -340,7 +342,7 @@ module Autobot::Agent
       end
 
       final_content ||= "I've completed processing but have no response to give."
-      {final_content, tools_used}
+      {final_content, tools_used, total_tokens}
     end
 
     # Call LLM and log token usage
@@ -353,7 +355,7 @@ module Autobot::Agent
 
       usage = response.usage
       unless usage.zero?
-        Log.debug { "Tokens: prompt=#{usage.prompt_tokens} completion=#{usage.completion_tokens} total=#{usage.total_tokens}" }
+        Log.info { "Tokens: prompt=#{usage.prompt_tokens} completion=#{usage.completion_tokens} total=#{usage.total_tokens}" }
       end
 
       response
