@@ -156,8 +156,8 @@ describe Autobot::Agent::Loop do
       )
 
       prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should contain("Compare current values")
       prompt.should contain("CHANGED")
+      prompt.should contain("previous state")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

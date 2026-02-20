@@ -170,7 +170,7 @@ module Autobot::Agent
     # Process a system message (e.g., subagent announcement).
     # Routes response back to the original channel.
     private def process_system_message(msg : Bus::InboundMessage) : Bus::OutboundMessage?
-      Log.info { "Processing system message from #{msg.sender_id}" }
+      Log.debug { "Processing system message from #{msg.sender_id}" }
 
       # Parse origin from chat_id (format: "channel:chat_id")
       origin_channel, origin_chat_id = if msg.chat_id.includes?(":")
@@ -198,12 +198,12 @@ module Autobot::Agent
         chat_id: origin_chat_id
       )
 
-      final_content, tools_used = run_tool_loop(messages, session.key)
+      final_content, tools_used, total_tokens = run_tool_loop(messages, session.key)
       final_content ||= "Background task completed."
 
       if is_cron
         notified = tools_used.includes?("message")
-        Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, notified=#{notified}, tools=#{tools_used}" }
+        Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, notified=#{notified}, tools=#{tools_used}, tokens=#{total_tokens}" }
       end
 
       unless is_cron
@@ -222,13 +222,15 @@ module Autobot::Agent
       )
     end
 
-    # Run the tool execution loop and return the final content and tools used.
-    private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String?, Array(String)}
+    # Run the tool execution loop and return the final content, tools used, and total tokens.
+    private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String?, Array(String), Int32}
       final_content : String? = nil
       tools_used = [] of String
+      total_tokens = 0
 
       @max_iterations.times do
         response = call_llm(messages)
+        total_tokens += response.usage.total_tokens
 
         if response.has_tool_calls?
           messages = @context.add_assistant_message(
@@ -252,19 +254,19 @@ module Autobot::Agent
         end
       end
 
-      {final_content, tools_used}
+      {final_content, tools_used, total_tokens}
     end
 
     private def log_llm_reasoning(content : String?) : Nil
       return unless content
       return if content.empty?
       preview = truncate(content, LONG_MESSAGE_PREVIEW_LENGTH)
-      Log.info { "LLM reasoning: #{preview}" }
+      Log.debug { "LLM reasoning: #{preview}" }
     end
 
     private def log_tool_call(tool_call : Providers::ToolCall) : Nil
       args_preview = truncate(tool_call.arguments.to_json, LONG_MESSAGE_PREVIEW_LENGTH)
-      Log.info { "Tool call: #{tool_call.name}(#{args_preview})" }
+      Log.debug { "Tool call: #{tool_call.name}(#{args_preview})" }
     end
 
     private def truncate(text : String, max_length : Int32) : String
@@ -281,23 +283,21 @@ module Autobot::Agent
       job_id = msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)
       state = @cron_service.try(&.get_state(job_id))
 
-      Log.info { "Cron turn: job=#{job_id}, has_previous_state=#{!state.nil?}" }
       if state
-        state_json = state.to_json
-        preview = state_json.size > LONG_MESSAGE_PREVIEW_LENGTH ? state_json[0, LONG_MESSAGE_PREVIEW_LENGTH] + "..." : state_json
-        Log.info { "Cron turn: previous state=#{preview}" }
+        state_preview = truncate(state.to_json, LONG_MESSAGE_PREVIEW_LENGTH)
+        Log.info { "Cron turn: job=#{job_id}, state=#{state_preview}" }
+      else
+        Log.info { "Cron turn: job=#{job_id}, state=(none)" }
       end
 
       prompt = String.build do |io|
         io << msg.content
         if state
-          io << "\n\nPrevious state (from last run): "
+          io << "\n\nPrevious state: "
           io << state.to_json
-          io << "\n\nIMPORTANT: Compare current values with previous state above. "
-          io << "Only use `message` tool if values actually CHANGED. If unchanged, do NOT notify."
+          io << "\nOnly notify via `message` if values CHANGED vs previous state."
         end
-        io << "\n\nAfter checking, always save current data: call `cron` with action=`set_state`, job_id=`#{job_id}`, and state={...your data...}. "
-        io << "Use the exact same keys as in previous state to enable comparison on the next run."
+        io << "\nAlways call `cron` with action=`set_state`, job_id=`#{job_id}`, state={...}. Use same keys as previous state."
       end
 
       prompt
@@ -352,7 +352,7 @@ module Autobot::Agent
 
       usage = response.usage
       unless usage.zero?
-        Log.info { "Tokens: prompt=#{usage.prompt_tokens} completion=#{usage.completion_tokens} total=#{usage.total_tokens}" }
+        Log.debug { "Tokens: prompt=#{usage.prompt_tokens} completion=#{usage.completion_tokens} total=#{usage.total_tokens}" }
       end
 
       response

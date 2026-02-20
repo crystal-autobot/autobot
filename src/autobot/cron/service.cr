@@ -291,7 +291,7 @@ module Autobot
 
       private def execute_job(job : CronJob) : Nil
         start_ms = now_ms
-        Log.info { "Cron: executing job '#{job.name}' (#{job.id})" }
+        Log.debug { "Cron: executing job '#{job.name}' (#{job.id})" }
 
         run_job_callback(job, start_ms)
         job.updated_at_ms = now_ms
@@ -303,7 +303,7 @@ module Autobot
           callback.call(job)
         end
         job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Ok, last_error: nil)
-        Log.info { "Cron: job '#{job.name}' completed" }
+        Log.debug { "Cron: job '#{job.name}' completed" }
       rescue ex
         job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
         Log.error { "Cron: job '#{job.name}' failed: #{ex.message}" }

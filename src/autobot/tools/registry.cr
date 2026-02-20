@@ -66,16 +66,16 @@ module Autobot::Tools
         end
 
         if path = params["path"]?.try(&.as_s?)
-          Log.info { "Executing tool: #{name} (#{path})" }
+          Log.debug { "Executing tool: #{name} (#{path})" }
         else
-          Log.info { "Executing tool: #{name}" }
+          Log.debug { "Executing tool: #{name}" }
         end
         result = tool.execute(params)
 
         # Log based on result status
         case result.status
         when ToolResult::Status::Success
-          Log.info { "Tool #{name} completed successfully" }
+          Log.debug { "Tool #{name} completed successfully" }
         when ToolResult::Status::AccessDenied
           Log.warn { "Tool #{name} ACCESS DENIED: #{result.content.split('\n').first}" }
         when ToolResult::Status::Error
