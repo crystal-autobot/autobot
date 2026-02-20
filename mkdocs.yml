@@ -58,6 +58,9 @@ nav:
   - Getting Started:
       - Quick Start: quickstart.md
       - Configuration: configuration.md
+  - Channels:
+      - Telegram: telegram.md
+      - Slack: slack.md
   - Features:
       - Cron & Scheduling: cron.md
       - Media & Voice: media.md

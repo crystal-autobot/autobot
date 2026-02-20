@@ -90,6 +90,7 @@ module Autobot::Config
     property mode : String = "socket"
     property bot_token : String = ""
     property app_token : String = ""
+    property allow_from : Array(String) = [] of String
     property group_policy : String = "mention"
     property group_allow_from : Array(String) = [] of String
     property dm : SlackDMConfig?

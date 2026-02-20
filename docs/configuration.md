@@ -45,6 +45,8 @@ If neither Groq nor OpenAI is configured, voice messages fall back to `[voice me
 
 **Security Note:** `allow_from` is deny-by-default for security.
 
+Setup guides: **[Telegram](telegram.md)** | **[Slack](slack.md)**
+
 ```yaml
 channels:
   telegram:
@@ -60,6 +62,7 @@ channels:
     enabled: false
     bot_token: ""
     app_token: ""
+    allow_from: []
     mode: "socket"
     group_policy: "mention"  # "mention" (secure) | "open" | "allowlist"
 
@@ -181,6 +184,7 @@ channels:
     enabled: false
     bot_token: "xoxb-..."
     app_token: "xapp-..."
+    allow_from: ["U12345678"]
     mode: "socket"
     group_policy: "mention"
     dm:
