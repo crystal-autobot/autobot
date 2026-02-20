@@ -4,7 +4,7 @@ module Autobot
       TABLE_FORMAT     = "%-10s %-20s %-20s %-10s %-20s"
       TABLE_WIDTH      = 82
       COLUMN_MAX_WIDTH = 20
-      TIME_FORMAT      = "%Y-%m-%d %H:%M"
+      TIME_FORMAT      = "%Y-%m-%d %H:%M UTC"
       NIL_PLACEHOLDER  = "-"
       MS_PER_SECOND    = 1000
 

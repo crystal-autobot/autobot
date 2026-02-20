@@ -11,11 +11,14 @@ module Autobot
     class Service
       alias JobCallback = CronJob -> String?
 
+      RELOAD_CHECK_INTERVAL = 60.seconds
+
       @store_path : Path
       @on_job : JobCallback?
       @store : CronStore?
       @running : Bool = false
       @timer_generation : Int64 = 0
+      @store_mtime : Time? = nil
 
       def initialize(@store_path : Path, @on_job : JobCallback? = nil)
       end
@@ -23,8 +26,10 @@ module Autobot
       # Start the cron service timer loop.
       def start : Nil
         @running = true
+        @store = nil
         load_store
         arm_timer
+        start_reload_checker
         Log.info { "Cron service started with #{store.jobs.size} jobs" }
       end
 
@@ -169,6 +174,7 @@ module Autobot
         if File.exists?(@store_path)
           begin
             @store = CronStore.from_json(File.read(@store_path))
+            @store_mtime = File.info(@store_path).modification_time
           rescue ex
             Log.warn { "Failed to load cron store: #{ex.message}" }
             @store = CronStore.new
@@ -184,6 +190,24 @@ module Autobot
         end
       end
 
+      # Reload store from disk if the file was modified externally (e.g. by CLI).
+      private def reload_if_changed : Bool
+        return false unless File.exists?(@store_path)
+
+        current_mtime = File.info(@store_path).modification_time
+        return false if @store_mtime && current_mtime == @store_mtime
+
+        begin
+          @store = CronStore.from_json(File.read(@store_path))
+          @store_mtime = current_mtime
+          Log.info { "Cron: store reloaded from disk (#{store.jobs.size} jobs)" }
+          true
+        rescue ex
+          Log.warn { "Failed to reload cron store: #{ex.message}" }
+          false
+        end
+      end
+
       private def save_store : Nil
         return unless s = @store
 
@@ -195,6 +219,7 @@ module Autobot
 
         File.write(@store_path, s.to_json)
         File.chmod(@store_path, 0o600)
+        @store_mtime = File.info(@store_path).modification_time
       end
 
       private def now_ms : Int64
@@ -258,6 +283,7 @@ module Autobot
       end
 
       private def on_timer : Nil
+        reload_if_changed
         return unless s = @store
 
         now = now_ms
@@ -272,6 +298,21 @@ module Autobot
         end
 
         arm_timer
+      end
+
+      # Periodically check for external store changes (e.g. CLI adds a job).
+      private def start_reload_checker : Nil
+        spawn do
+          while @running
+            sleep RELOAD_CHECK_INTERVAL
+            next unless @running
+            if reload_if_changed
+              arm_timer
+            end
+          end
+        rescue ex
+          Log.error { "Cron reload checker error: #{ex.message}" }
+        end
       end
 
       private def execute_job(job : CronJob) : Nil

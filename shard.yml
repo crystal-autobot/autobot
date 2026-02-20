@@ -10,7 +10,6 @@ license: MIT
 
 description: |
   A Crystal-based AI agent framework - fast, type-safe, and extensible.
-  Alternative to nanobot with 5-10x faster startup and compiled binary distribution.
 
 dependencies:
   # HTTP client for LLM API calls

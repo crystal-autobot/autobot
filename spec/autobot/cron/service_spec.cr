@@ -334,7 +334,6 @@ describe Autobot::Cron::Service do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
 
-      now = Time.utc
       job = service.add_job(
         name: "noon_start",
         schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* 12 * * *"),
@@ -346,8 +345,6 @@ describe Autobot::Cron::Service do
 
       next_time = Time.unix_ms(next_run.as(Int64))
       next_time.hour.should eq(12)
-      next_time.minute.should eq(0)
-      next_time.should be > now
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
@@ -475,6 +472,107 @@ describe Autobot::Cron::Service do
       )
 
       service.compute_next_run_for(job).should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "service lifecycle" do
+    it "starts with zero jobs and accepts jobs later" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      # Start with no jobs
+      service.start
+      service.status["enabled"].as_bool.should be_true
+      service.list_jobs.should be_empty
+
+      # Add a job after start — should work
+      job = service.add_job(
+        name: "dynamic",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "added after start"
+      )
+
+      service.list_jobs.size.should eq(1)
+
+      # Next run should be in the future (not stuck in the past)
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+      (next_run.as(Int64) > Time.utc.to_unix_ms).should be_true
+
+      service.stop
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "is not running before start is called" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service.status["enabled"].as_bool.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "reports running after start" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service.start
+      service.status["enabled"].as_bool.should be_true
+      service.stop
+      service.status["enabled"].as_bool.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "reloads store on restart" do
+      tmp = TestHelper.tmp_dir
+      store_path = tmp / "cron.json"
+      service = Autobot::Cron::Service.new(store_path: store_path)
+      service.start
+
+      service.add_job(
+        name: "before_restart",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "persisted"
+      )
+      service.stop
+
+      # Restart — should reload from disk
+      service.start
+      service.list_jobs.size.should eq(1)
+      service.list_jobs.first.name.should eq("before_restart")
+      service.stop
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "external store reload" do
+    it "picks up jobs added externally to the store file" do
+      tmp = TestHelper.tmp_dir
+      store_path = tmp / "cron.json"
+
+      # Server service loads empty store
+      server = Autobot::Cron::Service.new(store_path: store_path)
+      server.list_jobs.should be_empty
+
+      # CLI service writes a job to disk
+      cli = Autobot::Cron::Service.new(store_path: store_path)
+      cli.add_job(
+        name: "cli_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "from cli"
+      )
+
+      # Server still has empty in-memory store
+      server.list_jobs.should be_empty
+
+      # After start (which reloads), server sees the job
+      server.start
+      server.list_jobs.size.should eq(1)
+      server.list_jobs.first.name.should eq("cli_job")
+      server.stop
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

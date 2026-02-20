@@ -77,11 +77,10 @@ module Autobot
         end
 
         cron_service = Cron::Service.new(cron_store_path, on_job: on_job)
-        cron_status = cron_service.status
-        cron_jobs = cron_status["jobs"]?.try(&.as_i?) || 0
+        cron_service.start
 
+        cron_jobs = cron_service.list_jobs.size
         if cron_jobs > 0
-          cron_service.start
           puts "✓ Cron: #{cron_jobs} scheduled jobs"
         end
 
