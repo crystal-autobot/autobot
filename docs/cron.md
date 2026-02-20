@@ -72,11 +72,7 @@ graph LR
 2. **Publish to bus** — An `InboundMessage` is published to the event bus with `channel: "system"` and `sender_id: "cron:{job_id}"`
 3. **Agent turn** — The agent loop picks up the message and executes the job's prompt
 4. **Tool execution** — The agent uses any tools needed (MCP, web search, etc.) to fulfill the task
-5. **Conditional notification** — The agent decides whether to notify the user via the `message` tool
-
-### No Auto-Delivery
-
-Cron turns **never** auto-deliver responses to the user. The agent must explicitly use the `message` tool to notify. This prevents unwanted notifications.
+5. **Auto-delivery** — The agent's final response is automatically delivered to the user through the originating channel
 
 ---
 
@@ -232,12 +228,6 @@ workspace/
 ---
 
 ## Troubleshooting
-
-### "Message sending not configured"
-
-**Cause:** The `message` tool's send callback wasn't wired to the bus.
-
-**Solution:** This is fixed in the gateway setup. Ensure you're running the latest build.
 
 ### Job doesn't fire
 

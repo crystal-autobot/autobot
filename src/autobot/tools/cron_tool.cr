@@ -28,8 +28,7 @@ module Autobot
 
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
-        "When fired, triggers a full agent turn with all tools. " \
-        "Cron turns never auto-deliver — use `message` tool to notify. " \
+        "When fired, triggers a full agent turn with all tools. Response is auto-delivered to the user. " \
         "Actions: add, list, remove. " \
         "Always confirm with the user before add or remove."
       end

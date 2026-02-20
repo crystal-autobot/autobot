@@ -83,7 +83,7 @@ describe Autobot::Agent::Loop do
   end
 
   describe "#process_message" do
-    it "returns nil for cron system messages (no auto-deliver)" do
+    it "auto-delivers cron system messages" do
       tmp = TestHelper.tmp_dir
       cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
       loop_inst = create_test_loop(workspace: tmp, cron_service: cron)
@@ -96,7 +96,9 @@ describe Autobot::Agent::Loop do
       )
 
       response = loop_inst.test_process_message(msg)
-      response.should be_nil
+      response.should_not be_nil
+      response.try(&.channel).should eq("telegram")
+      response.try(&.chat_id).should eq("user1")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

@@ -145,7 +145,7 @@ Tools are the agent's hands. The registry discovers and exposes tools to the LLM
 - **Bash** — Shell commands in a [sandboxed](sandboxing.md) environment
 - **Filesystem** — Read/write files within the workspace
 - **Web** — HTTP requests and [web search](web-search.md)
-- **Cron** — Schedule recurring or one-time tasks
+- **Cron** — Schedule recurring or one-time [tasks](cron.md)
 - **Spawn** — Launch subagents for parallel work
 - **Message** — Send messages to channel owners
 
@@ -178,4 +178,4 @@ See [Memory](memory.md) for details.
 
 ### Cron (`cron/`)
 
-Scheduler supporting cron expressions, fixed intervals, and one-time triggers. When a job fires, it publishes a message through the event bus, triggering a full agent turn with all tools. Jobs carry persistent state for change detection (e.g., "notify only when steps change"). See [Cron & Scheduling](cron.md) for details.
+Scheduler supporting cron expressions, fixed intervals, and one-time triggers. When a job fires, it publishes a message through the event bus, triggering a full agent turn with all tools. See [Cron & Scheduling](cron.md) for details.

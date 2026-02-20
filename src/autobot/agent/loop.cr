@@ -203,18 +203,12 @@ module Autobot::Agent
       final_content ||= "Background task completed."
 
       if is_cron
-        notified = tools_used.includes?("message")
-        Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, notified=#{notified}, tools=#{tools_used}" }
-      end
-
-      unless is_cron
+        Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, tools=#{tools_used}" }
+      else
         session.add_message(Constants::ROLE_USER, msg.content)
         session.add_message(Constants::ROLE_ASSISTANT, final_content)
         @sessions.save(session)
       end
-
-      # Cron turns never auto-deliver — agent uses `message` tool explicitly
-      return nil if is_cron
 
       Bus::OutboundMessage.new(
         channel: origin_channel,
