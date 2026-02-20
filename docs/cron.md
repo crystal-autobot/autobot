@@ -86,7 +86,9 @@ Cron turns use a minimal system prompt and exclude certain tools to prevent unin
 
 - **`spawn`** — excluded to prevent background task proliferation
 
-The `cron` tool is available in background turns so jobs can self-remove when their task is complete (e.g., "monitor X until condition Y, then stop").
+Cron turns never auto-deliver the final response. The agent must use the `message` tool explicitly to notify the user. This enables **conditional delivery** — the agent can stay silent when there is nothing to report (e.g., "monitor X, only notify if Y changes").
+
+The `cron` tool is available so jobs can self-remove when their task defines a stop condition (e.g., "monitor X until condition Y, then stop").
 
 ---
 

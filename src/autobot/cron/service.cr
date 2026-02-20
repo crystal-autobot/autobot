@@ -57,6 +57,7 @@ module Autobot
         name : String,
         schedule : CronSchedule,
         message : String,
+        args : Hash(String, String)? = nil,
         deliver : Bool = false,
         channel : String? = nil,
         to : String? = nil,
@@ -73,6 +74,7 @@ module Autobot
           payload: CronPayload.new(
             kind: PayloadKind::AgentTurn,
             message: message,
+            args: args,
             deliver: deliver,
             channel: channel,
             to: to

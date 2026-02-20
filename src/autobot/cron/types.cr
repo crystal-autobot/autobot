@@ -39,11 +39,12 @@ module Autobot
 
       property kind : PayloadKind = PayloadKind::AgentTurn
       property message : String = ""
+      property args : Hash(String, String)? = nil
       property? deliver : Bool = false
       property channel : String? = nil
       property to : String? = nil
 
-      def initialize(@kind = PayloadKind::AgentTurn, @message = "", @deliver = false, @channel = nil, @to = nil)
+      def initialize(@kind = PayloadKind::AgentTurn, @message = "", @args = nil, @deliver = false, @channel = nil, @to = nil)
       end
     end
 

@@ -209,7 +209,7 @@ module Autobot::Agent
         - Search the web and fetch web pages
         - Send messages to users on chat channels
         - Spawn subagents for complex background tasks
-        - Schedule cron jobs for reminders, deferred tasks, and recurring checks (use cron tool, never exec sleep)
+        - Schedule cron jobs for reminders, deferred tasks, and recurring checks
 
         ## Current Time
         #{now} (UTC)

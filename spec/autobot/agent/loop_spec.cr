@@ -92,12 +92,46 @@ describe Autobot::Agent::Loop do
       )
 
       prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should contain("do NOT create new cron jobs")
+      prompt.should contain("Do NOT create new cron jobs")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
 
-    it "includes cron remove instruction with job ID" do
+    it "instructs to use message tool for delivery" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "cron:xyz789",
+        chat_id: "telegram:user1",
+        content: "Monitor file"
+      )
+
+      prompt = loop_inst.test_build_cron_prompt(msg)
+      prompt.should contain("message")
+      prompt.should contain("deliver results")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "instructs to stay silent when nothing to report" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "cron:xyz789",
+        chat_id: "telegram:user1",
+        content: "Monitor file"
+      )
+
+      prompt = loop_inst.test_build_cron_prompt(msg)
+      prompt.should contain("nothing to report")
+      prompt.should contain("do NOT send a message")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "instructs not to remove job unless stop condition met" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)
       msg = Autobot::Bus::InboundMessage.new(
@@ -108,15 +142,27 @@ describe Autobot::Agent::Loop do
       )
 
       prompt = loop_inst.test_build_cron_prompt(msg)
-      prompt.should contain("cron remove")
-      prompt.should contain("stop123")
+      prompt.should contain("Do NOT remove this job")
+      prompt.should contain("stop condition")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
   end
 
+  describe "BACKGROUND_EXCLUDED_TOOLS" do
+    it "excludes spawn from background turns" do
+      excluded = Autobot::Agent::Loop::BACKGROUND_EXCLUDED_TOOLS
+      excluded.should contain("spawn")
+    end
+
+    it "does not exclude message tool (allows conditional delivery)" do
+      excluded = Autobot::Agent::Loop::BACKGROUND_EXCLUDED_TOOLS
+      excluded.should_not contain("message")
+    end
+  end
+
   describe "#process_message" do
-    it "auto-delivers cron system messages" do
+    it "suppresses auto-delivery for cron turns" do
       tmp = TestHelper.tmp_dir
       cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
       loop_inst = create_test_loop(workspace: tmp, cron_service: cron)
@@ -129,9 +175,7 @@ describe Autobot::Agent::Loop do
       )
 
       response = loop_inst.test_process_message(msg)
-      response.should_not be_nil
-      response.try(&.channel).should eq("telegram")
-      response.try(&.chat_id).should eq("user1")
+      response.should be_nil
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

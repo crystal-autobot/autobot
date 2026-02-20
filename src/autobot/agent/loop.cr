@@ -204,6 +204,8 @@ module Autobot::Agent
 
       if is_cron
         Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, tools=#{tools_used}" }
+        # Cron turns never auto-deliver; agent must use message tool explicitly
+        return nil
       else
         session.add_message(Constants::ROLE_USER, msg.content)
         session.add_message(Constants::ROLE_ASSISTANT, final_content)
@@ -247,6 +249,9 @@ module Autobot::Agent
             result = @tools.execute(tool_call.name, tool_call.arguments, session_key)
             messages = @context.add_tool_result(messages, tool_call.id, tool_call.name, result)
           end
+
+          # Background turns: stop after message delivery (no follow-up LLM call needed)
+          break if background && response.tool_calls.any? { |tool| tool.name == "message" }
         else
           final_content = response.content
           break
@@ -282,9 +287,12 @@ module Autobot::Agent
       Log.info { "Cron turn: job=#{job_id}" }
 
       <<-PROMPT
-      This is a scheduled cron execution (job: #{job_id}). The job is already running — do NOT create new cron jobs.
-      Execute the task below, then stop.
-      Use `cron remove` with job_id "#{job_id}" only if the task is complete and monitoring should stop.
+      This is a scheduled cron execution (job: #{job_id}).
+      Rules:
+      - Use the `message` tool to deliver results to the user
+      - If there is nothing to report, do NOT send a message
+      - Do NOT create new cron jobs
+      - Do NOT remove this job unless the task explicitly defines a stop condition that has been met
 
       Task: #{msg.content}
       PROMPT

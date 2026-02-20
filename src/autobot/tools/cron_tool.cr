@@ -28,9 +28,9 @@ module Autobot
 
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
-        "Each firing triggers a single agent turn — the `message` is the turn's prompt. " \
-        "Response is auto-delivered to the user. " \
+        "Each firing triggers a background agent turn — the `message` is the turn's prompt. " \
         "Actions: add, list, remove. " \
+        "To remove a job, always use `list` first to get the job ID. " \
         "Always confirm with the user before add or remove."
       end
 
@@ -64,9 +64,14 @@ module Autobot
               type: "string",
               description: "ISO datetime for one-time execution (e.g. '2026-02-12T10:30:00')"
             ),
+            "args" => PropertySchema.new(
+              type: "object",
+              description: "Key-value arguments preserved verbatim for each execution. " \
+                           "Use for URLs, thresholds, names, or any specific values from the user's request."
+            ),
             "job_id" => PropertySchema.new(
               type: "string",
-              description: "Job ID (for remove)"
+              description: "Job ID (for remove). Use `list` action first to get the ID."
             ),
           },
           required: ["action"]
@@ -112,11 +117,13 @@ module Autobot
                    end
 
         owner_key = "#{@channel}:#{@chat_id}"
+        args = parse_args(params["args"]?)
 
         job = @cron.add_job(
           name: message.size > JOB_NAME_MAX_LENGTH ? message[0, JOB_NAME_MAX_LENGTH] : message,
           schedule: schedule,
           message: message,
+          args: args,
           deliver: true,
           channel: @channel,
           to: @chat_id,
@@ -152,6 +159,15 @@ module Autobot
       private def owner_context : String?
         return nil if @channel.empty? || @chat_id.empty?
         "#{@channel}:#{@chat_id}"
+      end
+
+      private def parse_args(value : JSON::Any?) : Hash(String, String)?
+        return nil unless value
+        hash = {} of String => String
+        value.as_h.each { |key, val| hash[key] = val.as_s }
+        hash.empty? ? nil : hash
+      rescue
+        nil
       end
     end
   end
