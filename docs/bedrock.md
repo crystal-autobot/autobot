@@ -110,6 +110,13 @@ Unlike other providers that use OpenAI-compatible HTTP APIs, Bedrock uses:
 
 Autobot handles all format conversion transparently. Tools, MCP servers, plugins, and all other features work the same as with other providers.
 
+## Known limitations
+
+- **No streaming** — Responses are returned in full after the model finishes generating. The `ConverseStream` API is not used.
+- **No credential refresh** — SigV4 credentials are set at startup. Temporary credentials (STS session tokens) will not refresh when they expire; restart autobot to pick up new credentials.
+- **Text-only content blocks** — Image and document content blocks in messages and tool results are not converted. Only text is sent to Bedrock.
+- **Tool choice is always `auto`** — There is no configuration to force a specific tool or disable tool use per-request.
+
 ## Troubleshooting
 
 Enable debug logging to see request/response details:
@@ -119,6 +126,7 @@ LOG_LEVEL=DEBUG autobot agent -m "Hello"
 ```
 
 Look for:
+
 - `Bedrock: region=... model=...` — confirms provider is active
 - `Bedrock toolConfig: N tools` — confirms tools are in the request
 - `Response 200 (N bytes)` — confirms API response
