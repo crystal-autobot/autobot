@@ -103,6 +103,11 @@ module Autobot
         end
       end
 
+      def self.clear(config_path : String?) : Nil
+        count = cron_service.clear_all
+        puts "Removed #{count} job(s)."
+      end
+
       def self.run_job(config_path : String?, job_id : String, force : Bool) : Nil
         if cron_service.run_job(job_id, force: force)
           puts "✓ Job executed"

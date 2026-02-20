@@ -12,7 +12,7 @@ The cron system solves three common needs:
 - **Recurring reports** — "Send me a weather summary every morning at 9am" (cron expression)
 - **Periodic tasks** — "Check my email every 5 minutes" (fixed interval)
 
-When a job fires, it triggers a full agent turn — the agent can use MCP tools, web search, memory, and any other registered tools to complete the task.
+When a job fires, it triggers a full agent turn — the agent can use MCP tools, web search, memory, and any other registered tools to complete the task. The response is automatically delivered to the user.
 
 ---
 
@@ -58,14 +58,13 @@ graph LR
     CALLBACK --> BUS[Event Bus]
     BUS --> LOOP[Agent Loop]
     LOOP --> LLM[LLM + Tools]
-    LLM -->|notify?| MSG[Message Tool]
-    MSG --> USER[User gets notification]
+    LLM --> USER[Response auto-delivered]
 
     style TIMER fill:#ab47bc,stroke:#8e24aa,color:#fff
     style BUS fill:#7c4dff,stroke:#651fff,color:#fff
     style LOOP fill:#5c6bc0,stroke:#3949ab,color:#fff
     style LLM fill:#26a69a,stroke:#00897b,color:#fff
-    style MSG fill:#ffa726,stroke:#fb8c00,color:#fff
+    style USER fill:#ffa726,stroke:#fb8c00,color:#fff
 ```
 
 1. **Timer fires** — The cron service detects a job is due
@@ -73,6 +72,13 @@ graph LR
 3. **Agent turn** — The agent loop picks up the message and executes the job's prompt
 4. **Tool execution** — The agent uses any tools needed (MCP, web search, etc.) to fulfill the task
 5. **Auto-delivery** — The agent's final response is automatically delivered to the user through the originating channel
+
+### Background Turn Restrictions
+
+Cron turns use a minimal system prompt and exclude certain tools to prevent unintended behavior:
+
+- **`cron`** — excluded to prevent jobs from creating more jobs
+- **`spawn`** — excluded to prevent background task proliferation
 
 ---
 
@@ -113,20 +119,6 @@ autobot cron list --all  # Include disabled jobs
 autobot cron show <job_id>
 ```
 
-Output includes schedule, message, and delivery config:
-
-```
-ID:       aa6d7d5c
-Name:     Morning briefing
-Status:   enabled
-Schedule: 0 9 * * *
-Next Run: 2026-02-21 09:00
-Message:  Send a weather summary
-Deliver:  true
-Channel:  telegram
-To:       634643933
-```
-
 ### Add Jobs Manually
 
 ```bash
@@ -144,6 +136,12 @@ autobot cron add --name "reminder" --message "Call dentist" --at "2026-02-20T15:
 
 ```bash
 autobot cron remove <job_id>
+```
+
+### Clear All Jobs
+
+```bash
+autobot cron clear
 ```
 
 ### Enable/Disable
@@ -186,7 +184,7 @@ cron add:
   at: "2026-02-20T10:30:00Z"
 ```
 
-Job fires once, sends reminder via `message` tool, then auto-deletes.
+Job fires once, delivers the reminder, then auto-deletes.
 
 ### Daily Report
 

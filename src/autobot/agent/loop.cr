@@ -217,14 +217,18 @@ module Autobot::Agent
       )
     end
 
+    # Tools excluded from background turns (cron jobs, subagent work).
+    BACKGROUND_EXCLUDED_TOOLS = ["cron", "spawn"]
+
     # Run the tool execution loop and return the final content, tools used, and total tokens.
     private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String, background : Bool = false) : {String?, Array(String), Int32}
       final_content : String? = nil
       tools_used = [] of String
       total_tokens = 0
+      exclude_tools = background ? BACKGROUND_EXCLUDED_TOOLS : nil
 
       @max_iterations.times do
-        response = call_llm(messages)
+        response = call_llm(messages, exclude_tools: exclude_tools)
         total_tokens += response.usage.total_tokens
 
         if response.has_tool_calls?
@@ -321,10 +325,10 @@ module Autobot::Agent
     end
 
     # Call LLM and log token usage
-    private def call_llm(messages : Array(Hash(String, JSON::Any))) : Providers::Response
+    private def call_llm(messages : Array(Hash(String, JSON::Any)), exclude_tools : Array(String)? = nil) : Providers::Response
       response = @provider.chat(
         messages: messages,
-        tools: @tools.definitions,
+        tools: @tools.definitions(exclude: exclude_tools),
         model: active_model
       )
 

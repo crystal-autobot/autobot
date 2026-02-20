@@ -87,10 +87,12 @@ module Autobot
           CronCmd.show(options[:config_path], require_job_id(options[:args]))
         when "remove"
           CronCmd.remove(options[:config_path], require_job_id(options[:args]))
-        when "enable"
-          CronCmd.enable(options[:config_path], require_job_id(options[:args]), !options[:cron_disable])
+        when "enable", "disable"
+          CronCmd.enable(options[:config_path], require_job_id(options[:args]), subcommand == "enable")
         when "run"
           CronCmd.run_job(options[:config_path], require_job_id(options[:args]), options[:cron_force])
+        when "clear"
+          CronCmd.clear(options[:config_path])
         when "help"
           print_cron_help
         else
@@ -148,7 +150,6 @@ module Autobot
         cron_to : String? = nil
         cron_channel : String? = nil
         cron_force = false
-        cron_disable = false
 
         # Determine command from first non-flag argument
         if args.size > 0 && !args[0].starts_with?("-")
@@ -183,7 +184,6 @@ module Autobot
           option_parser.on("--to DEST", "Recipient for delivery") { |v| cron_to = v }
           option_parser.on("--channel CH", "Channel for delivery") { |v| cron_channel = v }
           option_parser.on("-f", "--force", "Force action") { cron_force = true }
-          option_parser.on("--disable", "Disable instead of enable") { cron_disable = true }
 
           option_parser.invalid_option { |flag| STDERR.puts "Unknown option: #{flag}" }
           option_parser.missing_option { |flag| STDERR.puts "Missing value for: #{flag}" }
@@ -213,7 +213,6 @@ module Autobot
           cron_to:      cron_to,
           cron_channel: cron_channel,
           cron_force:   cron_force,
-          cron_disable: cron_disable,
         }
       end
 
@@ -224,8 +223,10 @@ module Autobot
         puts "  show <job_id>     Show full job details including message"
         puts "  add               Add a new job (requires -n, -m, and a schedule)"
         puts "  remove <job_id>   Remove a job"
-        puts "  enable <job_id>   Enable a job (use --disable to disable)"
+        puts "  enable <job_id>   Enable a job"
+        puts "  disable <job_id>  Disable a job"
         puts "  run <job_id>      Run a job now (use -f to force if disabled)"
+        puts "  clear             Remove all jobs"
         puts "  help              Show this help"
       end
 
@@ -253,7 +254,7 @@ module Autobot
         puts "  doctor    Check configuration and security (use --strict for warnings as errors)"
         puts "  agent     Interact with the agent (single message or interactive)"
         puts "  gateway   Start the gateway server"
-        puts "  cron      Manage scheduled tasks (list|show|add|remove|enable|run)"
+        puts "  cron      Manage scheduled tasks (list|show|add|remove|enable|disable|run|clear)"
         puts "  status    Show system status"
         puts "  version   Show version info"
         puts "  help      Show this help\n\n"

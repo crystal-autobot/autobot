@@ -39,9 +39,12 @@ module Autobot::Tools
       @tools.has_key?(name)
     end
 
-    # Get all tool definitions in OpenAI/Anthropic function calling format
-    def definitions : Array(Hash(String, JSON::Any))
-      @tools.values.map(&.to_schema)
+    # Get all tool definitions in OpenAI/Anthropic function calling format.
+    # Optionally exclude specific tools by name.
+    def definitions(exclude : Array(String)? = nil) : Array(Hash(String, JSON::Any))
+      tools = @tools.values
+      tools = tools.reject { |tool| exclude.try(&.includes?(tool.name)) } if exclude
+      tools.map(&.to_schema)
     end
 
     def execute(name : String, params : Hash(String, JSON::Any), session_key : String? = nil) : String

@@ -197,6 +197,55 @@ describe Autobot::Cron::Service do
     end
   end
 
+  describe "#clear_all" do
+    it "removes all jobs and returns count" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      service.add_job(
+        name: "job1",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "first"
+      )
+      service.add_job(
+        name: "job2",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "second"
+      )
+
+      service.clear_all.should eq(2)
+      service.list_jobs.should be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns zero when no jobs exist" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service.clear_all.should eq(0)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "persists empty store to disk" do
+      tmp = TestHelper.tmp_dir
+      store_path = tmp / "cron.json"
+      service = Autobot::Cron::Service.new(store_path: store_path)
+
+      service.add_job(
+        name: "to_clear",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test"
+      )
+      service.clear_all
+
+      service2 = Autobot::Cron::Service.new(store_path: store_path)
+      service2.list_jobs.should be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
   describe "delete_after_run" do
     it "marks one-time jobs with delete_after_run" do
       tmp = TestHelper.tmp_dir

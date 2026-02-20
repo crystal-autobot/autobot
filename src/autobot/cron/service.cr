@@ -86,6 +86,16 @@ module Autobot
         job
       end
 
+      # Remove all jobs and return the count of removed jobs.
+      def clear_all : Int32
+        count = store.jobs.size
+        store.jobs.clear
+        save_store
+        arm_timer
+        Log.info { "Cron: cleared #{count} job(s)" }
+        count
+      end
+
       # Remove a job by ID.
       # If owner is provided, only removes job if it matches the owner.
       def remove_job(job_id : String, owner : String? = nil) : Bool
