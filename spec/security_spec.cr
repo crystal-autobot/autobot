@@ -233,6 +233,26 @@ describe "Security Tests" do
     end
   end
 
+  describe "WebFetch HTTPS support" do
+    it "fetches HTTPS URLs without SSL errors" do
+      tool = Autobot::Tools::WebFetchTool.new
+
+      result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
+      result.success?.should be_true
+
+      parsed = JSON.parse(result.content)
+      parsed["status"].as_i.should eq(200)
+      parsed["text"].as_s.should contain("Example Domain")
+    end
+
+    it "still blocks private IPs over HTTPS" do
+      tool = Autobot::Tools::WebFetchTool.new
+
+      result = tool.execute({"url" => JSON::Any.new("https://127.0.0.1/secret")} of String => JSON::Any)
+      result.access_denied?.should be_true
+    end
+  end
+
   describe "IPv6 SSRF protection" do
     it "blocks private IPv6 ranges" do
       tool = Autobot::Tools::WebFetchTool.new
