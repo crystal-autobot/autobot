@@ -276,7 +276,7 @@ describe Autobot::Cron::Service do
         message: "ping"
       )
 
-      next_run = job.state.next_run_at_ms
+      next_run = service.compute_next_run_for(job)
       next_run.should_not be_nil
 
       # Should be within 2 minutes from now (next minute boundary)
@@ -298,7 +298,7 @@ describe Autobot::Cron::Service do
         message: "half past"
       )
 
-      next_run = job.state.next_run_at_ms
+      next_run = service.compute_next_run_for(job)
       next_run.should_not be_nil
 
       next_time = Time.unix_ms(next_run.as(Int64))
@@ -319,7 +319,7 @@ describe Autobot::Cron::Service do
         message: "morning"
       )
 
-      next_run = job.state.next_run_at_ms
+      next_run = service.compute_next_run_for(job)
       next_run.should_not be_nil
 
       next_time = Time.unix_ms(next_run.as(Int64))
@@ -341,7 +341,7 @@ describe Autobot::Cron::Service do
         message: "noon"
       )
 
-      next_run = job.state.next_run_at_ms
+      next_run = service.compute_next_run_for(job)
       next_run.should_not be_nil
 
       next_time = Time.unix_ms(next_run.as(Int64))
@@ -362,7 +362,7 @@ describe Autobot::Cron::Service do
         message: "nope"
       )
 
-      job.state.next_run_at_ms.should be_nil
+      service.compute_next_run_for(job).should be_nil
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

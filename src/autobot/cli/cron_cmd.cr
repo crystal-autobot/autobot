@@ -5,7 +5,8 @@ module Autobot
       TABLE_WIDTH  = 82
 
       def self.list(config_path : String?, include_all : Bool) : Nil
-        jobs = cron_service.list_jobs(include_disabled: include_all)
+        service = cron_service
+        jobs = service.list_jobs(include_disabled: include_all)
 
         if jobs.empty?
           puts "No scheduled jobs."
@@ -17,7 +18,7 @@ module Autobot
 
         jobs.each do |job|
           sched = format_schedule(job.schedule)
-          next_run = format_next_run(job.state.next_run_at_ms)
+          next_run = format_next_run(service.compute_next_run_for(job))
           status = job.enabled? ? "enabled" : "disabled"
 
           puts TABLE_FORMAT % [job.id, job.name[0, 20], sched[0, 20], status, next_run]
@@ -25,7 +26,8 @@ module Autobot
       end
 
       def self.show(config_path : String?, job_id : String) : Nil
-        job = cron_service.list_jobs(include_disabled: true).find { |j| j.id == job_id }
+        service = cron_service
+        job = service.list_jobs(include_disabled: true).find { |j| j.id == job_id }
         unless job
           STDERR.puts "Job #{job_id} not found"
           exit 1
@@ -37,7 +39,7 @@ module Autobot
         puts "Name:     #{job.name}"
         puts "Status:   #{status}"
         puts "Schedule: #{format_schedule(job.schedule)}"
-        puts "Next Run: #{format_next_run(job.state.next_run_at_ms)}"
+        puts "Next Run: #{format_next_run(service.compute_next_run_for(job))}"
         puts "Message:  #{job.payload.message}"
         puts "Deliver:  #{job.payload.deliver?}"
         puts "Channel:  #{job.payload.channel || "-"}"

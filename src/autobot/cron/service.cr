@@ -22,8 +22,6 @@ module Autobot
       def start : Nil
         @running = true
         load_store
-        recompute_next_runs
-        save_store
         arm_timer
         Log.info { "Cron service started with #{store.jobs.size} jobs" }
       end
@@ -44,7 +42,7 @@ module Autobot
 
         jobs = jobs.select { |j| j.owner == owner } if owner
 
-        jobs.sort_by { |j| j.state.next_run_at_ms || Int64::MAX }
+        jobs.sort_by { |j| compute_next_run_for(j) || Int64::MAX }
       end
 
       # Add a new scheduled job.
@@ -72,7 +70,7 @@ module Autobot
             channel: channel,
             to: to
           ),
-          state: CronJobState.new(next_run_at_ms: compute_next_run(schedule, now)),
+          state: CronJobState.new,
           created_at_ms: now,
           updated_at_ms: now,
           delete_after_run: delete_after_run,
@@ -126,8 +124,6 @@ module Autobot
           if job.id == job_id
             job.enabled = enabled
             job.updated_at_ms = now_ms
-            next_run = enabled ? compute_next_run(job.schedule, now_ms) : nil
-            job.state = job.state.copy(next_run_at_ms: next_run)
             save_store
             arm_timer
             return job
@@ -203,6 +199,12 @@ module Autobot
         Time.utc.to_unix_ms
       end
 
+      # Compute next run for a job, using last_run for interval jobs or expression for cron jobs.
+      def compute_next_run_for(job : CronJob) : Int64?
+        return nil unless job.enabled?
+        compute_next_run(job.schedule, job.state.last_run_at_ms || job.created_at_ms)
+      end
+
       private def compute_next_run(schedule : CronSchedule, current_ms : Int64) : Int64?
         case schedule.kind
         when .at?
@@ -256,19 +258,9 @@ module Autobot
         target.to_unix_ms
       end
 
-      private def recompute_next_runs : Nil
-        return unless s = @store
-        now = now_ms
-        s.jobs.each do |job|
-          if job.enabled?
-            job.state = job.state.copy(next_run_at_ms: compute_next_run(job.schedule, now))
-          end
-        end
-      end
-
       private def get_next_wake_ms : Int64?
         return nil unless s = @store
-        times = s.jobs.compact_map { |job| job.state.next_run_at_ms if job.enabled? }
+        times = s.jobs.compact_map { |job| compute_next_run_for(job) }
         times.empty? ? nil : times.min
       end
 
@@ -281,6 +273,9 @@ module Autobot
         spawn do
           sleep delay_ms.milliseconds
           on_timer if @running
+        rescue ex
+          Log.error { "Cron timer error: #{ex.message}" }
+          arm_timer if @running
         end
       end
 
@@ -288,7 +283,10 @@ module Autobot
         return unless s = @store
 
         now = now_ms
-        due_jobs = s.jobs.select { |job| job.enabled? && job.state.next_run_at_ms.try { |run_ms| now >= run_ms } }
+        due_jobs = s.jobs.select do |job|
+          next_run = compute_next_run_for(job)
+          next_run && now >= next_run
+        end
 
         due_jobs.each do |job|
           execute_job(job)
@@ -319,15 +317,12 @@ module Autobot
       end
 
       private def schedule_next_run(job : CronJob) : Nil
-        if job.schedule.kind.at?
-          if job.delete_after_run?
-            store.jobs.reject! { |j| j.id == job.id }
-          else
-            job.enabled = false
-            job.state = job.state.copy(next_run_at_ms: nil)
-          end
+        return unless job.schedule.kind.at?
+
+        if job.delete_after_run?
+          store.jobs.reject! { |j| j.id == job.id }
         else
-          job.state = job.state.copy(next_run_at_ms: compute_next_run(job.schedule, now_ms))
+          job.enabled = false
         end
       end
     end

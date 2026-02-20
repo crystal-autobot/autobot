@@ -65,20 +65,19 @@ end
 describe Autobot::Cron::CronJobState do
   it "creates with nil fields by default" do
     state = Autobot::Cron::CronJobState.new
-    state.next_run_at_ms.should be_nil
     state.last_run_at_ms.should be_nil
     state.last_status.should be_nil
   end
 
   it "serializes to JSON and back" do
     state = Autobot::Cron::CronJobState.new(
-      next_run_at_ms: 1700000000000_i64,
+      last_run_at_ms: 1700000000000_i64,
       last_status: Autobot::Cron::JobStatus::Ok,
     )
 
     json = state.to_json
     restored = Autobot::Cron::CronJobState.from_json(json)
-    restored.next_run_at_ms.should eq(1700000000000_i64)
+    restored.last_run_at_ms.should eq(1700000000000_i64)
     restored.last_status.should eq(Autobot::Cron::JobStatus::Ok)
   end
 end
