@@ -28,7 +28,7 @@ module Autobot::Providers
     getter model : String
     getter region : String
 
-    @signer : AwsSigv4::Signer
+    @signer : Awscr::Signer::Signers::V4
     @client : HTTP::Client?
 
     def initialize(
@@ -43,12 +43,8 @@ module Autobot::Providers
       # Provider base class requires api_key; pass access_key_id for compatibility
       super(@access_key_id)
 
-      @signer = AwsSigv4::Signer.new(
-        access_key_id: @access_key_id,
-        secret_access_key: @secret_access_key,
-        region: @region,
-        service: SERVICE_NAME,
-        session_token: @session_token,
+      @signer = Awscr::Signer::Signers::V4.new(
+        SERVICE_NAME, @region, @access_key_id, @secret_access_key, @session_token,
       )
     end
 
@@ -139,12 +135,19 @@ module Autobot::Providers
 
     private def execute_request(url_str : String, body : String) : String
       url = URI.parse(url_str)
-      headers = HTTP::Headers{"Content-Type" => CONTENT_TYPE}
+      host = url.host
+      raise "Invalid URL: missing host" unless host
 
-      @signer.sign("POST", url, headers, body)
+      headers = HTTP::Headers{
+        "Content-Type" => CONTENT_TYPE,
+        "Host"         => host,
+      }
+
+      request = HTTP::Request.new("POST", url.request_target, headers: headers, body: body)
+      @signer.sign(request)
 
       client = get_or_create_client(url)
-      response = client.post(url.request_target, headers: headers, body: body)
+      response = client.exec(request)
       Log.debug { "Response #{response.status_code} (#{response.body.size} bytes)" }
 
       unless response.success?

@@ -1,5 +1,5 @@
 require "option_parser"
-require "aws-sigv4"
+require "awscr-signer"
 require "./autobot/**"
 
 module Autobot
