@@ -233,6 +233,12 @@ module Autobot::Agent
         response = call_llm(messages, exclude_tools: exclude_tools)
         total_tokens += response.usage.total_tokens
 
+        if response.finish_reason == "guardrail_intervened"
+          Log.warn { "Guardrail intervened — returning blocked message" }
+          final_content = response.content
+          break
+        end
+
         if response.has_tool_calls?
           messages = @context.add_assistant_message(
             messages,
@@ -326,6 +332,12 @@ module Autobot::Agent
       @max_iterations.times do
         response = call_llm(messages)
         total_tokens += response.usage.total_tokens
+
+        if response.finish_reason == "guardrail_intervened"
+          Log.warn { "Guardrail intervened — returning blocked message" }
+          final_content = response.content
+          break
+        end
 
         if response.has_tool_calls?
           messages = process_tool_calls(messages, response, tools_used, session_key)

@@ -46,6 +46,29 @@ describe Autobot::CLI::InteractiveSetup do
       config.provider.should eq("deepseek")
       config.api_key.should eq("")
     end
+
+    it "collects AWS Bedrock credentials" do
+      input = IO::Memory.new("7\nAKIATESTKEY12345678\nsecret-key\neu-west-1\n0\n")
+      output = IO::Memory.new
+
+      config = Autobot::CLI::InteractiveSetup.run(input, output)
+
+      config.provider.should eq("bedrock")
+      config.aws_access_key_id.should eq("AKIATESTKEY12345678")
+      config.aws_secret_access_key.should eq("secret-key")
+      config.aws_region.should eq("eu-west-1")
+      config.api_key.should eq("")
+    end
+
+    it "uses default region for Bedrock when empty" do
+      input = IO::Memory.new("7\nAKIATESTKEY12345678\nsecret-key\n\n0\n")
+      output = IO::Memory.new
+
+      config = Autobot::CLI::InteractiveSetup.run(input, output)
+
+      config.provider.should eq("bedrock")
+      config.aws_region.should eq("us-east-1")
+    end
   end
 
   describe ".prompt_provider" do

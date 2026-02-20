@@ -132,6 +132,28 @@ describe Autobot::Config::Validator do
       end
     end
 
+    it "does not report missing provider when bedrock is configured" do
+      config_yaml = <<-YAML
+      providers:
+        bedrock:
+          access_key_id: "AKIAIOSFODNN7EXAMPLE"
+          secret_access_key: "secret"
+      YAML
+
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      ValidatorSpecHelpers.with_temp_config(config_yaml) do |path|
+        ValidatorSpecHelpers.with_temp_env(path, "AWS_ACCESS_KEY_ID=test") do
+          config = Autobot::Config::Config.from_yaml(config_yaml)
+          issues = Autobot::Config::Validator.validate(config, path)
+
+          errors = issues.select { |i| i.severity == Autobot::Config::Validator::Severity::Error }
+          errors.any?(&.message.includes?("No LLM provider")).should be_false
+        end
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
     it "detects gateway bound to all interfaces" do
       config_yaml = <<-YAML
       providers:

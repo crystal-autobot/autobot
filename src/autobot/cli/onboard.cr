@@ -84,6 +84,11 @@ module Autobot
         # SLACK_BOT_TOKEN=
         # SLACK_APP_TOKEN=
 
+        # AWS Bedrock (optional)
+        # AWS_ACCESS_KEY_ID=
+        # AWS_SECRET_ACCESS_KEY=
+        # AWS_REGION=us-east-1
+
         # Web search (optional)
         # BRAVE_API_KEY=
         ENV
@@ -108,6 +113,10 @@ module Autobot
             api_key: "${ANTHROPIC_API_KEY}"
           # openai:
           #   api_key: "${OPENAI_API_KEY}"
+          # bedrock:
+          #   access_key_id: "${AWS_ACCESS_KEY_ID}"
+          #   secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+          #   region: "${AWS_REGION}"
 
         channels:
           telegram:

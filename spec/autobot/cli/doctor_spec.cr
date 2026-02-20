@@ -138,7 +138,27 @@ describe Autobot::CLI::Doctor do
 
         errors.should eq(1)
         io.to_s.should contain("✗ No LLM provider configured")
-        io.to_s.should contain("ANTHROPIC_API_KEY")
+        io.to_s.should contain("API key")
+      end
+    end
+
+    it "passes when bedrock is the only provider" do
+      config = make_config(<<-YAML
+      agents:
+        defaults:
+          model: "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"
+      providers:
+        bedrock:
+          access_key_id: "AKIAIOSFODNN7EXAMPLE"
+          secret_access_key: "secret"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_provider(config, 0)
+
+        errors.should eq(0)
+        io.to_s.should contain("✓ LLM provider configured (bedrock)")
       end
     end
   end

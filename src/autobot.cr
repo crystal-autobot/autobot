@@ -1,4 +1,5 @@
 require "option_parser"
+require "awscr-signer"
 require "./autobot/**"
 
 module Autobot

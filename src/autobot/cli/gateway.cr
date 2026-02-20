@@ -101,23 +101,17 @@ module Autobot
         channel_manager
       end
 
-      private def self.create_provider(config : Config::Config) : Providers::HttpProvider
-        provider_config, _provider_name = config.match_provider
-        unless provider_config
-          STDERR.puts "Error: No provider configured"
-          exit 1
-        end
-
-        Providers::HttpProvider.new(
-          api_key: provider_config.api_key,
-          api_base: provider_config.api_base?
-        )
+      private def self.create_provider(config : Config::Config) : Providers::Provider
+        SetupHelper.create_provider(config)
+      rescue ex
+        STDERR.puts "Error: #{ex.message}"
+        exit 1
       end
 
       private def self.create_agent_loop(
         config : Config::Config,
         bus : Bus::MessageBus,
-        provider : Providers::HttpProvider,
+        provider : Providers::Provider,
         tool_registry : Tools::Registry,
         session_manager : Session::Manager,
         cron_service : Cron::Service,

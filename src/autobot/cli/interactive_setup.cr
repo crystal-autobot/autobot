@@ -10,6 +10,7 @@ module Autobot
         "groq"       => "Groq",
         "gemini"     => "Google Gemini",
         "openrouter" => "OpenRouter",
+        "bedrock"    => "AWS Bedrock",
       }
 
       # Supported chat channels
@@ -28,6 +29,9 @@ module Autobot
         property slack_bot_token : String?
         property slack_app_token : String?
         property whatsapp_bridge_url : String?
+        property aws_access_key_id : String?
+        property aws_secret_access_key : String?
+        property aws_region : String?
 
         def initialize(
           @provider : String,
@@ -37,6 +41,9 @@ module Autobot
           @slack_bot_token = nil,
           @slack_app_token = nil,
           @whatsapp_bridge_url = nil,
+          @aws_access_key_id = nil,
+          @aws_secret_access_key = nil,
+          @aws_region = nil,
         )
         end
       end
@@ -47,10 +54,16 @@ module Autobot
         output.puts ""
 
         provider = prompt_provider(input, output)
-        api_key = prompt_api_key(provider, input, output)
-        channels = prompt_channels(input, output)
 
-        config = Configuration.new(provider: provider, api_key: api_key, channels: channels)
+        config = if provider == "bedrock"
+                   prompt_bedrock_setup(input, output, provider)
+                 else
+                   api_key = prompt_api_key(provider, input, output)
+                   Configuration.new(provider: provider, api_key: api_key)
+                 end
+
+        channels = prompt_channels(input, output)
+        config.channels = channels
 
         # Prompt for channel-specific configuration
         channels.each do |channel|
@@ -102,13 +115,7 @@ module Autobot
         output.print "→ "
         output.flush
 
-        # Hide input for security (only for real terminal)
-        hide_input = input == STDIN
-        system("stty -echo") rescue nil if hide_input
-        api_key = input.gets.try(&.strip) || ""
-        system("stty echo") rescue nil if hide_input
-
-        output.puts # Newline after hidden input
+        api_key = read_hidden_input(input, output)
 
         if api_key.empty?
           output.puts "⚠  No API key provided. Add it to .env later.\n"
@@ -117,6 +124,51 @@ module Autobot
 
         output.puts "✓ API key saved\n"
         api_key
+      end
+
+      # Prompts for AWS Bedrock credentials and returns a Configuration
+      private def self.prompt_bedrock_setup(input : IO, output : IO, provider : String) : Configuration
+        output.puts "[2/3] AWS Credentials"
+        output.puts ""
+
+        output.puts "Enter your AWS Access Key ID:"
+        output.print "→ "
+        output.flush
+        access_key = input.gets.try(&.strip) || ""
+
+        output.puts "Enter your AWS Secret Access Key (input hidden):"
+        output.print "→ "
+        output.flush
+        secret_key = read_hidden_input(input, output)
+
+        output.puts "Enter your AWS Region [us-east-1]:"
+        output.print "→ "
+        output.flush
+        region = input.gets.try(&.strip) || ""
+        region = "us-east-1" if region.empty?
+
+        if access_key.empty? || secret_key.empty?
+          output.puts "⚠  Incomplete AWS credentials. Add them to .env later.\n"
+        else
+          output.puts "✓ AWS credentials saved (#{region})\n"
+        end
+
+        Configuration.new(
+          provider: provider,
+          api_key: "",
+          aws_access_key_id: access_key,
+          aws_secret_access_key: secret_key,
+          aws_region: region,
+        )
+      end
+
+      private def self.read_hidden_input(input : IO, output : IO) : String
+        hide_input = input == STDIN
+        system("stty -echo") rescue nil if hide_input
+        value = input.gets.try(&.strip) || ""
+        system("stty echo") rescue nil if hide_input
+        output.puts # Newline after hidden input
+        value
       end
 
       # Prompts user to select chat channels

@@ -14,7 +14,7 @@ Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://cr
 
 ## ✨ Features
 
-- **🤖 Multi-Provider LLM** — Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM
+- **🤖 Multi-Provider LLM** — Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, AWS Bedrock, vLLM
 - **💬 Chat Channels** — Telegram, Slack, WhatsApp with allowlists and custom slash commands
 - **👁️ Vision** — Send photos via Telegram and get AI-powered image analysis
 - **🎤 Voice** — Voice messages auto-transcribed via Whisper (Groq/OpenAI)
@@ -128,6 +128,7 @@ Autobot automatically detects and logs the sandbox method on startup — Docker 
 |----------|-------------|
 | [Quick Start](docs/quickstart.md) | Installation and first steps |
 | [Configuration](docs/configuration.md) | Complete config reference |
+| [AWS Bedrock](docs/bedrock.md) | Bedrock provider setup and configuration |
 | [Security](docs/security.md) | Security model and best practices |
 | [Deployment](docs/deployment.md) | Production deployment with proper user/permissions |
 | [Architecture](docs/architecture.md) | System design and components |

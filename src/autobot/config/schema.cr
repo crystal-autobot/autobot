@@ -160,6 +160,23 @@ module Autobot::Config
     end
   end
 
+  class BedrockProviderConfig
+    include YAML::Serializable
+    property access_key_id : String = ""
+    property secret_access_key : String = ""
+    property session_token : String?
+    property region : String = "us-east-1"
+    property guardrail_id : String?
+    property guardrail_version : String?
+
+    def initialize
+    end
+
+    def configured? : Bool
+      !access_key_id.empty? && !secret_access_key.empty?
+    end
+  end
+
   class ProvidersConfig
     include YAML::Serializable
     property anthropic : ProviderConfig?
@@ -169,6 +186,7 @@ module Autobot::Config
     property groq : ProviderConfig?
     property gemini : ProviderConfig?
     property vllm : ProviderConfig?
+    property bedrock : BedrockProviderConfig?
 
     def initialize
     end
@@ -278,8 +296,12 @@ module Autobot::Config
     end
 
     def match_provider(model : String? = nil) : Tuple(ProviderConfig?, String?)
-      default_model = agents.try(&.defaults.try(&.model)) || "anthropic/claude-sonnet-4-5"
-      model_str = (model || default_model).downcase
+      resolved_model = agents.try(&.defaults.try(&.model)) || "anthropic/claude-sonnet-4-5"
+      model_str = (model || resolved_model).downcase
+
+      # Bedrock is handled separately via match_bedrock
+      return {nil, nil} if model_str.starts_with?("bedrock/")
+
       if p = providers
         {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm] %}
           provider = p.{{ provider_name.id }}
@@ -297,6 +319,17 @@ module Autobot::Config
       {nil, nil}
     end
 
+    # Returns Bedrock config if the model uses the bedrock provider.
+    def match_bedrock(model : String? = nil) : BedrockProviderConfig?
+      resolved_model = agents.try(&.defaults.try(&.model)) || "anthropic/claude-sonnet-4-5"
+      model_str = (model || resolved_model).downcase
+      return nil unless model_str.starts_with?("bedrock/")
+
+      bedrock = providers.try(&.bedrock)
+      return nil unless bedrock && bedrock.configured?
+      bedrock
+    end
+
     def validate! : Nil
       has_provider = false
       if p = providers
@@ -304,6 +337,7 @@ module Autobot::Config
           provider = p.{{ provider_name.id }}
           has_provider ||= (provider && provider.api_key != "")
         {% end %}
+        has_provider ||= (p.bedrock.try(&.configured?) || false)
       end
       unless has_provider
         raise "No LLM provider configured. Please set an API key in config.yml"

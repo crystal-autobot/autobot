@@ -139,12 +139,17 @@ module Autobot
 
       def self.check_provider(config : Config::Config, errors : Int32) : Int32
         _provider, provider_name = config.match_provider
+        bedrock = config.match_bedrock
+
         if provider_name
           report(Status::Pass, "LLM provider configured (#{provider_name})")
           errors
+        elsif bedrock
+          report(Status::Pass, "LLM provider configured (bedrock)")
+          errors
         else
           report(Status::Fail, "No LLM provider configured")
-          hint("Add an API key to .env (e.g. ANTHROPIC_API_KEY)")
+          hint("Add an API key to .env (e.g. ANTHROPIC_API_KEY or AWS credentials)")
           errors + 1
         end
       end

@@ -125,6 +125,13 @@ module Autobot
         api_url: "https://api.groq.com/openai/v1/chat/completions",
       ),
 
+      # === Cloud (non-gateway) ===
+      ProviderSpec.new(
+        name: "bedrock",
+        keywords: ["bedrock", "nova", "amazon"],
+        display_name: "AWS Bedrock",
+      ),
+
       # === Local ===
       ProviderSpec.new(
         name: "vllm",

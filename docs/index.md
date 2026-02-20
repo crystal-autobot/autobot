@@ -20,7 +20,7 @@ Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://cr
 
 ## Features
 
-- **Multi-Provider LLM** — Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM
+- **Multi-Provider LLM** — Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, AWS Bedrock, vLLM
 - **Chat Channels** — Telegram, Slack, WhatsApp with allowlists and custom slash commands
 - **Vision** — Send photos via Telegram and get AI-powered image analysis
 - **Voice** — Voice messages auto-transcribed via Whisper (Groq/OpenAI)

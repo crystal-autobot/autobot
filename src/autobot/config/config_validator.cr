@@ -36,11 +36,15 @@ module Autobot::Config
         end
       {% end %}
 
+      if bedrock_cfg = providers.bedrock
+        has_configured_provider ||= bedrock_cfg.configured?
+      end
+
       unless has_configured_provider
         issues << Issue.new(
           severity: Severity::Error,
           message: "No LLM provider configured. Add at least one API key to .env file " \
-                   "(e.g., ANTHROPIC_API_KEY, OPENAI_API_KEY)."
+                   "(e.g., ANTHROPIC_API_KEY, OPENAI_API_KEY, or AWS credentials)."
         )
       end
 
