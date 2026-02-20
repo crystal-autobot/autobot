@@ -178,4 +178,4 @@ See [Memory](memory.md) for details.
 
 ### Cron (`cron/`)
 
-Scheduler supporting cron expressions, fixed intervals, and one-time triggers. Jobs are scoped per owner and publish messages through the event bus.
+Scheduler supporting cron expressions, fixed intervals, and one-time triggers. When a job fires, it publishes a message through the event bus, triggering a full agent turn with all tools. Jobs carry persistent state for change detection (e.g., "notify only when steps change"). See [Cron & Scheduling](cron.md) for details.

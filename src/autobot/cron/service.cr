@@ -86,6 +86,26 @@ module Autobot
         job
       end
 
+      # Update the state of a job.
+      def set_state(job_id : String, state : JSON::Any) : Bool
+        store.jobs.each do |job|
+          if job.id == job_id
+            job.state = job.state.copy(state: state)
+            save_store
+            return true
+          end
+        end
+        false
+      end
+
+      # Get the state of a job.
+      def get_state(job_id : String) : JSON::Any?
+        store.jobs.each do |job|
+          return job.state.state if job.id == job_id
+        end
+        nil
+      end
+
       # Remove a job by ID.
       # If owner is provided, only removes job if it matches the owner.
       def remove_job(job_id : String, owner : String? = nil) : Bool
@@ -116,21 +136,8 @@ module Autobot
           if job.id == job_id
             job.enabled = enabled
             job.updated_at_ms = now_ms
-            if enabled
-              job.state = CronJobState.new(
-                next_run_at_ms: compute_next_run(job.schedule, now_ms),
-                last_run_at_ms: job.state.last_run_at_ms,
-                last_status: job.state.last_status,
-                last_error: job.state.last_error
-              )
-            else
-              job.state = CronJobState.new(
-                next_run_at_ms: nil,
-                last_run_at_ms: job.state.last_run_at_ms,
-                last_status: job.state.last_status,
-                last_error: job.state.last_error
-              )
-            end
+            next_run = enabled ? compute_next_run(job.schedule, now_ms) : nil
+            job.state = job.state.copy(next_run_at_ms: next_run)
             save_store
             arm_timer
             return job
@@ -245,12 +252,7 @@ module Autobot
         now = now_ms
         s.jobs.each do |job|
           if job.enabled?
-            job.state = CronJobState.new(
-              next_run_at_ms: compute_next_run(job.schedule, now),
-              last_run_at_ms: job.state.last_run_at_ms,
-              last_status: job.state.last_status,
-              last_error: job.state.last_error
-            )
+            job.state = job.state.copy(next_run_at_ms: compute_next_run(job.schedule, now))
           end
         end
       end
@@ -291,51 +293,32 @@ module Autobot
         start_ms = now_ms
         Log.info { "Cron: executing job '#{job.name}' (#{job.id})" }
 
-        begin
-          if callback = @on_job
-            callback.call(job)
-          end
-
-          job.state = CronJobState.new(
-            next_run_at_ms: job.state.next_run_at_ms,
-            last_run_at_ms: start_ms,
-            last_status: JobStatus::Ok,
-            last_error: nil
-          )
-          Log.info { "Cron: job '#{job.name}' completed" }
-        rescue ex
-          job.state = CronJobState.new(
-            next_run_at_ms: job.state.next_run_at_ms,
-            last_run_at_ms: start_ms,
-            last_status: JobStatus::Error,
-            last_error: ex.message
-          )
-          Log.error { "Cron: job '#{job.name}' failed: #{ex.message}" }
-        end
-
+        run_job_callback(job, start_ms)
         job.updated_at_ms = now_ms
+        schedule_next_run(job)
+      end
 
-        # Handle one-shot jobs
+      private def run_job_callback(job : CronJob, start_ms : Int64) : Nil
+        if callback = @on_job
+          callback.call(job)
+        end
+        job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Ok, last_error: nil)
+        Log.info { "Cron: job '#{job.name}' completed" }
+      rescue ex
+        job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
+        Log.error { "Cron: job '#{job.name}' failed: #{ex.message}" }
+      end
+
+      private def schedule_next_run(job : CronJob) : Nil
         if job.schedule.kind.at?
           if job.delete_after_run?
             store.jobs.reject! { |j| j.id == job.id }
           else
             job.enabled = false
-            job.state = CronJobState.new(
-              next_run_at_ms: nil,
-              last_run_at_ms: job.state.last_run_at_ms,
-              last_status: job.state.last_status,
-              last_error: job.state.last_error
-            )
+            job.state = job.state.copy(next_run_at_ms: nil)
           end
         else
-          # Compute next run
-          job.state = CronJobState.new(
-            next_run_at_ms: compute_next_run(job.schedule, now_ms),
-            last_run_at_ms: job.state.last_run_at_ms,
-            last_status: job.state.last_status,
-            last_error: job.state.last_error
-          )
+          job.state = job.state.copy(next_run_at_ms: compute_next_run(job.schedule, now_ms))
         end
       end
     end

@@ -7,6 +7,8 @@ module Autobot
   module Tools
     # Tool to schedule reminders and recurring tasks via the cron service.
     class CronTool < Tool
+      JOB_NAME_MAX_LENGTH = 30
+
       @cron : Cron::Service
       @channel : String = ""
       @chat_id : String = ""
@@ -25,7 +27,9 @@ module Autobot
       end
 
       def description : String
-        "Schedule reminders and recurring tasks. Actions: add, list, remove."
+        "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
+        "When fired, the message triggers a full agent turn with all tools. " \
+        "Actions: add, list, remove, set_state."
       end
 
       def parameters : ToolSchema
@@ -33,12 +37,12 @@ module Autobot
           properties: {
             "action" => PropertySchema.new(
               type: "string",
-              enum_values: ["add", "list", "remove"],
+              enum_values: ["add", "list", "remove", "set_state"],
               description: "Action to perform"
             ),
             "message" => PropertySchema.new(
               type: "string",
-              description: "Reminder message (for add)"
+              description: "Self-contained instruction for the agent turn. Include specific tool names and parameters (e.g. 'Use web_search to find latest news about X. Notify the user with a summary.')"
             ),
             "every_seconds" => PropertySchema.new(
               type: "integer",
@@ -54,7 +58,11 @@ module Autobot
             ),
             "job_id" => PropertySchema.new(
               type: "string",
-              description: "Job ID (for remove)"
+              description: "Job ID (for remove, set_state)"
+            ),
+            "state" => PropertySchema.new(
+              type: "object",
+              description: "State data to persist for this job (for set_state). Saved to the job and injected on next run."
             ),
           },
           required: ["action"]
@@ -71,6 +79,8 @@ module Autobot
           list_jobs
         when "remove"
           remove_job(params)
+        when "set_state"
+          set_state(params)
         else
           ToolResult.error("Unknown action: #{action}")
         end
@@ -102,7 +112,7 @@ module Autobot
         owner_key = "#{@channel}:#{@chat_id}"
 
         job = @cron.add_job(
-          name: message.size > 30 ? message[0, 30] : message,
+          name: message.size > JOB_NAME_MAX_LENGTH ? message[0, JOB_NAME_MAX_LENGTH] : message,
           schedule: schedule,
           message: message,
           deliver: true,
@@ -134,6 +144,20 @@ module Autobot
           ToolResult.success("Removed job #{job_id}")
         else
           ToolResult.error("Job #{job_id} not found or access denied")
+        end
+      end
+
+      private def set_state(params : Hash(String, JSON::Any)) : ToolResult
+        job_id = params["job_id"]?.try(&.as_s)
+        return ToolResult.error("job_id is required for set_state") unless job_id
+
+        state = params["state"]?
+        return ToolResult.error("state is required for set_state") unless state
+
+        if @cron.set_state(job_id, state)
+          ToolResult.success("State updated for job #{job_id}")
+        else
+          ToolResult.error("Job #{job_id} not found")
         end
       end
 

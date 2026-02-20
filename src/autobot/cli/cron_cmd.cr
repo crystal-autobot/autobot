@@ -24,6 +24,29 @@ module Autobot
         end
       end
 
+      def self.show(config_path : String?, job_id : String) : Nil
+        job = cron_service.list_jobs(include_disabled: true).find { |j| j.id == job_id }
+        unless job
+          STDERR.puts "Job #{job_id} not found"
+          exit 1
+        end
+
+        status = job.enabled? ? "enabled" : "disabled"
+
+        puts "ID:       #{job.id}"
+        puts "Name:     #{job.name}"
+        puts "Status:   #{status}"
+        puts "Schedule: #{format_schedule(job.schedule)}"
+        puts "Next Run: #{format_next_run(job.state.next_run_at_ms)}"
+        puts "Message:  #{job.payload.message}"
+        puts "Deliver:  #{job.payload.deliver?}"
+        puts "Channel:  #{job.payload.channel || "-"}"
+        puts "To:       #{job.payload.to || "-"}"
+        if state = job.state.state
+          puts "State:    #{state.to_json}"
+        end
+      end
+
       def self.add(
         config_path : String?,
         name : String,

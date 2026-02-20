@@ -186,7 +186,7 @@ module Autobot::Agent
         - Search the web and fetch web pages
         - Send messages to users on chat channels
         - Spawn subagents for complex background tasks
-        - Schedule cron jobs for reminders and recurring tasks
+        - Schedule cron jobs for reminders, deferred tasks, and recurring checks (use cron tool, never exec sleep)
 
         ## Current Time
         #{now} (UTC)
@@ -216,6 +216,10 @@ module Autobot::Agent
         IMPORTANT: When responding to direct questions or conversations, reply directly with your text response.
         Only use the 'message' tool when you need to send a message to a specific chat channel.
         For normal conversation, just respond with text - do not call the message tool.
+
+        For delayed/scheduled tasks, always use `cron` tool (never `exec sleep`).
+        Cron jobs trigger a full agent turn. Use `set_state` to persist data between runs.
+        Cron turns never auto-deliver — use the `message` tool to notify the user when needed.
 
         Always be helpful, accurate, and concise. When using tools, think step by step.
         When remembering something important, write to memory/MEMORY.md

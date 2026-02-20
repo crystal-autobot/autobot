@@ -137,6 +137,196 @@ describe Autobot::Cron::Service do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  describe "#set_state" do
+    it "sets state on a job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "stateful",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "check something"
+      )
+
+      state = JSON::Any.new({"count" => JSON::Any.new(42_i64)})
+      service.set_state(job.id, state).should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "preserves other state fields" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "preserve",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test"
+      )
+
+      original_next_run = job.state.next_run_at_ms
+
+      state = JSON::Any.new({"key" => JSON::Any.new("value")})
+      service.set_state(job.id, state)
+
+      updated = service.list_jobs.first
+      updated.state.next_run_at_ms.should eq(original_next_run)
+      updated.state.state.should eq(state)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns false for nonexistent job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      state = JSON::Any.new({"key" => JSON::Any.new("val")})
+      service.set_state("nonexistent", state).should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "persists state to disk" do
+      tmp = TestHelper.tmp_dir
+      store_path = tmp / "cron.json"
+      service = Autobot::Cron::Service.new(store_path: store_path)
+
+      job = service.add_job(
+        name: "persist_state",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test"
+      )
+
+      state = JSON::Any.new({"steps" => JSON::Any.new(5000_i64)})
+      service.set_state(job.id, state)
+
+      # Reload from disk
+      service2 = Autobot::Cron::Service.new(store_path: store_path)
+      service2.get_state(job.id).should eq(state)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "#get_state" do
+    it "returns nil when no state is set" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "no_state",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test"
+      )
+
+      service.get_state(job.id).should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns nil for nonexistent job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service.get_state("nonexistent").should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns previously set state" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "get_state",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test"
+      )
+
+      state = JSON::Any.new({"temperature" => JSON::Any.new(22.5)})
+      service.set_state(job.id, state)
+      service.get_state(job.id).should eq(state)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "owner-scoped operations" do
+    it "filters jobs by owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      service.add_job(
+        name: "user1_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "user1",
+        owner: "telegram:user1"
+      )
+      service.add_job(
+        name: "user2_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "user2",
+        owner: "telegram:user2"
+      )
+
+      user1_jobs = service.list_jobs(owner: "telegram:user1")
+      user1_jobs.size.should eq(1)
+      user1_jobs.first.name.should eq("user1_job")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "prevents removing job with wrong owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "owned",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test",
+        owner: "telegram:user1"
+      )
+
+      service.remove_job(job.id, owner: "telegram:user2").should be_false
+      service.list_jobs.size.should eq(1)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "allows removing job with correct owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "owned",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test",
+        owner: "telegram:user1"
+      )
+
+      service.remove_job(job.id, owner: "telegram:user1").should be_true
+      service.list_jobs.should be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "delete_after_run" do
+    it "marks one-time jobs with delete_after_run" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "one_shot",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::At, at_ms: Time.utc.to_unix_ms + 60000),
+        message: "once",
+        delete_after_run: true
+      )
+
+      job.delete_after_run?.should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
   it "loads existing store from disk" do
     tmp = TestHelper.tmp_dir
     store_path = tmp / "cron.json"

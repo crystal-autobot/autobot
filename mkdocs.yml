@@ -59,6 +59,7 @@ nav:
       - Quick Start: quickstart.md
       - Configuration: configuration.md
   - Features:
+      - Cron & Scheduling: cron.md
       - Media & Voice: media.md
       - Web Search: web-search.md
       - MCP Servers: mcp.md

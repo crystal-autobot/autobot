@@ -82,27 +82,36 @@ module Autobot
         when "list"
           CronCmd.list(options[:config_path], options[:cron_all])
         when "add"
-          job_name = options[:cron_name]
-          msg = options[:message] || options[:cron_message]
-          unless job_name && msg
-            STDERR.puts "Error: --name and --message are required"
-            exit 1
-          end
-          CronCmd.add(
-            options[:config_path], job_name, msg,
-            options[:cron_every], options[:cron_expr], options[:cron_at],
-            options[:cron_deliver], options[:cron_to], options[:cron_channel]
-          )
+          handle_cron_add(options)
+        when "show"
+          CronCmd.show(options[:config_path], require_job_id(options[:args]))
         when "remove"
           CronCmd.remove(options[:config_path], require_job_id(options[:args]))
         when "enable"
           CronCmd.enable(options[:config_path], require_job_id(options[:args]), !options[:cron_disable])
         when "run"
           CronCmd.run_job(options[:config_path], require_job_id(options[:args]), options[:cron_force])
+        when "help"
+          print_cron_help
         else
           STDERR.puts "Unknown cron subcommand: #{subcommand}"
+          STDERR.puts "Run 'autobot cron help' for usage."
           exit 1
         end
+      end
+
+      private def self.handle_cron_add(options) : Nil
+        job_name = options[:cron_name]
+        msg = options[:message] || options[:cron_message]
+        unless job_name && msg
+          STDERR.puts "Error: --name and --message are required"
+          exit 1
+        end
+        CronCmd.add(
+          options[:config_path], job_name, msg,
+          options[:cron_every], options[:cron_expr], options[:cron_at],
+          options[:cron_deliver], options[:cron_to], options[:cron_channel]
+        )
       end
 
       private def self.setup_logging(verbose : Bool) : Nil
@@ -208,6 +217,18 @@ module Autobot
         }
       end
 
+      private def self.print_cron_help : Nil
+        puts "Usage: autobot cron <subcommand> [options]\n\n"
+        puts "Subcommands:"
+        puts "  list              List scheduled jobs (use -a to include disabled)"
+        puts "  show <job_id>     Show full job details including message"
+        puts "  add               Add a new job (requires -n, -m, and a schedule)"
+        puts "  remove <job_id>   Remove a job"
+        puts "  enable <job_id>   Enable a job (use --disable to disable)"
+        puts "  run <job_id>      Run a job now (use -f to force if disabled)"
+        puts "  help              Show this help"
+      end
+
       private def self.require_job_id(args : Array(String)) : String
         job_id = args.shift?
         unless job_id
@@ -232,7 +253,7 @@ module Autobot
         puts "  doctor    Check configuration and security (use --strict for warnings as errors)"
         puts "  agent     Interact with the agent (single message or interactive)"
         puts "  gateway   Start the gateway server"
-        puts "  cron      Manage scheduled tasks (list|add|remove|enable|run)"
+        puts "  cron      Manage scheduled tasks (list|show|add|remove|enable|run)"
         puts "  status    Show system status"
         puts "  version   Show version info"
         puts "  help      Show this help\n\n"
