@@ -274,16 +274,21 @@ module Autobot
         hostname = uri.host
         raise "Invalid URI: missing host" unless hostname
 
-        # Resolve and validate, then connect to validated IP (prevent DNS rebinding)
+        # Validate all resolved IPs before connecting (SSRF protection)
         validated_ip = resolve_and_validate_ip(hostname)
 
-        # Connect to validated IP, use Host header for virtual hosting
-        headers = HTTP::Headers{
-          "User-Agent" => USER_AGENT,
-          "Host"       => hostname,
-        }
+        headers = HTTP::Headers{"User-Agent" => USER_AGENT}
 
-        client = HTTP::Client.new(validated_ip, uri.port, tls: uri.scheme == "https")
+        if uri.scheme == "https"
+          # HTTPS: connect via hostname for proper SNI/cert validation.
+          # DNS rebinding is mitigated by TLS — a rebind target won't have
+          # a valid certificate for the original hostname.
+          client = HTTP::Client.new(hostname, uri.port, tls: true)
+        else
+          # HTTP: connect to validated IP to prevent DNS rebinding.
+          headers["Host"] = hostname
+          client = HTTP::Client.new(validated_ip, uri.port)
+        end
         client.read_timeout = DEFAULT_TIMEOUT
         client.connect_timeout = DEFAULT_TIMEOUT
 
