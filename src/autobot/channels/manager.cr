@@ -125,6 +125,7 @@ module Autobot::Channels
             bus: @bus,
             bot_token: slack_config.bot_token,
             app_token: slack_config.app_token,
+            allow_from: slack_config.allow_from,
             group_policy: slack_config.group_policy,
             group_allow_from: slack_config.group_allow_from,
             dm_config: dm_cfg,

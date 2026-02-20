@@ -28,11 +28,12 @@ module Autobot::Channels
       @bus : Bus::MessageBus,
       @bot_token : String,
       @app_token : String,
+      allow_from : Array(String) = [] of String,
       @group_policy : String = "mention",
       @group_allow_from : Array(String) = [] of String,
       @dm_config : Config::SlackDMConfig = Config::SlackDMConfig.new,
     )
-      super("slack", @bus)
+      super("slack", @bus, allow_from)
     end
 
     def start : Nil
@@ -64,12 +65,19 @@ module Autobot::Channels
       thread_ts = message.metadata["thread_ts"]?
       channel_type = message.metadata["channel_type"]?
       use_thread = !thread_ts.nil? && channel_type != "im"
+      mrkdwn = MarkdownToSlackMrkdwn.convert(message.content)
 
+      MarkdownToSlackMrkdwn.split_message(mrkdwn).each do |chunk|
+        send_slack_message(message.chat_id, chunk, use_thread ? thread_ts : nil)
+      end
+    end
+
+    private def send_slack_message(chat_id : String, text : String, thread_ts : String?) : Nil
       body = JSON.build do |json|
         json.object do
-          json.field "channel", message.chat_id
-          json.field "text", message.content
-          if use_thread && (ts = thread_ts)
+          json.field "channel", chat_id
+          json.field "text", text
+          if ts = thread_ts
             json.field "thread_ts", ts
           end
         end
@@ -77,7 +85,7 @@ module Autobot::Channels
 
       response = slack_api("chat.postMessage", body)
       unless response
-        Log.error { "Failed to send Slack message to #{message.chat_id}" }
+        Log.error { "Failed to send Slack message to #{chat_id}" }
       end
     end
 

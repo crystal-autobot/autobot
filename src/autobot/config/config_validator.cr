@@ -102,6 +102,12 @@ module Autobot::Config
           message: "Slack is enabled but bot_token is not set. " \
                    "Add SLACK_BOT_TOKEN to .env file."
         )
+      elsif slack.allow_from.empty?
+        issues << Issue.new(
+          severity: Severity::Warning,
+          message: "Slack is enabled but allow_from is empty (denies all messages). " \
+                   "Add Slack user IDs to allow_from array, or use [\"*\"] to allow all."
+        )
       end
 
       if dm = slack.dm
