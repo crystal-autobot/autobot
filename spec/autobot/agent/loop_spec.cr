@@ -216,6 +216,29 @@ describe Autobot::Agent::Loop do
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
+
+    it "preserves inbound metadata in outbound response" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "slack",
+        sender_id: "U12345",
+        chat_id: "C67890",
+        content: "Hello from Slack",
+        metadata: {
+          "thread_ts"    => "1234567890.123456",
+          "channel_type" => "channel",
+        },
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.should_not be_nil
+      response.try(&.metadata["thread_ts"]).should eq("1234567890.123456")
+      response.try(&.metadata["channel_type"]).should eq("channel")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
   end
 
   describe "message tool wiring" do

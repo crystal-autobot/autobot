@@ -164,7 +164,7 @@ module Autobot::Agent
       save_to_session(session, msg.content, final_content, tools_used)
 
       # Build and return response
-      build_response(msg.channel, msg.chat_id, final_content)
+      build_response(msg.channel, msg.chat_id, final_content, msg.metadata)
     end
 
     # Process a system message (e.g., subagent announcement).
@@ -395,14 +395,15 @@ module Autobot::Agent
     end
 
     # Build outbound message with logging
-    private def build_response(channel : String, chat_id : String, content : String) : Bus::OutboundMessage
+    private def build_response(channel : String, chat_id : String, content : String, metadata : Hash(String, String) = {} of String => String) : Bus::OutboundMessage
       preview = content.size > LONG_MESSAGE_PREVIEW_LENGTH ? content[0..LONG_MESSAGE_PREVIEW_LENGTH] + "..." : content
       Log.info { "Response: #{preview}" }
 
       Bus::OutboundMessage.new(
         channel: channel,
         chat_id: chat_id,
-        content: content
+        content: content,
+        metadata: metadata,
       )
     end
 
