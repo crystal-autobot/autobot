@@ -24,20 +24,24 @@ module Autobot::Agent
         @skills = SkillsLoader.new(@workspace)
       end
 
-      # Build complete message array for LLM
+      # Build complete message array for LLM.
+      # When `background` is true, uses a minimal system prompt (no formatting rules,
+      # skills summary, or session info) to reduce token usage for background tasks.
       def build_messages(
         history : Array(Hash(String, String)),
         current_message : String,
         media : Array(Bus::MediaAttachment)? = nil,
         channel : String? = nil,
         chat_id : String? = nil,
+        background : Bool = false,
       ) : Array(Hash(String, JSON::Any))
         messages = [] of Hash(String, JSON::Any)
 
-        # Build system prompt with memory + skills
-        system_prompt = build_system_prompt
-        if channel && chat_id
-          system_prompt += "\n\n## Current Session\nChannel: #{channel}\nChat ID: #{chat_id}"
+        system_prompt = build_system_prompt(background)
+        unless background
+          if channel && chat_id
+            system_prompt += "\n\n## Current Session\nChannel: #{channel}\nChat ID: #{chat_id}"
+          end
         end
 
         messages << {
@@ -112,10 +116,11 @@ module Autobot::Agent
       end
 
       # Build the complete system prompt from identity, bootstrap files, memory, and skills.
-      private def build_system_prompt : String
+      # When `background` is true, uses minimal identity and skips skills summary.
+      private def build_system_prompt(background : Bool = false) : String
         parts = [] of String
 
-        parts << identity_section
+        parts << (background ? background_identity_section : identity_section)
 
         bootstrap = load_bootstrap_files
         parts << bootstrap unless bootstrap.empty?
@@ -131,17 +136,19 @@ module Autobot::Agent
           parts << "# Active Skills\n\n#{always_content}" unless always_content.empty?
         end
 
-        # Available skills: show summary for progressive loading
-        skills_summary = @skills.build_skills_summary
-        unless skills_summary.empty?
-          parts << <<-SKILLS
-          # Skills
+        # Available skills: show summary for progressive loading (skip for background)
+        unless background
+          skills_summary = @skills.build_skills_summary
+          unless skills_summary.empty?
+            parts << <<-SKILLS
+            # Skills
 
-          The following skills extend your capabilities. To use a skill, read its SKILL.md file using the read_file tool.
-          Skills with available="false" need dependencies installed first.
+            The following skills extend your capabilities. To use a skill, read its SKILL.md file using the read_file tool.
+            Skills with available="false" need dependencies installed first.
 
-          #{skills_summary}
-          SKILLS
+            #{skills_summary}
+            SKILLS
+          end
         end
 
         parts.join("\n\n---\n\n")
@@ -169,6 +176,22 @@ module Autobot::Agent
         - Dangerous command patterns are blocked (rm -rf, curl | bash, etc.)
         - SSRF attempts are blocked (private IPs, cloud metadata)
         POLICY
+      end
+
+      # Minimal identity for background tasks (cron turns, subagent work).
+      # Keeps: time, workspace, security. Drops: formatting, conversation rules, skills hints.
+      private def background_identity_section : String
+        now = Time.utc.to_s(TIMESTAMP_FORMAT)
+        workspace_path = @workspace.expand(home: true).to_s
+
+        <<-IDENTITY
+        # autobot (background task)
+
+        You are Autobot, executing a scheduled background task.
+        Current time: #{now} (UTC)
+        Workspace: #{workspace_path}
+        #{build_security_policy(workspace_path)}
+        IDENTITY
       end
 
       private def identity_section : String

@@ -195,7 +195,8 @@ module Autobot::Agent
         history: is_cron ? [] of Hash(String, String) : session.get_history,
         current_message: content,
         channel: origin_channel,
-        chat_id: origin_chat_id
+        chat_id: origin_chat_id,
+        background: is_cron
       )
 
       final_content, tools_used, total_tokens = run_tool_loop(messages, session.key)
