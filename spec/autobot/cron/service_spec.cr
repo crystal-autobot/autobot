@@ -197,6 +197,164 @@ describe Autobot::Cron::Service do
     end
   end
 
+  describe "#update_job" do
+    it "updates schedule" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "updatable",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "original"
+      )
+
+      new_schedule = Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "0 9 * * *")
+      updated = service.update_job(job.id, schedule: new_schedule)
+
+      updated.should_not be_nil
+      updated.try(&.schedule.kind).should eq(Autobot::Cron::ScheduleKind::Cron)
+      updated.try(&.schedule.expr).should eq("0 9 * * *")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "updates message" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "updatable",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "original",
+        deliver: true,
+        channel: "telegram",
+        to: "user1"
+      )
+
+      updated = service.update_job(job.id, message: "new message")
+
+      updated.should_not be_nil
+      updated.try(&.payload.message).should eq("new message")
+      updated.try(&.payload.deliver?).should be_true
+      updated.try(&.payload.channel).should eq("telegram")
+      updated.try(&.payload.to).should eq("user1")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "updates both schedule and message" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "updatable",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "original"
+      )
+
+      new_schedule = Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "0 8 * * *")
+      updated = service.update_job(job.id, schedule: new_schedule, message: "updated")
+
+      updated.should_not be_nil
+      updated.try(&.schedule.expr).should eq("0 8 * * *")
+      updated.try(&.payload.message).should eq("updated")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "preserves created_at_ms, state, and owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "updatable",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "original",
+        owner: "telegram:user1"
+      )
+      original_created = job.created_at_ms
+
+      updated = service.update_job(job.id, owner: "telegram:user1", message: "changed")
+
+      updated.should_not be_nil
+      updated.try(&.created_at_ms).should eq(original_created)
+      updated.try(&.owner).should eq("telegram:user1")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "updates updated_at_ms" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "updatable",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "original"
+      )
+      original_updated = job.updated_at_ms
+
+      sleep 1.milliseconds
+      updated = service.update_job(job.id, message: "changed")
+
+      updated.should_not be_nil
+      (updated.as(Autobot::Cron::CronJob).updated_at_ms >= original_updated).should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "rejects update with wrong owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "owned",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "original",
+        owner: "telegram:user1"
+      )
+
+      result = service.update_job(job.id, owner: "telegram:user2", message: "hacked")
+      result.should be_nil
+
+      # Original message unchanged
+      jobs = service.list_jobs
+      jobs.first.payload.message.should eq("original")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns nil for non-existent job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      result = service.update_job("nonexistent", message: "test")
+      result.should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "persists changes to disk" do
+      tmp = TestHelper.tmp_dir
+      store_path = tmp / "cron.json"
+      service = Autobot::Cron::Service.new(store_path: store_path)
+
+      job = service.add_job(
+        name: "persist_test",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "original"
+      )
+
+      service.update_job(job.id, message: "persisted change")
+
+      service2 = Autobot::Cron::Service.new(store_path: store_path)
+      jobs = service2.list_jobs
+      jobs.first.payload.message.should eq("persisted change")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
   describe "#clear_all" do
     it "removes all jobs and returns count" do
       tmp = TestHelper.tmp_dir

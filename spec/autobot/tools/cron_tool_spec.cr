@@ -257,6 +257,126 @@ describe Autobot::Tools::CronTool do
     end
   end
 
+  describe "update action" do
+    it "updates schedule" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Original task"),
+        "every_seconds" => JSON::Any.new(60_i64),
+      })
+
+      job_id = service.list_jobs.first.id
+      result = tool.execute({
+        "action"    => JSON::Any.new("update"),
+        "job_id"    => JSON::Any.new(job_id),
+        "cron_expr" => JSON::Any.new("0 9 * * *"),
+      })
+
+      result.success?.should be_true
+      result.content.should contain("Updated job")
+      service.list_jobs.first.schedule.expr.should eq("0 9 * * *")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "updates message" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Original task"),
+        "every_seconds" => JSON::Any.new(60_i64),
+      })
+
+      job_id = service.list_jobs.first.id
+      result = tool.execute({
+        "action"  => JSON::Any.new("update"),
+        "job_id"  => JSON::Any.new(job_id),
+        "message" => JSON::Any.new("New task message"),
+      })
+
+      result.success?.should be_true
+      service.list_jobs.first.payload.message.should eq("New task message")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails without job_id" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action"  => JSON::Any.new("update"),
+        "message" => JSON::Any.new("New message"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("job_id is required")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails without fields to update" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Task"),
+        "every_seconds" => JSON::Any.new(60_i64),
+      })
+
+      job_id = service.list_jobs.first.id
+      result = tool.execute({
+        "action" => JSON::Any.new("update"),
+        "job_id" => JSON::Any.new(job_id),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("provide message, every_seconds, cron_expr, or at to update")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "prevents updating other owner's job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      # Add job owned by user2
+      service.add_job(
+        name: "other_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "Not yours",
+        owner: "telegram:user2"
+      )
+
+      job_id = service.list_jobs.first.id
+      result = tool.execute({
+        "action"  => JSON::Any.new("update"),
+        "job_id"  => JSON::Any.new(job_id),
+        "message" => JSON::Any.new("Hacked"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("not found or access denied")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
   it "returns error for unknown action" do
     tmp = TestHelper.tmp_dir
     service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")

@@ -110,6 +110,7 @@ The agent creates cron jobs via the `cron` tool when users make scheduling reque
 |--------|-------------|---------------------|
 | `add` | Create a new job | `message` + one of: `every_seconds`, `cron_expr`, `at` |
 | `list` | List jobs for current owner | — |
+| `update` | Update schedule or message in-place | `job_id` + at least one of: `message`, `every_seconds`, `cron_expr`, `at` |
 | `remove` | Delete a job | `job_id` |
 
 ---
@@ -140,6 +141,19 @@ autobot cron add --name "morning" --message "Good morning!" --cron "0 9 * * *"
 
 # One-time
 autobot cron add --name "reminder" --message "Call dentist" --at "2026-02-20T15:00:00Z"
+```
+
+### Update a Job
+
+```bash
+# Change schedule
+autobot cron update <job_id> --cron "0 8 * * *"
+
+# Change message
+autobot cron update <job_id> --message "New task instructions"
+
+# Change both
+autobot cron update <job_id> --every 600 --message "Updated check"
 ```
 
 ### Remove a Job
@@ -176,6 +190,7 @@ Jobs created via the `cron` tool are automatically scoped to the originating cha
 
 - **Owner format:** `channel:chat_id` (e.g., `telegram:634643933`)
 - **List** only shows the current owner's jobs
+- **Update** only works on the current owner's jobs
 - **Remove** only works on the current owner's jobs
 - Jobs created via CLI have no owner restriction
 
@@ -218,6 +233,19 @@ cron add:
   message: "Check email and notify the user of new messages."
   every_seconds: 300
 ```
+
+### Update Existing Job
+
+User says: *"Change my morning report to 8am instead"*
+
+The agent updates:
+```
+cron update:
+  job_id: "a1b2c3d4"
+  cron_expr: "0 8 * * *"
+```
+
+Job identity (`id`, `created_at_ms`, `state`) is preserved — only the schedule changes.
 
 ---
 
