@@ -78,7 +78,7 @@ graph LR
 2. **Publish to bus** — An `InboundMessage` is published to the event bus with `channel: "system"` and `sender_id: "cron:{job_id}"`
 3. **Agent turn** — The agent loop picks up the message and executes the job's prompt
 4. **Tool execution** — The agent uses any tools needed (MCP, web search, etc.) to fulfill the task
-5. **Auto-delivery** — The agent's final response is automatically delivered to the user through the originating channel
+5. **Explicit delivery** — The agent uses the `message` tool to send results to the user (no auto-delivery)
 
 ### Background Turn Restrictions
 

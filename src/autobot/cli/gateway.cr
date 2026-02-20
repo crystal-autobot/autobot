@@ -67,17 +67,11 @@ module Autobot
           chat_id = job.payload.to || ""
           return nil if chat_id.empty?
 
-          content = job.payload.message
-          if args = job.payload.args
-            args_str = args.map { |key, val| "#{key}: #{val}" }.join("\n")
-            content += "\n\nArgs:\n#{args_str}"
-          end
-
           bus.publish_inbound(Bus::InboundMessage.new(
             channel: Constants::CHANNEL_SYSTEM,
             sender_id: "#{Constants::CRON_SENDER_PREFIX}#{job.id}",
             chat_id: "#{channel}:#{chat_id}",
-            content: content,
+            content: job.payload.message,
           ))
           nil
         end

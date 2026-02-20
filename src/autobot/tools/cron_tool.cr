@@ -45,7 +45,8 @@ module Autobot
             "message" => PropertySchema.new(
               type: "string",
               description: "Single-execution instruction — what to do on THIS firing, not the schedule. " \
-                           "Write as a direct action with specific tool names. "
+                           "Write as a direct action with specific tool names. " \
+                           "Include all user-provided specifics verbatim: URLs, names, values, thresholds."
             ),
             "every_seconds" => PropertySchema.new(
               type: "integer",
@@ -63,11 +64,6 @@ module Autobot
             "at" => PropertySchema.new(
               type: "string",
               description: "ISO datetime for one-time execution (e.g. '2026-02-12T10:30:00')"
-            ),
-            "args" => PropertySchema.new(
-              type: "object",
-              description: "Key-value arguments preserved verbatim for each execution. " \
-                           "Use for URLs, thresholds, names, or any specific values from the user's request."
             ),
             "job_id" => PropertySchema.new(
               type: "string",
@@ -117,13 +113,11 @@ module Autobot
                    end
 
         owner_key = "#{@channel}:#{@chat_id}"
-        args = parse_args(params["args"]?)
 
         job = @cron.add_job(
           name: message.size > JOB_NAME_MAX_LENGTH ? message[0, JOB_NAME_MAX_LENGTH] : message,
           schedule: schedule,
           message: message,
-          args: args,
           deliver: true,
           channel: @channel,
           to: @chat_id,
@@ -159,15 +153,6 @@ module Autobot
       private def owner_context : String?
         return nil if @channel.empty? || @chat_id.empty?
         "#{@channel}:#{@chat_id}"
-      end
-
-      private def parse_args(value : JSON::Any?) : Hash(String, String)?
-        return nil unless value
-        hash = {} of String => String
-        value.as_h.each { |key, val| hash[key] = val.as_s }
-        hash.empty? ? nil : hash
-      rescue
-        nil
       end
     end
   end

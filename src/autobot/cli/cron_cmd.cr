@@ -46,9 +46,6 @@ module Autobot
         puts "Next Run: #{format_time_ms(service.compute_next_run_for(job))}"
         puts "Last Run: #{format_time_ms(job.state.last_run_at_ms)}"
         puts "Message:  #{job.payload.message}"
-        if args = job.payload.args
-          args.each { |key, val| puts "  #{key}: #{val}" }
-        end
         puts "Deliver:  #{job.payload.deliver?}"
         puts "Channel:  #{job.payload.channel || NIL_PLACEHOLDER}"
         puts "To:       #{job.payload.to || NIL_PLACEHOLDER}"
