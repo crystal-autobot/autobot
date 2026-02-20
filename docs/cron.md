@@ -78,7 +78,7 @@ graph LR
 2. **Publish to bus** — An `InboundMessage` is published to the event bus with `channel: "system"` and `sender_id: "cron:{job_id}"`
 3. **Agent turn** — The agent loop picks up the message and executes the job's prompt
 4. **Tool execution** — The agent uses any tools needed (MCP, web search, etc.) to fulfill the task
-5. **Auto-delivery** — The agent's final response is automatically delivered to the user through the originating channel
+5. **Explicit delivery** — The agent uses the `message` tool to send results to the user (no auto-delivery)
 
 ### Background Turn Restrictions
 
@@ -86,7 +86,9 @@ Cron turns use a minimal system prompt and exclude certain tools to prevent unin
 
 - **`spawn`** — excluded to prevent background task proliferation
 
-The `cron` tool is available in background turns so jobs can self-remove when their task is complete (e.g., "monitor X until condition Y, then stop").
+Cron turns never auto-deliver the final response. The agent must use the `message` tool explicitly to notify the user. This enables **conditional delivery** — the agent can stay silent when there is nothing to report (e.g., "monitor X, only notify if Y changes").
+
+The `cron` tool is available so jobs can self-remove when their task defines a stop condition (e.g., "monitor X until condition Y, then stop").
 
 ---
 
