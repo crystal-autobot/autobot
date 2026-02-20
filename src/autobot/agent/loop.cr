@@ -88,6 +88,11 @@ module Autobot::Agent
       if cron = @cron_service
         @tools.register(Tools::CronTool.new(cron))
       end
+
+      # Wire message tool send callback to bus
+      if message_tool = @tools.get("message").as?(Tools::MessageTool)
+        message_tool.send_callback = ->(msg : Bus::OutboundMessage) { @bus.publish_outbound(msg) }
+      end
     end
 
     # Run the agent loop, processing messages from the bus
@@ -144,7 +149,6 @@ module Autobot::Agent
       end
 
       update_tool_contexts(msg.channel, msg.chat_id)
-      update_tool_contexts(msg.channel, msg.chat_id)
       messages = @context.build_messages(
         history: session.get_history,
         current_message: msg.content,
@@ -154,7 +158,7 @@ module Autobot::Agent
       )
 
       # Execute agent loop and get response
-      final_content, tools_used = execute_agent_loop(messages, session.key)
+      final_content, tools_used, _total_tokens = execute_agent_loop(messages, session.key)
 
       # Save to session
       save_to_session(session, msg.content, final_content, tools_used)
@@ -166,7 +170,7 @@ module Autobot::Agent
     # Process a system message (e.g., subagent announcement).
     # Routes response back to the original channel.
     private def process_system_message(msg : Bus::InboundMessage) : Bus::OutboundMessage?
-      Log.info { "Processing system message from #{msg.sender_id}" }
+      Log.debug { "Processing system message from #{msg.sender_id}" }
 
       # Parse origin from chat_id (format: "channel:chat_id")
       origin_channel, origin_chat_id = if msg.chat_id.includes?(":")
@@ -176,22 +180,35 @@ module Autobot::Agent
                                          {Constants::CHANNEL_CLI, msg.chat_id}
                                        end
 
+      is_cron = msg.sender_id.starts_with?(Constants::CRON_SENDER_PREFIX)
+
       session = @sessions.get_or_create("#{origin_channel}:#{origin_chat_id}")
       update_tool_contexts(origin_channel, origin_chat_id)
 
+      content = if is_cron
+                  build_cron_prompt(msg)
+                else
+                  msg.content
+                end
+
       messages = @context.build_messages(
-        history: session.get_history,
-        current_message: msg.content,
+        history: is_cron ? [] of Hash(String, String) : session.get_history,
+        current_message: content,
         channel: origin_channel,
-        chat_id: origin_chat_id
+        chat_id: origin_chat_id,
+        background: is_cron
       )
 
-      final_content = run_tool_loop(messages, session.key)
+      final_content, tools_used, _total_tokens = run_tool_loop(messages, session.key, background: is_cron)
       final_content ||= "Background task completed."
 
-      session.add_message(Constants::ROLE_USER, "[System: #{msg.sender_id}] #{msg.content}")
-      session.add_message(Constants::ROLE_ASSISTANT, final_content)
-      @sessions.save(session)
+      if is_cron
+        Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, tools=#{tools_used}" }
+      else
+        session.add_message(Constants::ROLE_USER, msg.content)
+        session.add_message(Constants::ROLE_ASSISTANT, final_content)
+        @sessions.save(session)
+      end
 
       Bus::OutboundMessage.new(
         channel: origin_channel,
@@ -200,16 +217,19 @@ module Autobot::Agent
       )
     end
 
-    # Run the tool execution loop and return the final content.
-    private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : String?
+    # Tools excluded from background turns (cron jobs, subagent work).
+    BACKGROUND_EXCLUDED_TOOLS = ["spawn"]
+
+    # Run the tool execution loop and return the final content, tools used, and total tokens.
+    private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String, background : Bool = false) : {String?, Array(String), Int32}
       final_content : String? = nil
+      tools_used = [] of String
+      total_tokens = 0
+      exclude_tools = background ? BACKGROUND_EXCLUDED_TOOLS : nil
 
       @max_iterations.times do
-        response = @provider.chat(
-          messages: messages,
-          tools: @tools.definitions,
-          model: active_model
-        )
+        response = call_llm(messages, exclude_tools: exclude_tools)
+        total_tokens += response.usage.total_tokens
 
         if response.has_tool_calls?
           messages = @context.add_assistant_message(
@@ -219,8 +239,11 @@ module Autobot::Agent
             reasoning_content: response.reasoning_content
           )
 
+          log_llm_reasoning(response.content)
+
           response.tool_calls.each do |tool_call|
-            Log.info { "Tool call: #{tool_call.name}" }
+            tools_used << tool_call.name
+            log_tool_call(tool_call)
             result = @tools.execute(tool_call.name, tool_call.arguments, session_key)
             messages = @context.add_tool_result(messages, tool_call.id, tool_call.name, result)
           end
@@ -230,11 +253,41 @@ module Autobot::Agent
         end
       end
 
-      final_content
+      {final_content, tools_used, total_tokens}
+    end
+
+    private def log_llm_reasoning(content : String?) : Nil
+      return unless content
+      return if content.empty?
+      preview = truncate(content, LONG_MESSAGE_PREVIEW_LENGTH)
+      Log.debug { "LLM reasoning: #{preview}" }
+    end
+
+    private def log_tool_call(tool_call : Providers::ToolCall) : Nil
+      args_preview = truncate(tool_call.arguments.to_json, LONG_MESSAGE_PREVIEW_LENGTH)
+      Log.debug { "Tool call: #{tool_call.name}(#{args_preview})" }
+    end
+
+    private def truncate(text : String, max_length : Int32) : String
+      text.size > max_length ? text[0, max_length] + "..." : text
     end
 
     private def active_model : String
       @model || @provider.default_model
+    end
+
+    # Build prompt for cron-triggered agent turns.
+    private def build_cron_prompt(msg : Bus::InboundMessage) : String
+      job_id = msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)
+      Log.info { "Cron turn: job=#{job_id}" }
+
+      <<-PROMPT
+      This is a scheduled cron execution (job: #{job_id}). The job is already running — do NOT create new cron jobs.
+      Execute the task below, then stop.
+      Use `cron remove` with job_id "#{job_id}" only if the task is complete and monitoring should stop.
+
+      Task: #{msg.content}
+      PROMPT
     end
 
     # Update spawn, cron, and message tool contexts for current session.
@@ -257,12 +310,14 @@ module Autobot::Agent
     end
 
     # Execute the agent loop with tool calls
-    private def execute_agent_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String, Array(String)}
+    private def execute_agent_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String, Array(String), Int32}
       final_content : String? = nil
       tools_used = [] of String
+      total_tokens = 0
 
       @max_iterations.times do
         response = call_llm(messages)
+        total_tokens += response.usage.total_tokens
 
         if response.has_tool_calls?
           messages = process_tool_calls(messages, response, tools_used, session_key)
@@ -273,14 +328,14 @@ module Autobot::Agent
       end
 
       final_content ||= "I've completed processing but have no response to give."
-      {final_content, tools_used}
+      {final_content, tools_used, total_tokens}
     end
 
     # Call LLM and log token usage
-    private def call_llm(messages : Array(Hash(String, JSON::Any))) : Providers::Response
+    private def call_llm(messages : Array(Hash(String, JSON::Any)), exclude_tools : Array(String)? = nil) : Providers::Response
       response = @provider.chat(
         messages: messages,
-        tools: @tools.definitions,
+        tools: @tools.definitions(exclude: exclude_tools),
         model: active_model
       )
 
@@ -309,7 +364,7 @@ module Autobot::Agent
       # Execute tools with session-specific rate limiting
       response.tool_calls.each do |tool_call|
         tools_used << tool_call.name
-        Log.info { "Tool call: #{tool_call.name}" }
+        log_tool_call(tool_call)
 
         result = @tools.execute(tool_call.name, tool_call.arguments, session_key)
 

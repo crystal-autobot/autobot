@@ -18,7 +18,7 @@ module Autobot
         session_manager = Session::Manager.new(config.workspace_path)
 
         tool_registry, plugin_registry, mcp_clients = setup_tools(config)
-        cron_service = setup_cron(config)
+        cron_service = setup_cron(config, bus)
         channel_manager = setup_channels(config, bus, session_manager)
 
         puts "✓ Gateway ready\n"
@@ -57,14 +57,30 @@ module Autobot
         {tool_registry, plugin_registry, mcp_clients}
       end
 
-      private def self.setup_cron(config : Config::Config) : Cron::Service
+      private def self.setup_cron(config : Config::Config, bus : Bus::MessageBus) : Cron::Service
         cron_store_path = Config::Loader.cron_store_path
-        cron_service = Cron::Service.new(cron_store_path)
-        cron_status = cron_service.status
-        cron_jobs = cron_status["jobs"]?.try(&.as_i?) || 0
 
+        on_job = ->(job : Cron::CronJob) : String? do
+          return nil unless job.payload.deliver?
+
+          channel = job.payload.channel || "system"
+          chat_id = job.payload.to || ""
+          return nil if chat_id.empty?
+
+          bus.publish_inbound(Bus::InboundMessage.new(
+            channel: Constants::CHANNEL_SYSTEM,
+            sender_id: "#{Constants::CRON_SENDER_PREFIX}#{job.id}",
+            chat_id: "#{channel}:#{chat_id}",
+            content: job.payload.message,
+          ))
+          nil
+        end
+
+        cron_service = Cron::Service.new(cron_store_path, on_job: on_job)
+        cron_service.start
+
+        cron_jobs = cron_service.list_jobs.size
         if cron_jobs > 0
-          cron_service.start
           puts "✓ Cron: #{cron_jobs} scheduled jobs"
         end
 

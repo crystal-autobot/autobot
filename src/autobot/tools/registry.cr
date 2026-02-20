@@ -39,9 +39,12 @@ module Autobot::Tools
       @tools.has_key?(name)
     end
 
-    # Get all tool definitions in OpenAI/Anthropic function calling format
-    def definitions : Array(Hash(String, JSON::Any))
-      @tools.values.map(&.to_schema)
+    # Get all tool definitions in OpenAI/Anthropic function calling format.
+    # Optionally exclude specific tools by name.
+    def definitions(exclude : Array(String)? = nil) : Array(Hash(String, JSON::Any))
+      tools = @tools.values
+      tools = tools.reject { |tool| exclude.try(&.includes?(tool.name)) } if exclude
+      tools.map(&.to_schema)
     end
 
     def execute(name : String, params : Hash(String, JSON::Any), session_key : String? = nil) : String
@@ -66,16 +69,16 @@ module Autobot::Tools
         end
 
         if path = params["path"]?.try(&.as_s?)
-          Log.info { "Executing tool: #{name} (#{path})" }
+          Log.debug { "Executing tool: #{name} (#{path})" }
         else
-          Log.info { "Executing tool: #{name}" }
+          Log.debug { "Executing tool: #{name}" }
         end
         result = tool.execute(params)
 
         # Log based on result status
         case result.status
         when ToolResult::Status::Success
-          Log.info { "Tool #{name} completed successfully" }
+          Log.debug { "Tool #{name} completed successfully" }
         when ToolResult::Status::AccessDenied
           Log.warn { "Tool #{name} ACCESS DENIED: #{result.content.split('\n').first}" }
         when ToolResult::Status::Error

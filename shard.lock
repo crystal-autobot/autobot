@@ -8,6 +8,10 @@ shards:
     git: https://github.com/mamantoha/crest.git
     version: 1.6.2
 
+  cron_parser:
+    git: https://github.com/kostya/cron_parser.git
+    version: 0.4.0
+
   http-client-digest_auth:
     git: https://github.com/mamantoha/http-client-digest_auth.git
     version: 0.6.0

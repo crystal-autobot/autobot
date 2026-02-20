@@ -128,4 +128,23 @@ describe Autobot::Tools::Registry do
     registry.clear
     registry.size.should eq(0)
   end
+
+  it "excludes tools from definitions" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(DummyTool.new)
+    registry.register(FailingTool.new)
+
+    defs = registry.definitions(exclude: ["failing"])
+    defs.size.should eq(1)
+    defs[0]["function"]["name"].as_s.should eq("dummy")
+  end
+
+  it "returns all definitions when exclude is nil" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(DummyTool.new)
+    registry.register(FailingTool.new)
+
+    defs = registry.definitions(exclude: nil)
+    defs.size.should eq(2)
+  end
 end

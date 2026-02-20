@@ -1,5 +1,6 @@
 require "json"
 require "uuid"
+require "cron_parser"
 require "./types"
 
 module Autobot
@@ -10,10 +11,14 @@ module Autobot
     class Service
       alias JobCallback = CronJob -> String?
 
+      RELOAD_CHECK_INTERVAL = 60.seconds
+
       @store_path : Path
       @on_job : JobCallback?
       @store : CronStore?
       @running : Bool = false
+      @timer_generation : Int64 = 0
+      @store_mtime : Time? = nil
 
       def initialize(@store_path : Path, @on_job : JobCallback? = nil)
       end
@@ -21,10 +26,10 @@ module Autobot
       # Start the cron service timer loop.
       def start : Nil
         @running = true
+        @store = nil
         load_store
-        recompute_next_runs
-        save_store
         arm_timer
+        start_reload_checker
         Log.info { "Cron service started with #{store.jobs.size} jobs" }
       end
 
@@ -44,7 +49,7 @@ module Autobot
 
         jobs = jobs.select { |j| j.owner == owner } if owner
 
-        jobs.sort_by { |j| j.state.next_run_at_ms || Int64::MAX }
+        jobs.sort_by { |j| compute_next_run_for(j) || Int64::MAX }
       end
 
       # Add a new scheduled job.
@@ -72,7 +77,7 @@ module Autobot
             channel: channel,
             to: to
           ),
-          state: CronJobState.new(next_run_at_ms: compute_next_run(schedule, now)),
+          state: CronJobState.new,
           created_at_ms: now,
           updated_at_ms: now,
           delete_after_run: delete_after_run,
@@ -84,6 +89,16 @@ module Autobot
         arm_timer
         Log.info { "Cron: added job '#{name}' (#{job.id})" }
         job
+      end
+
+      # Remove all jobs and return the count of removed jobs.
+      def clear_all : Int32
+        count = store.jobs.size
+        store.jobs.clear
+        save_store
+        arm_timer
+        Log.info { "Cron: cleared #{count} job(s)" }
+        count
       end
 
       # Remove a job by ID.
@@ -116,21 +131,6 @@ module Autobot
           if job.id == job_id
             job.enabled = enabled
             job.updated_at_ms = now_ms
-            if enabled
-              job.state = CronJobState.new(
-                next_run_at_ms: compute_next_run(job.schedule, now_ms),
-                last_run_at_ms: job.state.last_run_at_ms,
-                last_status: job.state.last_status,
-                last_error: job.state.last_error
-              )
-            else
-              job.state = CronJobState.new(
-                next_run_at_ms: nil,
-                last_run_at_ms: job.state.last_run_at_ms,
-                last_status: job.state.last_status,
-                last_error: job.state.last_error
-              )
-            end
             save_store
             arm_timer
             return job
@@ -174,6 +174,7 @@ module Autobot
         if File.exists?(@store_path)
           begin
             @store = CronStore.from_json(File.read(@store_path))
+            @store_mtime = File.info(@store_path).modification_time
           rescue ex
             Log.warn { "Failed to load cron store: #{ex.message}" }
             @store = CronStore.new
@@ -189,6 +190,24 @@ module Autobot
         end
       end
 
+      # Reload store from disk if the file was modified externally (e.g. by CLI).
+      private def reload_if_changed : Bool
+        return false unless File.exists?(@store_path)
+
+        current_mtime = File.info(@store_path).modification_time
+        return false if @store_mtime && current_mtime == @store_mtime
+
+        begin
+          @store = CronStore.from_json(File.read(@store_path))
+          @store_mtime = current_mtime
+          Log.info { "Cron: store reloaded from disk (#{store.jobs.size} jobs)" }
+          true
+        rescue ex
+          Log.warn { "Failed to reload cron store: #{ex.message}" }
+          false
+        end
+      end
+
       private def save_store : Nil
         return unless s = @store
 
@@ -200,10 +219,17 @@ module Autobot
 
         File.write(@store_path, s.to_json)
         File.chmod(@store_path, 0o600)
+        @store_mtime = File.info(@store_path).modification_time
       end
 
       private def now_ms : Int64
         Time.utc.to_unix_ms
+      end
+
+      # Compute next run for a job, using last_run for interval jobs or expression for cron jobs.
+      def compute_next_run_for(job : CronJob) : Int64?
+        return nil unless job.enabled?
+        compute_next_run(job.schedule, job.state.last_run_at_ms || job.created_at_ms)
       end
 
       private def compute_next_run(schedule : CronSchedule, current_ms : Int64) : Int64?
@@ -215,49 +241,27 @@ module Autobot
           every = schedule.every_ms
           (every && every > 0) ? current_ms + every : nil
         when .cron?
-          parse_cron_next(schedule.expr, schedule.tz)
+          parse_cron_next(schedule.expr, schedule.tz, current_ms)
         else
           nil
         end
       end
 
-      # Simple cron expression parser for common patterns.
-      # Supports: "MIN HOUR * * *" format. For full cron, a library would be needed.
-      private def parse_cron_next(expr : String?, tz : String? = nil) : Int64?
+      # Parse a cron expression and return the next run time in ms.
+      # Delegates to the cron_parser shard which supports:
+      # *, fixed values, ranges (1-5), steps (*/5), lists (1,15,30),
+      # combos (1-30/10), named months/days, and @hourly/@daily etc.
+      private def parse_cron_next(expr : String?, tz : String? = nil, after_ms : Int64? = nil) : Int64?
         return nil unless expr
-
-        parts = expr.split(/\s+/)
-        return nil unless parts.size == 5
-
-        now = Time.utc
-        minute = parts[0] == "*" ? now.minute : parts[0].to_i
-        hour = parts[1] == "*" ? now.hour : parts[1].to_i
-
-        # Calculate next occurrence
-        target = Time.utc(now.year, now.month, now.day, hour, minute, 0)
-        target = target + 1.day if target <= now
-
-        target.to_unix_ms
-      end
-
-      private def recompute_next_runs : Nil
-        return unless s = @store
-        now = now_ms
-        s.jobs.each do |job|
-          if job.enabled?
-            job.state = CronJobState.new(
-              next_run_at_ms: compute_next_run(job.schedule, now),
-              last_run_at_ms: job.state.last_run_at_ms,
-              last_status: job.state.last_status,
-              last_error: job.state.last_error
-            )
-          end
-        end
+        base_time = after_ms ? Time.unix_ms(after_ms) : Time.utc
+        CronParser.new(expr).next(base_time).to_unix_ms
+      rescue ArgumentError
+        nil
       end
 
       private def get_next_wake_ms : Int64?
         return nil unless s = @store
-        times = s.jobs.compact_map { |job| job.state.next_run_at_ms if job.enabled? }
+        times = s.jobs.compact_map { |job| compute_next_run_for(job) }
         times.empty? ? nil : times.min
       end
 
@@ -265,77 +269,79 @@ module Autobot
         next_wake = get_next_wake_ms
         return unless next_wake && @running
 
+        @timer_generation += 1
+        generation = @timer_generation
         delay_ms = {0_i64, next_wake - now_ms}.max
 
         spawn do
           sleep delay_ms.milliseconds
-          on_timer if @running
+          on_timer if @running && generation == @timer_generation
+        rescue ex
+          Log.error { "Cron timer error: #{ex.message}" }
+          arm_timer if @running
         end
       end
 
       private def on_timer : Nil
+        reload_if_changed
         return unless s = @store
 
         now = now_ms
-        due_jobs = s.jobs.select { |job| job.enabled? && job.state.next_run_at_ms.try { |run_ms| now >= run_ms } }
+        due_jobs = s.jobs.select do |job|
+          next_run = compute_next_run_for(job)
+          next_run && now >= next_run
+        end
 
         due_jobs.each do |job|
           execute_job(job)
+          save_store
         end
 
-        save_store
         arm_timer
+      end
+
+      # Periodically check for external store changes (e.g. CLI adds a job).
+      private def start_reload_checker : Nil
+        spawn do
+          while @running
+            sleep RELOAD_CHECK_INTERVAL
+            next unless @running
+            if reload_if_changed
+              arm_timer
+            end
+          end
+        rescue ex
+          Log.error { "Cron reload checker error: #{ex.message}" }
+        end
       end
 
       private def execute_job(job : CronJob) : Nil
         start_ms = now_ms
-        Log.info { "Cron: executing job '#{job.name}' (#{job.id})" }
+        Log.debug { "Cron: executing job '#{job.name}' (#{job.id})" }
 
-        begin
-          if callback = @on_job
-            callback.call(job)
-          end
-
-          job.state = CronJobState.new(
-            next_run_at_ms: job.state.next_run_at_ms,
-            last_run_at_ms: start_ms,
-            last_status: JobStatus::Ok,
-            last_error: nil
-          )
-          Log.info { "Cron: job '#{job.name}' completed" }
-        rescue ex
-          job.state = CronJobState.new(
-            next_run_at_ms: job.state.next_run_at_ms,
-            last_run_at_ms: start_ms,
-            last_status: JobStatus::Error,
-            last_error: ex.message
-          )
-          Log.error { "Cron: job '#{job.name}' failed: #{ex.message}" }
-        end
-
+        run_job_callback(job, start_ms)
         job.updated_at_ms = now_ms
+        schedule_next_run(job)
+      end
 
-        # Handle one-shot jobs
-        if job.schedule.kind.at?
-          if job.delete_after_run?
-            store.jobs.reject! { |j| j.id == job.id }
-          else
-            job.enabled = false
-            job.state = CronJobState.new(
-              next_run_at_ms: nil,
-              last_run_at_ms: job.state.last_run_at_ms,
-              last_status: job.state.last_status,
-              last_error: job.state.last_error
-            )
-          end
+      private def run_job_callback(job : CronJob, start_ms : Int64) : Nil
+        if callback = @on_job
+          callback.call(job)
+        end
+        job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Ok, last_error: nil)
+        Log.debug { "Cron: job '#{job.name}' completed" }
+      rescue ex
+        job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
+        Log.error { "Cron: job '#{job.name}' failed: #{ex.message}" }
+      end
+
+      private def schedule_next_run(job : CronJob) : Nil
+        return unless job.schedule.kind.at?
+
+        if job.delete_after_run?
+          store.jobs.reject! { |j| j.id == job.id }
         else
-          # Compute next run
-          job.state = CronJobState.new(
-            next_run_at_ms: compute_next_run(job.schedule, now_ms),
-            last_run_at_ms: job.state.last_run_at_ms,
-            last_status: job.state.last_status,
-            last_error: job.state.last_error
-          )
+          job.enabled = false
         end
       end
     end

@@ -7,6 +7,8 @@ module Autobot
   module Tools
     # Tool to schedule reminders and recurring tasks via the cron service.
     class CronTool < Tool
+      JOB_NAME_MAX_LENGTH = 30
+
       @cron : Cron::Service
       @channel : String = ""
       @chat_id : String = ""
@@ -25,7 +27,11 @@ module Autobot
       end
 
       def description : String
-        "Schedule reminders and recurring tasks. Actions: add, list, remove."
+        "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
+        "Each firing triggers a single agent turn — the `message` is the turn's prompt. " \
+        "Response is auto-delivered to the user. " \
+        "Actions: add, list, remove. " \
+        "Always confirm with the user before add or remove."
       end
 
       def parameters : ToolSchema
@@ -38,15 +44,21 @@ module Autobot
             ),
             "message" => PropertySchema.new(
               type: "string",
-              description: "Reminder message (for add)"
+              description: "Single-execution instruction — what to do on THIS firing, not the schedule. " \
+                           "Write as a direct action with specific tool names. "
             ),
             "every_seconds" => PropertySchema.new(
               type: "integer",
-              description: "Interval in seconds (for recurring tasks)"
+              description: "Interval in seconds (for recurring tasks). Minimum: 1. " \
+                           "Prefer this for sub-minute intervals."
             ),
             "cron_expr" => PropertySchema.new(
               type: "string",
-              description: "Cron expression like '0 9 * * *' (for scheduled tasks)"
+              description: "Standard 5-field cron: MIN(0-59) HOUR(0-23) DOM(1-31) MON(1-12) DOW(0-6). " \
+                           "Supports: * (any), ranges (9-17), steps (*/5), lists (1,15,30). " \
+                           "All values must be integers. Minimum granularity: 1 minute. " \
+                           "Examples: '*/5 * * * *' (every 5 min), '0 9 * * 1-5' (weekdays 9am). " \
+                           "For sub-minute intervals use every_seconds instead."
             ),
             "at" => PropertySchema.new(
               type: "string",
@@ -102,7 +114,7 @@ module Autobot
         owner_key = "#{@channel}:#{@chat_id}"
 
         job = @cron.add_job(
-          name: message.size > 30 ? message[0, 30] : message,
+          name: message.size > JOB_NAME_MAX_LENGTH ? message[0, JOB_NAME_MAX_LENGTH] : message,
           schedule: schedule,
           message: message,
           deliver: true,

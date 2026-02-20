@@ -14,6 +14,9 @@ module Autobot
     CHANNEL_SLACK    = "slack"
     CHANNEL_WHATSAPP = "whatsapp"
 
+    # Sender ID prefixes
+    CRON_SENDER_PREFIX = "cron:"
+
     # Session keys
     DEFAULT_SESSION_KEY = "cli:direct"
     DEFAULT_CHAT_ID     = "direct"

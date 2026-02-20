@@ -137,6 +137,447 @@ describe Autobot::Cron::Service do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  describe "owner-scoped operations" do
+    it "filters jobs by owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      service.add_job(
+        name: "user1_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "user1",
+        owner: "telegram:user1"
+      )
+      service.add_job(
+        name: "user2_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "user2",
+        owner: "telegram:user2"
+      )
+
+      user1_jobs = service.list_jobs(owner: "telegram:user1")
+      user1_jobs.size.should eq(1)
+      user1_jobs.first.name.should eq("user1_job")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "prevents removing job with wrong owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "owned",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test",
+        owner: "telegram:user1"
+      )
+
+      service.remove_job(job.id, owner: "telegram:user2").should be_false
+      service.list_jobs.size.should eq(1)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "allows removing job with correct owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "owned",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test",
+        owner: "telegram:user1"
+      )
+
+      service.remove_job(job.id, owner: "telegram:user1").should be_true
+      service.list_jobs.should be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "#clear_all" do
+    it "removes all jobs and returns count" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      service.add_job(
+        name: "job1",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "first"
+      )
+      service.add_job(
+        name: "job2",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "second"
+      )
+
+      service.clear_all.should eq(2)
+      service.list_jobs.should be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns zero when no jobs exist" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service.clear_all.should eq(0)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "persists empty store to disk" do
+      tmp = TestHelper.tmp_dir
+      store_path = tmp / "cron.json"
+      service = Autobot::Cron::Service.new(store_path: store_path)
+
+      service.add_job(
+        name: "to_clear",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "test"
+      )
+      service.clear_all
+
+      service2 = Autobot::Cron::Service.new(store_path: store_path)
+      service2.list_jobs.should be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "delete_after_run" do
+    it "marks one-time jobs with delete_after_run" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "one_shot",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::At, at_ms: Time.utc.to_unix_ms + 60000),
+        message: "once",
+        delete_after_run: true
+      )
+
+      job.delete_after_run?.should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "cron expression scheduling" do
+    it "schedules * * * * * to the next minute" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      now = Time.utc
+      job = service.add_job(
+        name: "every_min",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* * * * *"),
+        message: "ping"
+      )
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      # Should be within 2 minutes from now (next minute boundary)
+      diff_ms = next_run.as(Int64) - now.to_unix_ms
+      diff_ms.should be > 0
+      diff_ms.should be <= 120_000
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "schedules fixed minute with wildcard hour" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      now = Time.utc
+      job = service.add_job(
+        name: "on_the_half",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "30 * * * *"),
+        message: "half past"
+      )
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      next_time.minute.should eq(30)
+      next_time.should be > now
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "schedules fixed hour and minute" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      now = Time.utc
+      job = service.add_job(
+        name: "daily_9am",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "0 9 * * *"),
+        message: "morning"
+      )
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      next_time.hour.should eq(9)
+      next_time.minute.should eq(0)
+      next_time.should be > now
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "schedules wildcard minute with fixed hour" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "noon_start",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* 12 * * *"),
+        message: "noon"
+      )
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      next_time.hour.should eq(12)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "computes next run relative to last_run, not now" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "relative",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* * * * *"),
+        message: "tick"
+      )
+
+      # Simulate last run 5 minutes ago
+      five_min_ago = Time.utc.to_unix_ms - 300_000
+      job.state = job.state.copy(last_run_at_ms: five_min_ago)
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      # Next run should be ~4 minutes ago (next minute after last_run),
+      # not in the future
+      next_run_ms = next_run.as(Int64)
+      next_run_ms.should be < Time.utc.to_unix_ms
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "cron job becomes due when next occurrence is in the past" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "due_check",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* * * * *"),
+        message: "check"
+      )
+
+      # Simulate last run 2 minutes ago
+      two_min_ago = Time.utc.to_unix_ms - 120_000
+      job.state = job.state.copy(last_run_at_ms: two_min_ago)
+
+      now = Time.utc.to_unix_ms
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      # Job should be due: now >= next_run
+      (now >= next_run.as(Int64)).should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "cron job is not due immediately after running" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "just_ran",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "* * * * *"),
+        message: "check"
+      )
+
+      # Simulate last run just now
+      job.state = job.state.copy(last_run_at_ms: Time.utc.to_unix_ms)
+
+      now = Time.utc.to_unix_ms
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      # Job should NOT be due yet (next run is ~1 minute from now)
+      (now >= next_run.as(Int64)).should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "supports step expressions like */5" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "every_5min",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "*/5 * * * *"),
+        message: "five"
+      )
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      (next_time.minute % 5).should eq(0)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "supports range expressions like 9-17" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "work_hours",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "0 9-17 * * *"),
+        message: "work"
+      )
+
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+
+      next_time = Time.unix_ms(next_run.as(Int64))
+      next_time.hour.should be >= 9
+      next_time.hour.should be <= 17
+      next_time.minute.should eq(0)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns nil for invalid expression" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "bad_expr",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "invalid"),
+        message: "nope"
+      )
+
+      service.compute_next_run_for(job).should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "service lifecycle" do
+    it "starts with zero jobs and accepts jobs later" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      # Start with no jobs
+      service.start
+      service.status["enabled"].as_bool.should be_true
+      service.list_jobs.should be_empty
+
+      # Add a job after start — should work
+      job = service.add_job(
+        name: "dynamic",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "added after start"
+      )
+
+      service.list_jobs.size.should eq(1)
+
+      # Next run should be in the future (not stuck in the past)
+      next_run = service.compute_next_run_for(job)
+      next_run.should_not be_nil
+      (next_run.as(Int64) > Time.utc.to_unix_ms).should be_true
+
+      service.stop
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "is not running before start is called" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service.status["enabled"].as_bool.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "reports running after start" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service.start
+      service.status["enabled"].as_bool.should be_true
+      service.stop
+      service.status["enabled"].as_bool.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "reloads store on restart" do
+      tmp = TestHelper.tmp_dir
+      store_path = tmp / "cron.json"
+      service = Autobot::Cron::Service.new(store_path: store_path)
+      service.start
+
+      service.add_job(
+        name: "before_restart",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "persisted"
+      )
+      service.stop
+
+      # Restart — should reload from disk
+      service.start
+      service.list_jobs.size.should eq(1)
+      service.list_jobs.first.name.should eq("before_restart")
+      service.stop
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "external store reload" do
+    it "picks up jobs added externally to the store file" do
+      tmp = TestHelper.tmp_dir
+      store_path = tmp / "cron.json"
+
+      # Server service loads empty store
+      server = Autobot::Cron::Service.new(store_path: store_path)
+      server.list_jobs.should be_empty
+
+      # CLI service writes a job to disk
+      cli = Autobot::Cron::Service.new(store_path: store_path)
+      cli.add_job(
+        name: "cli_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "from cli"
+      )
+
+      # Server still has empty in-memory store
+      server.list_jobs.should be_empty
+
+      # After start (which reloads), server sees the job
+      server.start
+      server.list_jobs.size.should eq(1)
+      server.list_jobs.first.name.should eq("cli_job")
+      server.stop
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
   it "loads existing store from disk" do
     tmp = TestHelper.tmp_dir
     store_path = tmp / "cron.json"

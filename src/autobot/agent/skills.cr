@@ -165,8 +165,9 @@ module Autobot
           if metadata_json = raw["metadata"]?
             begin
               parsed = JSON.parse(metadata_json)
-              if nanobot = parsed["nanobot"]?
-                if requires = nanobot["requires"]?
+              config = parsed["autobot"]? || parsed["nanobot"]?
+              if config
+                if requires = config["requires"]?
                   if b = requires["bins"]?
                     bins = b.as_a.map(&.as_s)
                   end
