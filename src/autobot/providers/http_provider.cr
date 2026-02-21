@@ -96,12 +96,7 @@ module Autobot
       ) : Response
         body = build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
         url = resolve_url(spec)
-
-        headers = HTTP::Headers{
-          "Content-Type" => "application/json",
-          "User-Agent"   => USER_AGENT,
-        }
-        apply_auth_headers(headers, spec)
+        headers = build_compatible_headers(spec)
 
         Log.debug { "POST #{url} model=#{model}" }
         response = http_post(url, headers, body.to_json)
@@ -160,13 +155,7 @@ module Autobot
       ) : Response
         body = build_anthropic_body(messages, tools, model, max_tokens, temperature)
         url = resolve_url(spec)
-
-        headers = HTTP::Headers{
-          "Content-Type"      => "application/json",
-          "User-Agent"        => USER_AGENT,
-          "anthropic-version" => ANTHROPIC_API_VERSION,
-        }
-        apply_auth_headers(headers, spec)
+        headers = build_anthropic_headers(spec)
 
         Log.debug { "POST #{url} model=#{model} (anthropic)" }
         response = http_post(url, headers, body.to_json)
@@ -410,12 +399,7 @@ module Autobot
           {"include_usage" => JSON::Any.new(true)} of String => JSON::Any
         )
         url = resolve_url(spec)
-
-        headers = HTTP::Headers{
-          "Content-Type" => "application/json",
-          "User-Agent"   => USER_AGENT,
-        }
-        apply_auth_headers(headers, spec)
+        headers = build_compatible_headers(spec)
 
         Log.debug { "POST #{url} model=#{model} (streaming)" }
         http_post_streaming(url, headers, body.to_json) do |io|
@@ -500,13 +484,7 @@ module Autobot
         body = build_anthropic_body(messages, tools, model, max_tokens, temperature)
         body["stream"] = JSON::Any.new(true)
         url = resolve_url(spec)
-
-        headers = HTTP::Headers{
-          "Content-Type"      => "application/json",
-          "User-Agent"        => USER_AGENT,
-          "anthropic-version" => ANTHROPIC_API_VERSION,
-        }
-        apply_auth_headers(headers, spec)
+        headers = build_anthropic_headers(spec)
 
         Log.debug { "POST #{url} model=#{model} (anthropic streaming)" }
         http_post_streaming(url, headers, body.to_json) do |io|
@@ -814,6 +792,25 @@ module Autobot
             return
           end
         end
+      end
+
+      private def build_compatible_headers(spec : ProviderSpec?) : HTTP::Headers
+        headers = HTTP::Headers{
+          "Content-Type" => "application/json",
+          "User-Agent"   => USER_AGENT,
+        }
+        apply_auth_headers(headers, spec)
+        headers
+      end
+
+      private def build_anthropic_headers(spec : ProviderSpec?) : HTTP::Headers
+        headers = HTTP::Headers{
+          "Content-Type"      => "application/json",
+          "User-Agent"        => USER_AGENT,
+          "anthropic-version" => ANTHROPIC_API_VERSION,
+        }
+        apply_auth_headers(headers, spec)
+        headers
       end
 
       private def apply_auth_headers(headers : HTTP::Headers, spec : ProviderSpec?)

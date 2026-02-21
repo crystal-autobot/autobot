@@ -226,49 +226,19 @@ module Autobot::Agent
     # Tools excluded from background turns (cron jobs, subagent work).
     BACKGROUND_EXCLUDED_TOOLS = ["spawn"]
 
+    # Configuration for the agent loop.
+    private record LoopOptions,
+      stream_callback : Providers::StreamCallback? = nil,
+      exclude_tools : Array(String)? = nil,
+      break_on_message : Bool = false
+
     # Run the tool execution loop and return the final content, tools used, and total tokens.
     private def run_tool_loop(messages : Array(Hash(String, JSON::Any)), session_key : String, background : Bool = false) : {String?, Array(String), Int32}
-      final_content : String? = nil
-      tools_used = [] of String
-      total_tokens = 0
-      exclude_tools = background ? BACKGROUND_EXCLUDED_TOOLS : nil
-
-      @max_iterations.times do
-        response = call_llm(messages, exclude_tools: exclude_tools)
-        total_tokens += response.usage.total_tokens
-
-        if response.finish_reason == "guardrail_intervened"
-          Log.warn { "Guardrail intervened — returning blocked message" }
-          final_content = response.content
-          break
-        end
-
-        if response.has_tool_calls?
-          messages = @context.add_assistant_message(
-            messages,
-            response.content || "",
-            response.tool_calls,
-            reasoning_content: response.reasoning_content
-          )
-
-          log_llm_reasoning(response.content)
-
-          response.tool_calls.each do |tool_call|
-            tools_used << tool_call.name
-            log_tool_call(tool_call)
-            result = @tools.execute(tool_call.name, tool_call.arguments, session_key)
-            messages = @context.add_tool_result(messages, tool_call.id, tool_call.name, result)
-          end
-
-          # Background turns: stop after message delivery (no follow-up LLM call needed)
-          break if background && response.tool_calls.any? { |tool| tool.name == "message" }
-        else
-          final_content = response.content
-          break
-        end
-      end
-
-      {final_content, tools_used, total_tokens}
+      options = LoopOptions.new(
+        exclude_tools: background ? BACKGROUND_EXCLUDED_TOOLS : nil,
+        break_on_message: background,
+      )
+      run_agent_loop(messages, session_key, options)
     end
 
     private def log_llm_reasoning(content : String?) : Nil
@@ -327,39 +297,17 @@ module Autobot::Agent
       Log.info { "Processing message from #{msg.channel}:#{msg.sender_id}: #{preview}" }
     end
 
-    # Execute the agent loop with tool calls
+    # Execute the agent loop with tool calls and optional streaming.
     private def execute_agent_loop(
       messages : Array(Hash(String, JSON::Any)),
       session_key : String,
       channel : String? = nil,
       chat_id : String? = nil,
     ) : {String, Array(String), Int32}
-      final_content : String? = nil
-      tools_used = [] of String
-      total_tokens = 0
       stream_callback = resolve_stream_callback(channel, chat_id)
+      options = LoopOptions.new(stream_callback: stream_callback)
 
-      @max_iterations.times do
-        response = call_llm(messages, stream_callback: stream_callback)
-        total_tokens += response.usage.total_tokens
-
-        if response.finish_reason == "guardrail_intervened"
-          Log.warn { "Guardrail intervened — returning blocked message" }
-          final_content = response.content
-          break
-        end
-
-        if response.has_tool_calls?
-          messages = process_tool_calls(messages, response, tools_used, session_key)
-          # Only stream the first LLM text generation; subsequent iterations
-          # after tool execution produce a new response that replaces the stream.
-          stream_callback = nil
-        else
-          final_content = response.content
-          break
-        end
-      end
-
+      final_content, tools_used, total_tokens = run_agent_loop(messages, session_key, options)
       final_content ||= "I've completed processing but have no response to give."
       {final_content, tools_used, total_tokens}
     end
@@ -400,33 +348,64 @@ module Autobot::Agent
       @streaming_callback_factory.try(&.call(channel, chat_id))
     end
 
-    # Process tool calls and update messages
-    private def process_tool_calls(
+    # Unified agent loop: iterates LLM calls and tool execution.
+    # Handles streaming, background mode, and guardrails in a single path.
+    private def run_agent_loop(
+      messages : Array(Hash(String, JSON::Any)),
+      session_key : String,
+      options : LoopOptions = LoopOptions.new,
+    ) : {String?, Array(String), Int32}
+      final_content : String? = nil
+      tools_used = [] of String
+      total_tokens = 0
+      stream_callback = options.stream_callback
+
+      @max_iterations.times do
+        response = call_llm(messages, exclude_tools: options.exclude_tools, stream_callback: stream_callback)
+        total_tokens += response.usage.total_tokens
+
+        if response.finish_reason == "guardrail_intervened"
+          Log.warn { "Guardrail intervened — returning blocked message" }
+          final_content = response.content
+          break
+        end
+
+        if response.has_tool_calls?
+          messages = execute_tool_calls(messages, response, tools_used, session_key)
+          # Only stream the first LLM text generation; subsequent iterations
+          # after tool execution produce a new response that replaces the stream.
+          stream_callback = nil
+          break if options.break_on_message && response.tool_calls.any? { |tool| tool.name == "message" }
+        else
+          final_content = response.content
+          break
+        end
+      end
+
+      {final_content, tools_used, total_tokens}
+    end
+
+    # Add assistant message (with reasoning_content) and execute all tool calls.
+    private def execute_tool_calls(
       messages : Array(Hash(String, JSON::Any)),
       response : Providers::Response,
       tools_used : Array(String),
       session_key : String,
     ) : Array(Hash(String, JSON::Any))
-      # Add assistant message with tool calls
       messages = @context.add_assistant_message(
         messages,
-        response.content,
-        response.tool_calls
+        response.content || "",
+        response.tool_calls,
+        reasoning_content: response.reasoning_content,
       )
 
-      # Execute tools with session-specific rate limiting
+      log_llm_reasoning(response.content)
+
       response.tool_calls.each do |tool_call|
         tools_used << tool_call.name
         log_tool_call(tool_call)
-
         result = @tools.execute(tool_call.name, tool_call.arguments, session_key)
-
-        messages = @context.add_tool_result(
-          messages,
-          tool_call.id,
-          tool_call.name,
-          result
-        )
+        messages = @context.add_tool_result(messages, tool_call.id, tool_call.name, result)
       end
 
       messages

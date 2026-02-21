@@ -26,13 +26,11 @@ module Autobot
         provider = create_provider(config)
         agent_loop = create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service)
 
-        # Wire streaming callback factory if Telegram supports it
-        if telegram = channel_manager.channel("telegram").as?(Channels::TelegramChannel)
-          agent_loop.streaming_callback_factory = ->(channel : String, chat_id : String) : Providers::StreamCallback? {
-            return nil unless channel == "telegram"
-            telegram.create_stream_callback(chat_id)
-          }
-        end
+        # Wire streaming callback factory via channel manager (OCP-compliant).
+        # Each channel decides whether it supports streaming.
+        agent_loop.streaming_callback_factory = ->(channel : String, chat_id : String) : Providers::StreamCallback? {
+          channel_manager.create_stream_callback(channel, chat_id)
+        }
 
         # Handle shutdown signals
         shutdown = -> do

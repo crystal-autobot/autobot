@@ -210,14 +210,21 @@ module Autobot::Channels
     TRUNCATION_TAIL = "..."
     MAX_PLAIN_TEXT  = MarkdownToTelegramHTML::TELEGRAM_MAX_LENGTH - TRUNCATION_TAIL.size
 
+    # Injectable time source for testable throttle behavior.
+    alias Clock = Proc(Time)
+
     Log = ::Log.for("channels.telegram.streaming")
 
     getter? active : Bool = true
     getter message_id : Int64? = nil
 
-    def initialize(@chat_id : String, @api_caller : Proc(String, Hash(String, String), JSON::Any?))
+    def initialize(
+      @chat_id : String,
+      @api_caller : Proc(String, Hash(String, String), JSON::Any?),
+      @clock : Clock = -> { Time.utc },
+    )
       @accumulated = IO::Memory.new
-      @last_edit = Time.utc - EDIT_THROTTLE
+      @last_edit = @clock.call - EDIT_THROTTLE
     end
 
     # Append a text delta from the LLM. Sends or edits the Telegram message
@@ -252,11 +259,11 @@ module Autobot::Channels
         Log.warn { "Failed to send initial streaming message, deactivating session" }
         deactivate
       end
-      @last_edit = Time.utc
+      @last_edit = @clock.call
     end
 
     private def edit_if_throttle_allows : Nil
-      now = Time.utc
+      now = @clock.call
       return if (now - @last_edit) < EDIT_THROTTLE
 
       msg_id = @message_id

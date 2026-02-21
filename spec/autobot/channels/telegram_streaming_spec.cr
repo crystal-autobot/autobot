@@ -1,8 +1,22 @@
 require "../../spec_helper"
 
+# Controllable clock for deterministic throttle testing.
+private class TestClock
+  property now : Time = Time.utc
+
+  def to_proc : Autobot::Channels::TelegramStreamingSession::Clock
+    -> { @now }
+  end
+
+  def advance(span : Time::Span) : Nil
+    @now += span
+  end
+end
+
 private def build_session(
   chat_id : String = "123",
   api_calls : Array({String, Hash(String, String)}) = [] of {String, Hash(String, String)},
+  clock : TestClock? = nil,
 ) : Autobot::Channels::TelegramStreamingSession
   api_caller = ->(method : String, params : Hash(String, String)) : JSON::Any? {
     # Deep-copy each value so that later String::Builder writes
@@ -16,7 +30,11 @@ private def build_session(
       nil
     end
   }
-  Autobot::Channels::TelegramStreamingSession.new(chat_id, api_caller)
+  if clock
+    Autobot::Channels::TelegramStreamingSession.new(chat_id, api_caller, clock: clock.to_proc)
+  else
+    Autobot::Channels::TelegramStreamingSession.new(chat_id, api_caller)
+  end
 end
 
 describe Autobot::Channels::TelegramStreamingSession do
@@ -56,35 +74,53 @@ describe Autobot::Channels::TelegramStreamingSession do
     end
 
     it "accumulates text across calls" do
+      clock = TestClock.new
       api_calls = [] of {String, Hash(String, String)}
-      session = build_session(api_calls: api_calls)
+      session = build_session(api_calls: api_calls, clock: clock)
 
       session.on_delta("Hello")
+      clock.advance(2.seconds)
       session.on_delta(" world")
 
       api_calls[0][0].should eq("sendMessage")
       api_calls[0][1]["text"].should eq("Hello")
 
-      # The second delta should attempt an edit with accumulated text.
-      # It may or may not be throttled depending on timing, but the
-      # sendMessage text should only contain the first delta.
-      if api_calls.size > 1
-        api_calls[1][0].should eq("editMessageText")
-        api_calls[1][1]["text"].should eq("Hello world")
-      end
+      api_calls.size.should eq(2)
+      api_calls[1][0].should eq("editMessageText")
+      api_calls[1][1]["text"].should eq("Hello world")
     end
 
     it "throttles edits within throttle period" do
+      clock = TestClock.new
       api_calls = [] of {String, Hash(String, String)}
-      session = build_session(api_calls: api_calls)
+      session = build_session(api_calls: api_calls, clock: clock)
 
       session.on_delta("Hello")
+      # Don't advance clock — still within throttle period
       session.on_delta(" world")
 
-      # Only the initial sendMessage should be called; the edit is throttled
-      # because EDIT_THROTTLE (1 second) has not elapsed since the send.
       edit_calls = api_calls.select { |call| call[0] == "editMessageText" }
       edit_calls.size.should eq(0)
+    end
+
+    it "sends edit after throttle period elapses" do
+      clock = TestClock.new
+      api_calls = [] of {String, Hash(String, String)}
+      session = build_session(api_calls: api_calls, clock: clock)
+
+      session.on_delta("Hello")
+      # Throttled — no edit
+      session.on_delta(" world")
+      edit_calls = api_calls.select { |call| call[0] == "editMessageText" }
+      edit_calls.size.should eq(0)
+
+      # Advance past throttle and send another delta
+      clock.advance(1.5.seconds)
+      session.on_delta("!")
+
+      edit_calls = api_calls.select { |call| call[0] == "editMessageText" }
+      edit_calls.size.should eq(1)
+      edit_calls[0][1]["text"].should eq("Hello world!")
     end
 
     it "does not send empty text on empty delta" do
@@ -110,6 +146,41 @@ describe Autobot::Channels::TelegramStreamingSession do
       sent_text = api_calls[0][1]["text"]
       sent_text.size.should eq(max_plain + tail.size)
       sent_text.should end_with(tail)
+    end
+
+    it "does not call API after deactivation" do
+      clock = TestClock.new
+      api_calls = [] of {String, Hash(String, String)}
+      session = build_session(api_calls: api_calls, clock: clock)
+
+      session.on_delta("Hello")
+      session.deactivate
+      clock.advance(2.seconds)
+      session.on_delta(" world")
+
+      # Only the initial sendMessage, no edit after deactivation
+      api_calls.size.should eq(1)
+      api_calls[0][0].should eq("sendMessage")
+    end
+
+    it "sends multiple edits across throttle windows" do
+      clock = TestClock.new
+      api_calls = [] of {String, Hash(String, String)}
+      session = build_session(api_calls: api_calls, clock: clock)
+
+      session.on_delta("A")
+      clock.advance(1.5.seconds)
+      session.on_delta("B")
+      clock.advance(1.5.seconds)
+      session.on_delta("C")
+
+      send_calls = api_calls.select { |call| call[0] == "sendMessage" }
+      edit_calls = api_calls.select { |call| call[0] == "editMessageText" }
+
+      send_calls.size.should eq(1)
+      edit_calls.size.should eq(2)
+      edit_calls[0][1]["text"].should eq("AB")
+      edit_calls[1][1]["text"].should eq("ABC")
     end
   end
 end

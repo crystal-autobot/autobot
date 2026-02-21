@@ -1,5 +1,6 @@
 require "../bus/events"
 require "../bus/queue"
+require "../providers/types"
 
 module Autobot::Channels
   # Abstract base class for chat channel integrations.
@@ -23,6 +24,12 @@ module Autobot::Channels
 
     # Send an outbound message through this channel.
     abstract def send_message(message : Bus::OutboundMessage) : Nil
+
+    # Create a streaming callback for the given chat_id.
+    # Returns nil by default. Channels that support streaming should override.
+    def create_stream_callback(chat_id : String) : Providers::StreamCallback?
+      nil
+    end
 
     # Check if a sender is allowed to use this bot.
     # Returns false if no allow list (deny by default).

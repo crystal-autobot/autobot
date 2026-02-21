@@ -79,6 +79,12 @@ module Autobot::Channels
       @channels.keys
     end
 
+    # Create a streaming callback for the given channel and chat_id.
+    # Delegates to the channel's own implementation (OCP-compliant).
+    def create_stream_callback(channel : String, chat_id : String) : Providers::StreamCallback?
+      @channels[channel]?.try(&.create_stream_callback(chat_id))
+    end
+
     private def detect_transcriber : Transcriber?
       providers = @config.providers
       return nil unless providers
