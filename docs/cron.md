@@ -94,16 +94,23 @@ The `cron` tool is available so jobs can self-remove when their task defines a s
 
 ## Exec Payloads
 
-Exec payloads run shell commands directly on a schedule — no LLM turn, no tokens consumed. Use them for lightweight monitoring tasks where you want zero-cost periodic checks.
+Many monitoring and automation tasks are deterministic — check a URL, compare a value, send an alert. These don't need an LLM reasoning about what to do every time. But setting them up still requires figuring out the right shell command, cron expression, and wiring.
+
+Exec payloads let you describe what you want in natural language — the agent writes the shell command once, and from that point on it runs directly on a schedule with zero LLM involvement. No tokens, no latency, no cost per execution.
+
+> **User:** "Check air quality in NYC every hour, notify me if AQI goes above 100"
+>
+> The agent creates an exec job with the right `curl | jq` pipeline. Every hour the command runs on its own — the LLM is never called again.
 
 ### How exec differs from agent turns
 
 | | Agent turn | Exec payload |
 |---|---|---|
-| **Runs** | Full LLM turn with tools | Shell command only |
-| **Token cost** | Per-invocation | Zero |
+| **Setup** | LLM writes the prompt | LLM writes the shell command |
+| **Each run** | Full LLM turn with tools | Shell command only |
+| **Token cost** | Per-invocation | Zero (after setup) |
 | **Output** | LLM-generated response | Raw stdout |
-| **Use case** | Complex tasks needing reasoning | Simple scripts and checks |
+| **Best for** | Tasks needing reasoning | Deterministic checks and scripts |
 
 ### Parameters
 
@@ -126,7 +133,7 @@ graph LR
     style SKIP fill:#78909c,stroke:#546e7a,color:#fff
 ```
 
-When sandbox is enabled (the default), exec commands run inside the sandbox (bubblewrap or Docker) for security. Set `sandbox: none` to run commands directly on the host.
+Exec commands run inside the sandbox (bubblewrap or Docker) by default. Set `sandbox: none` to run directly on the host. If your commands need runtimes not available in Alpine (e.g. Python), set `docker_image` in config — see [sandboxing docs](sandboxing.md).
 
 ### Examples
 
