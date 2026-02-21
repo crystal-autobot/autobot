@@ -40,9 +40,7 @@ module Autobot::Agent
     @memory_manager : MemoryManager
     @sandbox_config : String
 
-    # Factory that creates a streaming callback for a given channel and chat_id.
-    # Returns nil if streaming is not available for that channel.
-    property streaming_callback_factory : Proc(String, String, Providers::StreamCallback?)?
+    property streaming_callback_factory : Providers::StreamCallbackFactory?
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -353,6 +351,9 @@ module Autobot::Agent
 
         if response.has_tool_calls?
           messages = process_tool_calls(messages, response, tools_used, session_key)
+          # Only stream the first LLM text generation; subsequent iterations
+          # after tool execution produce a new response that replaces the stream.
+          stream_callback = nil
         else
           final_content = response.content
           break

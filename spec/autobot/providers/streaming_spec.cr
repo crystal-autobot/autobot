@@ -24,31 +24,30 @@ class StreamingTestableHttpProvider < Autobot::Providers::HttpProvider
 end
 
 # Minimal concrete provider that uses the base class chat_streaming fallback.
-module Autobot
-  module Providers
-    class FallbackTestProvider < Provider
-      @next_content : String? = nil
+# Defined inside the module to access abstract method default constants.
+module Autobot::Providers
+  class FallbackTestProvider < Provider
+    @next_content : String? = nil
 
-      def initialize
-        super("test-key")
-      end
+    def initialize
+      super("test-key")
+    end
 
-      def default_model : String
-        "test-model"
-      end
+    def default_model : String
+      "test-model"
+    end
 
-      def chat(
-        messages : Array(Hash(String, JSON::Any)),
-        tools : Array(Hash(String, JSON::Any))? = nil,
-        model : String? = nil,
-        max_tokens : Int32 = DEFAULT_MAX_TOKENS,
-        temperature : Float64 = DEFAULT_TEMPERATURE,
-      ) : Response
-        Response.new(content: @next_content, finish_reason: "stop")
-      end
+    def chat(
+      messages : Array(Hash(String, JSON::Any)),
+      tools : Array(Hash(String, JSON::Any))? = nil,
+      model : String? = nil,
+      max_tokens : Int32 = DEFAULT_MAX_TOKENS,
+      temperature : Float64 = DEFAULT_TEMPERATURE,
+    ) : Response
+      Response.new(content: @next_content, finish_reason: "stop")
+    end
 
-      def next_content=(@next_content : String?)
-      end
+    def next_content=(@next_content : String?)
     end
   end
 end

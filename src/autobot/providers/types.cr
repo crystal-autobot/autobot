@@ -3,6 +3,10 @@ module Autobot
     # Callback invoked with text deltas during streaming responses.
     alias StreamCallback = Proc(String, Nil)
 
+    # Factory that creates a StreamCallback for a given channel and chat_id.
+    # Returns nil if streaming is not supported for that channel.
+    alias StreamCallbackFactory = Proc(String, String, StreamCallback?)
+
     # Token usage from an LLM API response.
     struct TokenUsage
       include JSON::Serializable

@@ -210,6 +210,8 @@ module Autobot::Channels
     TRUNCATION_TAIL = "..."
     MAX_PLAIN_TEXT  = MarkdownToTelegramHTML::TELEGRAM_MAX_LENGTH - TRUNCATION_TAIL.size
 
+    Log = ::Log.for("channels.telegram.streaming")
+
     getter? active : Bool = true
     getter message_id : Int64? = nil
 
@@ -231,6 +233,11 @@ module Autobot::Channels
       end
     end
 
+    # Mark session as inactive, preventing further API calls.
+    def deactivate : Nil
+      @active = false
+    end
+
     private def send_initial_message : Nil
       text = truncated_plain_text
       return if text.empty?
@@ -241,6 +248,9 @@ module Autobot::Channels
       })
       if result
         @message_id = result["message_id"]?.try(&.as_i64?)
+      else
+        Log.warn { "Failed to send initial streaming message, deactivating session" }
+        deactivate
       end
       @last_edit = Time.utc
     end
@@ -292,6 +302,10 @@ module Autobot::Channels
     @offset : Int64 = 0_i64
     @bot_username : String = ""
     @typing_channels : Set(String) = Set(String).new
+    # Active streaming sessions keyed by chat_id.
+    # Written from the agent loop fiber (create_stream_callback), read/deleted
+    # from the outbound dispatcher fiber (send_message). Safe under Crystal's
+    # cooperative concurrency as long as no yield occurs between read and write.
     @streaming_sessions : Hash(String, TelegramStreamingSession) = {} of String => TelegramStreamingSession
 
     def initialize(
@@ -309,8 +323,12 @@ module Autobot::Channels
 
     # Create a streaming callback for the given chat_id.
     # Returns nil if streaming is disabled.
+    # Replaces any existing session for the same chat_id (deactivating the old one).
     def create_stream_callback(chat_id : String) : Providers::StreamCallback?
       return nil unless @streaming_enabled
+
+      # Deactivate any stale session for this chat
+      @streaming_sessions.delete(chat_id).try(&.deactivate)
 
       api_caller = ->(method : String, params : Hash(String, String)) : JSON::Any? {
         api_request(method, params)
@@ -355,6 +373,7 @@ module Autobot::Channels
       html = MarkdownToTelegramHTML.strip_html(html) unless MarkdownToTelegramHTML.valid_html?(html)
 
       streaming_session = @streaming_sessions.delete(message.chat_id)
+      streaming_session.try(&.deactivate)
       if streaming_session && (msg_id = streaming_session.message_id)
         finalize_streaming_message(message.chat_id, msg_id, html)
       else

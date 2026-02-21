@@ -19,6 +19,7 @@ module Autobot
       READ_TIMEOUT          = 300.seconds
       USER_AGENT            = "Autobot/#{VERSION}"
       ANTHROPIC_API_VERSION = "2023-06-01"
+      SSE_DATA_PREFIX       = "data: "
 
       getter model : String
       getter extra_headers : Hash(String, String)
@@ -432,7 +433,9 @@ module Autobot
           next if data == "[DONE]"
 
           json = JSON.parse(data)
-          update_compatible_usage(json, pointerof(usage))
+          if u = json_hash(json, "usage")
+            usage = parse_usage(JSON::Any.new(u))
+          end
 
           choice = json["choices"]?.try(&.as_a?).try(&.first?).try(&.as_h?)
           next unless choice
@@ -441,7 +444,7 @@ module Autobot
             finish_reason = reason
           end
 
-          delta = choice["delta"]?.try(&.as_h?)
+          delta = json_hash(JSON::Any.new(choice), "delta")
           next unless delta
 
           accumulate_compatible_delta(JSON::Any.new(delta), content, tool_calls_map, &on_delta)
@@ -477,18 +480,13 @@ module Autobot
       ) : Nil
         unless tool_calls_map.has_key?(idx)
           id = fragment["id"]?.try(&.as_s?) || ""
-          name = fragment["function"]?.try(&.as_h?).try { |func| func["name"]?.try(&.as_s?) } || ""
+          func = json_hash(fragment, "function")
+          name = func.try { |func_hash| func_hash["name"]?.try(&.as_s?) } || ""
           tool_calls_map[idx] = {id: id, name: name, args: String::Builder.new}
         end
 
-        if args_chunk = fragment["function"]?.try(&.as_h?).try { |func| func["arguments"]?.try(&.as_s?) }
+        if args_chunk = json_hash(fragment, "function").try { |func_hash| func_hash["arguments"]?.try(&.as_s?) }
           tool_calls_map[idx][:args] << args_chunk
-        end
-      end
-
-      private def update_compatible_usage(json : JSON::Any, usage_ptr : Pointer(TokenUsage)) : Nil
-        if u = json["usage"]?.try(&.as_h?)
-          usage_ptr.value = parse_usage(JSON::Any.new(u))
         end
       end
 
@@ -544,7 +542,7 @@ module Autobot
         when "message_delta"
           state.update_stop_reason(json)
         when "error"
-          error_msg = json["error"]?.try(&.as_h?).try { |err| err["message"]?.try(&.as_s?) } || "Unknown streaming error"
+          error_msg = json_hash(json, "error").try { |err| err["message"]?.try(&.as_s?) } || "Unknown streaming error"
           state.record_error(error_msg)
         end
       end
@@ -564,14 +562,14 @@ module Autobot
         @current_args : String::Builder = String::Builder.new
 
         def update_usage_from_message(json : JSON::Any) : Nil
-          if u = json["message"]?.try(&.as_h?).try { |message| message["usage"]?.try(&.as_h?) }
+          if u = hash_field(hash_field(json, "message"), "usage")
             input = u["input_tokens"]?.try(&.as_i?) || 0
             @usage = TokenUsage.new(prompt_tokens: input)
           end
         end
 
         def start_content_block(json : JSON::Any) : Nil
-          block = json["content_block"]?.try(&.as_h?)
+          block = hash_field(json, "content_block")
           return unless block
 
           @current_block_type = block["type"]?.try(&.as_s?)
@@ -582,7 +580,7 @@ module Autobot
         end
 
         def apply_delta(json : JSON::Any, &on_delta : StreamCallback) : Nil
-          delta = json["delta"]?.try(&.as_h?)
+          delta = hash_field(json, "delta")
           return unless delta
 
           case delta["type"]?.try(&.as_s?)
@@ -611,12 +609,12 @@ module Autobot
         end
 
         def update_stop_reason(json : JSON::Any) : Nil
-          if delta = json["delta"]?.try(&.as_h?)
+          if delta = hash_field(json, "delta")
             if reason = delta["stop_reason"]?.try(&.as_s?)
               @stop_reason = reason
             end
           end
-          if u = json["usage"]?.try(&.as_h?)
+          if u = hash_field(json, "usage")
             output = u["output_tokens"]?.try(&.as_i?) || 0
             @usage = TokenUsage.new(
               prompt_tokens: @usage.prompt_tokens,
@@ -633,7 +631,13 @@ module Autobot
         end
 
         def to_response : Response
-          finish = @stop_reason == "tool_use" ? "tool_calls" : (@error ? "error" : "stop")
+          finish = if @stop_reason == "tool_use"
+                     "tool_calls"
+                   elsif @error
+                     "error"
+                   else
+                     "stop"
+                   end
           Response.new(
             content: @text_parts.empty? ? nil : @text_parts.join("\n"),
             tool_calls: @tool_calls,
@@ -648,6 +652,17 @@ module Autobot
         rescue
           {} of String => JSON::Any
         end
+
+        # Safely extract a nested hash field from JSON::Any.
+        # Returns nil if the field is missing, null, or not a hash.
+        private def hash_field(node : JSON::Any, key : String) : Hash(String, JSON::Any)?
+          node[key]?.try(&.as_h?)
+        end
+
+        private def hash_field(node : Hash(String, JSON::Any)?, key : String) : Hash(String, JSON::Any)?
+          return nil unless node
+          node[key]?.try(&.as_h?)
+        end
       end
 
       # -----------------------------------------------------------------
@@ -658,9 +673,8 @@ module Autobot
           line = line.strip
           next if line.empty? || line.starts_with?(':')
 
-          if line.starts_with?("data: ")
-            data = line[6..]
-            block.call(data)
+          if line.starts_with?(SSE_DATA_PREFIX)
+            block.call(line.lchop(SSE_DATA_PREFIX))
           end
         end
       end
@@ -674,7 +688,7 @@ module Autobot
         tool_calls = tool_calls_map.keys.sort!.compact_map do |idx|
           entry = tool_calls_map[idx]?
           next unless entry
-          parsed_args = parse_streamed_tool_args(entry[:args].to_s)
+          parsed_args = parse_json_args(entry[:args].to_s)
           ToolCall.new(id: entry[:id], name: entry[:name], arguments: parsed_args)
         end
 
@@ -687,7 +701,7 @@ module Autobot
         )
       end
 
-      private def parse_streamed_tool_args(raw : String) : Hash(String, JSON::Any)
+      private def parse_json_args(raw : String) : Hash(String, JSON::Any)
         return {} of String => JSON::Any if raw.empty?
         JSON.parse(raw).as_h? || {} of String => JSON::Any
       rescue
@@ -713,9 +727,10 @@ module Autobot
           if http_response.status_code == 200
             response = block.call(http_response.body_io)
           else
-            http_response.body_io.gets_to_end # drain the response body
-            Log.error { "Streaming request failed: HTTP #{http_response.status_code}" }
-            response = Response.new(content: "Streaming error: HTTP #{http_response.status_code}", finish_reason: "error")
+            error_body = http_response.body_io.gets_to_end
+            error_detail = extract_streaming_error(error_body, http_response.status_code)
+            Log.error { "Streaming request failed: #{error_detail}" }
+            response = Response.new(content: "Streaming error: #{error_detail}", finish_reason: "error")
           end
         end
 
@@ -724,9 +739,26 @@ module Autobot
         client.try(&.close)
       end
 
+      private def extract_streaming_error(body : String, status_code : Int32) : String
+        json = JSON.parse(body)
+        msg = json_hash(json, "error").try { |err| err["message"]?.try(&.as_s?) }
+        msg ||= json["message"]?.try(&.as_s?)
+        msg ? "HTTP #{status_code}: #{msg}" : "HTTP #{status_code}"
+      rescue
+        "HTTP #{status_code}"
+      end
+
       # -----------------------------------------------------------------
       # Shared helpers
       # -----------------------------------------------------------------
+
+      # Safely extract a nested JSON hash field. Returns nil if the field is
+      # missing, null, or not a hash. Prevents "Expected Hash for #[]?" crashes
+      # when JSON::Any wraps null instead of a hash.
+      private def json_hash(node : JSON::Any?, key : String) : Hash(String, JSON::Any)?
+        node.try { |parent| parent[key]?.try(&.as_h?) }
+      end
+
       private def strip_provider_prefix(model : String) : String
         return model unless model.includes?("/")
 

@@ -106,9 +106,10 @@ describe Autobot::Channels::TelegramStreamingSession do
 
       session.on_delta(long_text)
 
+      tail = Autobot::Channels::TelegramStreamingSession::TRUNCATION_TAIL
       sent_text = api_calls[0][1]["text"]
-      sent_text.size.should eq(max_plain + 3) # 3 for "..."
-      sent_text.should end_with("...")
+      sent_text.size.should eq(max_plain + tail.size)
+      sent_text.should end_with(tail)
     end
   end
 end
