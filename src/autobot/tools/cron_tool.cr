@@ -29,6 +29,7 @@ module Autobot
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
         "Each firing triggers a background agent turn — the `message` is the turn's prompt. " \
+        "Use `exec_command` instead of `message` for LLM-free monitoring (runs a shell command directly, stdout = notification). " \
         "Actions: add, list, remove, update. " \
         "To remove or update a job, always use `list` first to get the job ID. " \
         "Always confirm with the user before add, remove, or update."
@@ -65,6 +66,12 @@ module Autobot
               type: "string",
               description: "ISO datetime for one-time execution (e.g. '2026-02-12T10:30:00')"
             ),
+            "exec_command" => PropertySchema.new(
+              type: "string",
+              description: "Shell command to run directly (LLM-free). Stdout becomes the notification. " \
+                           "Empty stdout = no notification. Mutually exclusive with `message`. " \
+                           "Previous stdout is passed as PREV_OUTPUT env var for change detection."
+            ),
             "job_id" => PropertySchema.new(
               type: "string",
               description: "Job ID (for remove/update). Use `list` action first to get the ID."
@@ -93,7 +100,14 @@ module Autobot
 
       private def add_job(params : Hash(String, JSON::Any)) : ToolResult
         message = params["message"]?.try(&.as_s) || ""
-        return ToolResult.error("message is required for add") if message.empty?
+        exec_command = params["exec_command"]?.try(&.as_s) || ""
+
+        if !message.empty? && !exec_command.empty?
+          return ToolResult.error("message and exec_command are mutually exclusive")
+        end
+        if message.empty? && exec_command.empty?
+          return ToolResult.error("message or exec_command is required for add")
+        end
         return ToolResult.error("no session context (channel/chat_id)") if @channel.empty? || @chat_id.empty?
 
         result = build_schedule(params)
@@ -102,6 +116,33 @@ module Autobot
         schedule, delete_after = result
         owner_key = "#{@channel}:#{@chat_id}"
 
+        if !exec_command.empty?
+          add_exec_job(exec_command, schedule, delete_after, owner_key)
+        else
+          add_agent_job(message, schedule, delete_after, owner_key)
+        end
+      end
+
+      private def add_exec_job(command : String, schedule : Cron::CronSchedule, delete_after : Bool, owner : String) : ToolResult
+        name = "exec: #{command.size > JOB_NAME_MAX_LENGTH ? command[0, JOB_NAME_MAX_LENGTH] : command}"
+        name = name[0, JOB_NAME_MAX_LENGTH] if name.size > JOB_NAME_MAX_LENGTH
+
+        job = @cron.add_job(
+          name: name,
+          schedule: schedule,
+          kind: Cron::PayloadKind::Exec,
+          command: command,
+          deliver: true,
+          channel: @channel,
+          to: @chat_id,
+          delete_after_run: delete_after,
+          owner: owner,
+        )
+
+        ToolResult.success("Created exec job '#{job.name}' (id: #{job.id})")
+      end
+
+      private def add_agent_job(message : String, schedule : Cron::CronSchedule, delete_after : Bool, owner : String) : ToolResult
         job = @cron.add_job(
           name: message.size > JOB_NAME_MAX_LENGTH ? message[0, JOB_NAME_MAX_LENGTH] : message,
           schedule: schedule,
@@ -110,7 +151,7 @@ module Autobot
           channel: @channel,
           to: @chat_id,
           delete_after_run: delete_after,
-          owner: owner_key
+          owner: owner,
         )
 
         ToolResult.success("Created job '#{job.name}' (id: #{job.id})")

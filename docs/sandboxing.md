@@ -117,14 +117,17 @@ Configure sandboxing in `config.yml`:
 ```yaml
 tools:
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
+  docker_image: "python:3.12-alpine"  # optional, default: alpine:latest
 ```
 
 **Options:**
 
-- `auto` - Auto-detect best available (recommended)
-- `bubblewrap` - Force bubblewrap (Linux only)
-- `docker` - Force Docker (all platforms)
-- `none` - Disable sandboxing (UNSAFE - tests only)
+- `sandbox` — Sandbox backend
+  - `auto` - Auto-detect best available (recommended)
+  - `bubblewrap` - Force bubblewrap (Linux only)
+  - `docker` - Force Docker (all platforms)
+  - `none` - Disable sandboxing (UNSAFE - tests only)
+- `docker_image` — Docker image to use for sandbox containers (default: `alpine:latest`). Set this when your cron exec commands need runtimes not available in Alpine (e.g. Python, Node.js). Only applies when sandbox is `docker` or `auto` resolves to Docker.
 
 ## Security Properties
 

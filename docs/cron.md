@@ -92,6 +92,76 @@ The `cron` tool is available so jobs can self-remove when their task defines a s
 
 ---
 
+## Exec Payloads
+
+Exec payloads run shell commands directly on a schedule — no LLM turn, no tokens consumed. Use them for lightweight monitoring tasks where you want zero-cost periodic checks.
+
+### How exec differs from agent turns
+
+| | Agent turn | Exec payload |
+|---|---|---|
+| **Runs** | Full LLM turn with tools | Shell command only |
+| **Token cost** | Per-invocation | Zero |
+| **Output** | LLM-generated response | Raw stdout |
+| **Use case** | Complex tasks needing reasoning | Simple scripts and checks |
+
+### Parameters
+
+- **`exec_command`** — The shell command to run (mutually exclusive with `message`)
+- **`PREV_OUTPUT`** — Environment variable containing the previous run's stdout, enabling change detection
+
+### Execution flow
+
+```mermaid
+graph LR
+    TIMER[Timer fires] --> EXEC[Run command in sandbox]
+    EXEC --> CHECK{Output empty?}
+    CHECK -->|no| DELIVER[Deliver to channel]
+    CHECK -->|yes| SKIP[Skip silently]
+
+    style TIMER fill:#ab47bc,stroke:#8e24aa,color:#fff
+    style EXEC fill:#5c6bc0,stroke:#3949ab,color:#fff
+    style CHECK fill:#7c4dff,stroke:#651fff,color:#fff
+    style DELIVER fill:#ffa726,stroke:#fb8c00,color:#fff
+    style SKIP fill:#78909c,stroke:#546e7a,color:#fff
+```
+
+When sandbox is enabled (the default), exec commands run inside the sandbox (bubblewrap or Docker) for security. Set `sandbox: none` to run commands directly on the host.
+
+### Examples
+
+**Air quality check (only notify on change):**
+
+```bash
+autobot cron add \
+  --name "air-quality" \
+  --exec 'curl -s "https://api.example.com/aqi?city=NYC" | jq -r .aqi' \
+  --every 3600 \
+  --channel telegram --to "12345"
+```
+
+The `PREV_OUTPUT` variable lets you detect changes:
+
+```bash
+autobot cron add \
+  --name "uptime-monitor" \
+  --exec 'STATUS=$(curl -so /dev/null -w "%{http_code}" https://example.com); [ "$STATUS" != "$PREV_OUTPUT" ] && echo "$STATUS" || true' \
+  --every 300 \
+  --channel slack --to "C12345"
+```
+
+**Disk space alert:**
+
+```bash
+autobot cron add \
+  --name "disk-check" \
+  --exec 'USAGE=$(df -h / | awk "NR==2{print \$5}" | tr -d "%"); [ "$USAGE" -gt 90 ] && echo "Disk usage: ${USAGE}%" || true' \
+  --cron "0 */6 * * *" \
+  --channel telegram --to "12345"
+```
+
+---
+
 ## Configuration
 
 ### Enable Cron
