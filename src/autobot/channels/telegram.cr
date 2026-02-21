@@ -16,9 +16,10 @@ module Autobot::Channels
     CODE_BLOCK_PREFIX  = "\x00CB"
     INLINE_CODE_PREFIX = "\x00IC"
     UNDERSCORE_PREFIX  = "\x00US"
+    HEADER_PREFIX      = "\x00HD"
     SUFFIX             = "\x00"
 
-    HEADER_REGEX     = Regex.new(%q(^#{1,6}\s+(.+)$), Regex::Options::MULTILINE)
+    HEADER_REGEX     = Regex.new(%q(^#{1,6}\s+([^\n]+)$), Regex::Options::MULTILINE)
     BLOCKQUOTE_REGEX = /^>\s*(.*)$/m
     HR_REGEX         = /^[-*_]{3,}\s*$/m
 
@@ -42,13 +43,14 @@ module Autobot::Channels
       code_blocks = [] of String
       inline_codes = [] of String
       underscore_runs = [] of String
+      headers = [] of String
 
       result = text
       result = extract_code_blocks(result, code_blocks)
       result = extract_inline_code(result, inline_codes)
 
-      # Strip block elements (before HTML escape since > would be escaped)
-      result = result.gsub(HEADER_REGEX, "\\1")
+      # Extract block elements (before HTML escape since > would be escaped)
+      result = extract_headers(result, headers)
       result = result.gsub(BLOCKQUOTE_REGEX, "\\1")
       result = result.gsub(HR_REGEX, "")
 
@@ -56,6 +58,7 @@ module Autobot::Channels
       result = protect_underscore_runs(result, underscore_runs)
       result = convert_inline_formatting(result)
       result = restore_underscore_runs(result, underscore_runs)
+      result = restore_headers(result, headers)
       result = restore_placeholders(result, inline_codes, code_blocks)
 
       result.strip
@@ -85,6 +88,21 @@ module Autobot::Channels
     def self.split_message(text : String) : Array(String)
       return [text] if text.size <= TELEGRAM_MAX_LENGTH
       split_by_paragraphs(text)
+    end
+
+    private def self.extract_headers(text : String, store : Array(String)) : String
+      text.gsub(HEADER_REGEX) do |_, match|
+        store << "<b>#{escape_html(match[1])}</b>"
+        "#{HEADER_PREFIX}#{store.size - 1}#{SUFFIX}"
+      end
+    end
+
+    private def self.restore_headers(text : String, store : Array(String)) : String
+      result = text
+      store.each_with_index do |html, i|
+        result = result.gsub("#{HEADER_PREFIX}#{i}#{SUFFIX}", html)
+      end
+      result
     end
 
     private def self.extract_code_blocks(text : String, store : Array(String)) : String
@@ -181,6 +199,77 @@ module Autobot::Channels
     end
   end
 
+  # Manages a single streaming message update cycle for a Telegram chat.
+  #
+  # On the first delta, sends a placeholder message. Subsequent deltas are
+  # accumulated and periodically pushed via `editMessageText` (throttled to
+  # respect Telegram rate limits). The final formatted message is applied
+  # by the channel's `send_message` after the LLM response completes.
+  class TelegramStreamingSession
+    EDIT_THROTTLE   = 1.second
+    TRUNCATION_TAIL = "..."
+    MAX_PLAIN_TEXT  = MarkdownToTelegramHTML::TELEGRAM_MAX_LENGTH - TRUNCATION_TAIL.size
+
+    getter? active : Bool = true
+    getter message_id : Int64? = nil
+
+    def initialize(@chat_id : String, @api_caller : Proc(String, Hash(String, String), JSON::Any?))
+      @accumulated = IO::Memory.new
+      @last_edit = Time.utc - EDIT_THROTTLE
+    end
+
+    # Append a text delta from the LLM. Sends or edits the Telegram message
+    # as appropriate.
+    def on_delta(delta : String) : Nil
+      return unless active?
+      @accumulated.print(delta)
+
+      if @message_id.nil?
+        send_initial_message
+      else
+        edit_if_throttle_allows
+      end
+    end
+
+    private def send_initial_message : Nil
+      text = truncated_plain_text
+      return if text.empty?
+
+      result = @api_caller.call("sendMessage", {
+        "chat_id" => @chat_id,
+        "text"    => text,
+      })
+      if result
+        @message_id = result["message_id"]?.try(&.as_i64?)
+      end
+      @last_edit = Time.utc
+    end
+
+    private def edit_if_throttle_allows : Nil
+      now = Time.utc
+      return if (now - @last_edit) < EDIT_THROTTLE
+
+      msg_id = @message_id
+      return unless msg_id
+
+      @api_caller.call("editMessageText", {
+        "chat_id"    => @chat_id,
+        "message_id" => msg_id.to_s,
+        "text"       => truncated_plain_text,
+      })
+      @last_edit = now
+    end
+
+    private def truncated_plain_text : String
+      text = @accumulated.to_s
+      if text.size > MAX_PLAIN_TEXT
+        text[0, MAX_PLAIN_TEXT] + TRUNCATION_TAIL
+      else
+        text
+      end
+    end
+  end
+
   # Telegram channel using long polling via the Bot API.
   #
   # Features:
@@ -191,6 +280,7 @@ module Autobot::Channels
   # - Typing indicators
   # - Markdown-to-Telegram HTML conversion
   # - Allow list for access control
+  # - Optional streaming (progressive message updates)
   class TelegramChannel < Channel
     Log = ::Log.for("channels.telegram")
 
@@ -202,6 +292,7 @@ module Autobot::Channels
     @offset : Int64 = 0_i64
     @bot_username : String = ""
     @typing_channels : Set(String) = Set(String).new
+    @streaming_sessions : Hash(String, TelegramStreamingSession) = {} of String => TelegramStreamingSession
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -211,8 +302,24 @@ module Autobot::Channels
       @custom_commands : Config::CustomCommandsConfig = Config::CustomCommandsConfig.new,
       @session_manager : Session::Manager? = nil,
       @transcriber : Transcriber? = nil,
+      @streaming_enabled : Bool = false,
     )
       super("telegram", @bus, @allow_from)
+    end
+
+    # Create a streaming callback for the given chat_id.
+    # Returns nil if streaming is disabled.
+    def create_stream_callback(chat_id : String) : Providers::StreamCallback?
+      return nil unless @streaming_enabled
+
+      api_caller = ->(method : String, params : Hash(String, String)) : JSON::Any? {
+        api_request(method, params)
+      }
+
+      session = TelegramStreamingSession.new(chat_id, api_caller)
+      @streaming_sessions[chat_id] = session
+
+      Providers::StreamCallback.new { |delta| session.on_delta(delta) }
     end
 
     def start : Nil
@@ -247,8 +354,41 @@ module Autobot::Channels
       html = MarkdownToTelegramHTML.convert(message.content)
       html = MarkdownToTelegramHTML.strip_html(html) unless MarkdownToTelegramHTML.valid_html?(html)
 
-      MarkdownToTelegramHTML.split_message(html).each do |chunk|
-        send_html_chunk(message.chat_id, chunk)
+      streaming_session = @streaming_sessions.delete(message.chat_id)
+      if streaming_session && (msg_id = streaming_session.message_id)
+        finalize_streaming_message(message.chat_id, msg_id, html)
+      else
+        MarkdownToTelegramHTML.split_message(html).each do |chunk|
+          send_html_chunk(message.chat_id, chunk)
+        end
+      end
+    end
+
+    private def finalize_streaming_message(chat_id : String, message_id : Int64, html : String) : Nil
+      chunks = MarkdownToTelegramHTML.split_message(html)
+
+      # Edit the existing streamed message with the first (formatted) chunk
+      first_chunk = chunks.first
+      result = api_request("editMessageText", {
+        "chat_id"    => chat_id,
+        "message_id" => message_id.to_s,
+        "text"       => first_chunk,
+        "parse_mode" => "HTML",
+      })
+
+      # Fallback to plain text if HTML edit fails
+      unless result
+        Log.warn { "HTML edit failed for streaming message, falling back to plain text" }
+        api_request("editMessageText", {
+          "chat_id"    => chat_id,
+          "message_id" => message_id.to_s,
+          "text"       => MarkdownToTelegramHTML.strip_html(first_chunk),
+        })
+      end
+
+      # Send remaining chunks as new messages
+      chunks.skip(1).each do |chunk|
+        send_html_chunk(chat_id, chunk)
       end
     end
 

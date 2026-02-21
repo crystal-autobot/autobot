@@ -58,6 +58,7 @@ channels:
     # ["*"]           - Allow anyone (use with caution)
     # ["@user", "id"] - Allowlist specific users (recommended)
     allow_from: []
+    streaming: false  # Enable progressive message updates
 
   slack:
     enabled: false
@@ -173,6 +174,7 @@ channels:
     enabled: true
     token: "BOT_TOKEN"
     allow_from: ["username1", "username2"]
+    streaming: true  # Progressive message updates
     custom_commands:
       macros:
         # Simple format (command name used as description)

@@ -11,7 +11,11 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
   end
 end
 
-private def build_channel(allow_from : Array(String) = [] of String, custom_commands : Autobot::Config::CustomCommandsConfig? = nil) : TelegramChannelTest
+private def build_channel(
+  allow_from : Array(String) = [] of String,
+  custom_commands : Autobot::Config::CustomCommandsConfig? = nil,
+  streaming_enabled : Bool = false,
+) : TelegramChannelTest
   bus = Autobot::Bus::MessageBus.new
   cmds = custom_commands || Autobot::Config::CustomCommandsConfig.new
   TelegramChannelTest.new(
@@ -19,6 +23,7 @@ private def build_channel(allow_from : Array(String) = [] of String, custom_comm
     token: "test-token",
     allow_from: allow_from,
     custom_commands: cmds,
+    streaming_enabled: streaming_enabled,
   )
 end
 
@@ -69,6 +74,20 @@ describe Autobot::Channels::TelegramChannel do
       entry = Autobot::Config::CustomCommandEntry.new("prompt text")
       channel = build_channel
       channel.test_command_description(entry, "run-deploy").should eq("Run deploy")
+    end
+  end
+
+  describe "#create_stream_callback" do
+    it "returns nil when streaming is disabled" do
+      channel = build_channel(streaming_enabled: false)
+      channel.create_stream_callback("12345").should be_nil
+    end
+
+    it "returns a StreamCallback when streaming is enabled" do
+      channel = build_channel(streaming_enabled: true)
+      callback = channel.create_stream_callback("12345")
+      callback.should_not be_nil
+      callback.should be_a(Autobot::Providers::StreamCallback)
     end
   end
 end

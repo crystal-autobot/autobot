@@ -40,6 +40,10 @@ module Autobot::Agent
     @memory_manager : MemoryManager
     @sandbox_config : String
 
+    # Factory that creates a streaming callback for a given channel and chat_id.
+    # Returns nil if streaming is not available for that channel.
+    property streaming_callback_factory : Proc(String, String, Providers::StreamCallback?)?
+
     def initialize(
       @bus : Bus::MessageBus,
       @provider : Providers::Provider,
@@ -158,7 +162,9 @@ module Autobot::Agent
       )
 
       # Execute agent loop and get response
-      final_content, tools_used, _total_tokens = execute_agent_loop(messages, session.key)
+      final_content, tools_used, _total_tokens = execute_agent_loop(
+        messages, session.key, channel: msg.channel, chat_id: msg.chat_id
+      )
 
       # Save to session
       save_to_session(session, msg.content, final_content, tools_used)
@@ -324,13 +330,19 @@ module Autobot::Agent
     end
 
     # Execute the agent loop with tool calls
-    private def execute_agent_loop(messages : Array(Hash(String, JSON::Any)), session_key : String) : {String, Array(String), Int32}
+    private def execute_agent_loop(
+      messages : Array(Hash(String, JSON::Any)),
+      session_key : String,
+      channel : String? = nil,
+      chat_id : String? = nil,
+    ) : {String, Array(String), Int32}
       final_content : String? = nil
       tools_used = [] of String
       total_tokens = 0
+      stream_callback = resolve_stream_callback(channel, chat_id)
 
       @max_iterations.times do
-        response = call_llm(messages)
+        response = call_llm(messages, stream_callback: stream_callback)
         total_tokens += response.usage.total_tokens
 
         if response.finish_reason == "guardrail_intervened"
@@ -351,13 +363,28 @@ module Autobot::Agent
       {final_content, tools_used, total_tokens}
     end
 
-    # Call LLM and log token usage
-    private def call_llm(messages : Array(Hash(String, JSON::Any)), exclude_tools : Array(String)? = nil) : Providers::Response
-      response = @provider.chat(
-        messages: messages,
-        tools: @tools.definitions(exclude: exclude_tools),
-        model: active_model
-      )
+    # Call LLM and log token usage. Uses streaming when a callback is provided.
+    private def call_llm(
+      messages : Array(Hash(String, JSON::Any)),
+      exclude_tools : Array(String)? = nil,
+      stream_callback : Providers::StreamCallback? = nil,
+    ) : Providers::Response
+      tools_defs = @tools.definitions(exclude: exclude_tools)
+
+      response = if cb = stream_callback
+                   @provider.chat_streaming(
+                     messages: messages,
+                     tools: tools_defs,
+                     model: active_model,
+                     &cb
+                   )
+                 else
+                   @provider.chat(
+                     messages: messages,
+                     tools: tools_defs,
+                     model: active_model,
+                   )
+                 end
 
       usage = response.usage
       unless usage.zero?
@@ -365,6 +392,11 @@ module Autobot::Agent
       end
 
       response
+    end
+
+    private def resolve_stream_callback(channel : String?, chat_id : String?) : Providers::StreamCallback?
+      return nil unless channel && chat_id
+      @streaming_callback_factory.try(&.call(channel, chat_id))
     end
 
     # Process tool calls and update messages

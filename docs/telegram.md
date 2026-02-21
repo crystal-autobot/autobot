@@ -95,9 +95,32 @@ channels:
 | `/reset` | Clear conversation history |
 | `/help` | List available commands |
 
+## Streaming
+
+By default, the bot waits for the full LLM response before sending it. With streaming enabled, the bot sends a placeholder message and progressively updates it as tokens arrive, so users see text appear in real time instead of waiting for the full response.
+
+```yaml
+channels:
+  telegram:
+    enabled: true
+    token: "${TELEGRAM_BOT_TOKEN}"
+    allow_from: ["123456789"]
+    streaming: true
+```
+
+How it works:
+
+- On the first token, the bot sends a plain-text message
+- As more tokens arrive, the message is edited in place (~1 update/sec to respect Telegram rate limits)
+- When the LLM finishes, the message gets a final edit with full HTML formatting (bold, code blocks, links, etc.)
+- If the response exceeds Telegram's 4096-character limit, overflow is sent as separate messages
+
+Streaming works with all HTTP-based providers (Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM). AWS Bedrock falls back to non-streaming behavior automatically.
+
 ## Features
 
 - **Long polling** — no webhook or public IP needed
+- **Streaming** — opt-in progressive message updates (see above)
 - **Voice messages** — auto-transcribed via Whisper (requires Groq or OpenAI provider)
 - **Photos** — sent as image attachments to the LLM
 - **Documents** — attached to the message context
@@ -112,6 +135,7 @@ channels:
 | `enabled` | No | `false` | Enable the Telegram channel |
 | `token` | Yes | — | Bot API token from BotFather |
 | `allow_from` | No | `[]` | User IDs/usernames allowed to use the bot |
+| `streaming` | No | `false` | Enable progressive message updates |
 | `proxy` | No | — | HTTP proxy URL for API requests |
 | `custom_commands` | No | — | Custom slash commands (macros and scripts) |
 

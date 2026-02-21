@@ -64,6 +64,29 @@ module Autobot
         Response.new(content: "Error calling LLM: #{ex.message}", finish_reason: "error")
       end
 
+      def chat_streaming(
+        messages : Array(Hash(String, JSON::Any)),
+        tools : Array(Hash(String, JSON::Any))? = nil,
+        model : String? = nil,
+        max_tokens : Int32 = DEFAULT_MAX_TOKENS,
+        temperature : Float64 = DEFAULT_TEMPERATURE,
+        &on_delta : StreamCallback
+      ) : Response
+        effective_model = model || @model
+        spec = resolve_spec(effective_model)
+        bare_model = strip_provider_prefix(effective_model)
+
+        if anthropic_native?(spec, effective_model)
+          chat_anthropic_streaming(messages, tools, bare_model, max_tokens, temperature, spec, &on_delta)
+        else
+          chat_compatible_streaming(messages, tools, bare_model, max_tokens, temperature, spec, &on_delta)
+        end
+      rescue ex
+        Log.error { "LLM streaming request failed: #{ex.message}" }
+        Log.debug { ex.inspect_with_backtrace }
+        Response.new(content: "Error calling LLM: #{ex.message}", finish_reason: "error")
+      end
+
       # -----------------------------------------------------------------
       # OpenAI-compatible (standard) request
       # -----------------------------------------------------------------
@@ -371,6 +394,334 @@ module Autobot
           finish_reason: finish,
           usage: usage,
         )
+      end
+
+      # -----------------------------------------------------------------
+      # OpenAI-compatible streaming
+      # -----------------------------------------------------------------
+      private def chat_compatible_streaming(
+        messages, tools, model, max_tokens, temperature, spec,
+        &on_delta : StreamCallback
+      ) : Response
+        body = build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
+        body["stream"] = JSON::Any.new(true)
+        body["stream_options"] = JSON::Any.new(
+          {"include_usage" => JSON::Any.new(true)} of String => JSON::Any
+        )
+        url = resolve_url(spec)
+
+        headers = HTTP::Headers{
+          "Content-Type" => "application/json",
+          "User-Agent"   => USER_AGENT,
+        }
+        apply_auth_headers(headers, spec)
+
+        Log.debug { "POST #{url} model=#{model} (streaming)" }
+        http_post_streaming(url, headers, body.to_json) do |io|
+          parse_compatible_sse(io, &on_delta)
+        end
+      end
+
+      private def parse_compatible_sse(io : IO, &on_delta : StreamCallback) : Response
+        content = String::Builder.new
+        tool_calls_map = {} of Int32 => {id: String, name: String, args: String::Builder}
+        finish_reason = "stop"
+        usage = TokenUsage.new
+
+        read_sse_events(io) do |data|
+          next if data == "[DONE]"
+
+          json = JSON.parse(data)
+          update_compatible_usage(json, pointerof(usage))
+
+          choice = json["choices"]?.try(&.as_a?).try(&.first?).try(&.as_h?)
+          next unless choice
+
+          if reason = choice["finish_reason"]?.try(&.as_s?)
+            finish_reason = reason
+          end
+
+          delta = choice["delta"]?.try(&.as_h?)
+          next unless delta
+
+          accumulate_compatible_delta(JSON::Any.new(delta), content, tool_calls_map, &on_delta)
+        end
+
+        finish_reason = "tool_calls" unless tool_calls_map.empty?
+        build_streaming_response(content, tool_calls_map, finish_reason, usage)
+      end
+
+      private def accumulate_compatible_delta(
+        delta : JSON::Any,
+        content : String::Builder,
+        tool_calls_map : Hash(Int32, {id: String, name: String, args: String::Builder}),
+        &on_delta : StreamCallback
+      ) : Nil
+        if text = delta["content"]?.try(&.as_s?)
+          content << text
+          on_delta.call(text)
+        end
+
+        if tc_arr = delta["tool_calls"]?.try(&.as_a?)
+          tc_arr.each do |tool_call|
+            idx = tool_call["index"]?.try(&.as_i?) || 0
+            accumulate_tool_call_fragment(tool_call, idx, tool_calls_map)
+          end
+        end
+      end
+
+      private def accumulate_tool_call_fragment(
+        fragment : JSON::Any,
+        idx : Int32,
+        tool_calls_map : Hash(Int32, {id: String, name: String, args: String::Builder}),
+      ) : Nil
+        unless tool_calls_map.has_key?(idx)
+          id = fragment["id"]?.try(&.as_s?) || ""
+          name = fragment["function"]?.try(&.as_h?).try { |func| func["name"]?.try(&.as_s?) } || ""
+          tool_calls_map[idx] = {id: id, name: name, args: String::Builder.new}
+        end
+
+        if args_chunk = fragment["function"]?.try(&.as_h?).try { |func| func["arguments"]?.try(&.as_s?) }
+          tool_calls_map[idx][:args] << args_chunk
+        end
+      end
+
+      private def update_compatible_usage(json : JSON::Any, usage_ptr : Pointer(TokenUsage)) : Nil
+        if u = json["usage"]?.try(&.as_h?)
+          usage_ptr.value = parse_usage(JSON::Any.new(u))
+        end
+      end
+
+      # -----------------------------------------------------------------
+      # Anthropic streaming
+      # -----------------------------------------------------------------
+      private def chat_anthropic_streaming(
+        messages, tools, model, max_tokens, temperature, spec,
+        &on_delta : StreamCallback
+      ) : Response
+        body = build_anthropic_body(messages, tools, model, max_tokens, temperature)
+        body["stream"] = JSON::Any.new(true)
+        url = resolve_url(spec)
+
+        headers = HTTP::Headers{
+          "Content-Type"      => "application/json",
+          "User-Agent"        => USER_AGENT,
+          "anthropic-version" => ANTHROPIC_API_VERSION,
+        }
+        apply_auth_headers(headers, spec)
+
+        Log.debug { "POST #{url} model=#{model} (anthropic streaming)" }
+        http_post_streaming(url, headers, body.to_json) do |io|
+          parse_anthropic_sse(io, &on_delta)
+        end
+      end
+
+      private def parse_anthropic_sse(io : IO, &on_delta : StreamCallback) : Response
+        state = AnthropicStreamState.new
+        read_sse_events(io) do |data|
+          process_anthropic_event(data, state, &on_delta)
+        end
+        state.to_response
+      end
+
+      private def process_anthropic_event(
+        data : String,
+        state : AnthropicStreamState,
+        &on_delta : StreamCallback
+      ) : Nil
+        json = JSON.parse(data)
+        event_type = json["type"]?.try(&.as_s?) || ""
+
+        case event_type
+        when "message_start"
+          state.update_usage_from_message(json)
+        when "content_block_start"
+          state.start_content_block(json)
+        when "content_block_delta"
+          state.apply_delta(json, &on_delta)
+        when "content_block_stop"
+          state.finish_content_block
+        when "message_delta"
+          state.update_stop_reason(json)
+        when "error"
+          error_msg = json["error"]?.try(&.as_h?).try { |err| err["message"]?.try(&.as_s?) } || "Unknown streaming error"
+          state.record_error(error_msg)
+        end
+      end
+
+      # Tracks accumulated state during Anthropic SSE streaming.
+      private class AnthropicStreamState
+        getter text_parts : Array(String) = [] of String
+        getter tool_calls : Array(ToolCall) = [] of ToolCall
+        getter usage : TokenUsage = TokenUsage.new
+        getter stop_reason : String = "end_turn"
+        getter? error : Bool = false
+
+        @current_block_type : String? = nil
+        @current_block_id : String = ""
+        @current_block_name : String = ""
+        @current_text : String::Builder = String::Builder.new
+        @current_args : String::Builder = String::Builder.new
+
+        def update_usage_from_message(json : JSON::Any) : Nil
+          if u = json["message"]?.try(&.as_h?).try { |message| message["usage"]?.try(&.as_h?) }
+            input = u["input_tokens"]?.try(&.as_i?) || 0
+            @usage = TokenUsage.new(prompt_tokens: input)
+          end
+        end
+
+        def start_content_block(json : JSON::Any) : Nil
+          block = json["content_block"]?.try(&.as_h?)
+          return unless block
+
+          @current_block_type = block["type"]?.try(&.as_s?)
+          @current_text = String::Builder.new
+          @current_args = String::Builder.new
+          @current_block_id = block["id"]?.try(&.as_s?) || ""
+          @current_block_name = block["name"]?.try(&.as_s?) || ""
+        end
+
+        def apply_delta(json : JSON::Any, &on_delta : StreamCallback) : Nil
+          delta = json["delta"]?.try(&.as_h?)
+          return unless delta
+
+          case delta["type"]?.try(&.as_s?)
+          when "text_delta"
+            if text = delta["text"]?.try(&.as_s?)
+              @current_text << text
+              on_delta.call(text)
+            end
+          when "input_json_delta"
+            if partial = delta["partial_json"]?.try(&.as_s?)
+              @current_args << partial
+            end
+          end
+        end
+
+        def finish_content_block : Nil
+          case @current_block_type
+          when "text"
+            text = @current_text.to_s
+            @text_parts << text unless text.empty?
+          when "tool_use"
+            args = parse_tool_args(@current_args.to_s)
+            @tool_calls << ToolCall.new(id: @current_block_id, name: @current_block_name, arguments: args)
+          end
+          @current_block_type = nil
+        end
+
+        def update_stop_reason(json : JSON::Any) : Nil
+          if delta = json["delta"]?.try(&.as_h?)
+            if reason = delta["stop_reason"]?.try(&.as_s?)
+              @stop_reason = reason
+            end
+          end
+          if u = json["usage"]?.try(&.as_h?)
+            output = u["output_tokens"]?.try(&.as_i?) || 0
+            @usage = TokenUsage.new(
+              prompt_tokens: @usage.prompt_tokens,
+              completion_tokens: output,
+              total_tokens: @usage.prompt_tokens + output,
+            )
+          end
+        end
+
+        def record_error(msg : String) : Nil
+          @error = true
+          @text_parts << "Streaming error: #{msg}"
+          @stop_reason = "error"
+        end
+
+        def to_response : Response
+          finish = @stop_reason == "tool_use" ? "tool_calls" : (@error ? "error" : "stop")
+          Response.new(
+            content: @text_parts.empty? ? nil : @text_parts.join("\n"),
+            tool_calls: @tool_calls,
+            finish_reason: finish,
+            usage: @usage,
+          )
+        end
+
+        private def parse_tool_args(raw : String) : Hash(String, JSON::Any)
+          return {} of String => JSON::Any if raw.empty?
+          JSON.parse(raw).as_h? || {} of String => JSON::Any
+        rescue
+          {} of String => JSON::Any
+        end
+      end
+
+      # -----------------------------------------------------------------
+      # SSE helpers
+      # -----------------------------------------------------------------
+      private def read_sse_events(io : IO, &block : String ->) : Nil
+        io.each_line do |line|
+          line = line.strip
+          next if line.empty? || line.starts_with?(':')
+
+          if line.starts_with?("data: ")
+            data = line[6..]
+            block.call(data)
+          end
+        end
+      end
+
+      private def build_streaming_response(
+        content : String::Builder,
+        tool_calls_map : Hash(Int32, {id: String, name: String, args: String::Builder}),
+        finish_reason : String,
+        usage : TokenUsage,
+      ) : Response
+        tool_calls = tool_calls_map.keys.sort!.compact_map do |idx|
+          entry = tool_calls_map[idx]?
+          next unless entry
+          parsed_args = parse_streamed_tool_args(entry[:args].to_s)
+          ToolCall.new(id: entry[:id], name: entry[:name], arguments: parsed_args)
+        end
+
+        text = content.to_s
+        Response.new(
+          content: text.empty? ? nil : text,
+          tool_calls: tool_calls,
+          finish_reason: finish_reason,
+          usage: usage,
+        )
+      end
+
+      private def parse_streamed_tool_args(raw : String) : Hash(String, JSON::Any)
+        return {} of String => JSON::Any if raw.empty?
+        JSON.parse(raw).as_h? || {} of String => JSON::Any
+      rescue
+        {} of String => JSON::Any
+      end
+
+      private def http_post_streaming(url : String, headers : HTTP::Headers, body : String, &block : IO -> Response) : Response
+        uri = URI.parse(url)
+        tls = uri.scheme == "https"
+
+        host = uri.host
+        raise "Invalid URL: missing host in '#{url}'" unless host
+
+        client = HTTP::Client.new(host, port: uri.port, tls: tls)
+        client.connect_timeout = CONNECT_TIMEOUT
+        client.read_timeout = READ_TIMEOUT
+
+        path = uri.request_target
+        response : Response? = nil
+
+        client.post(path, headers: headers, body: body) do |http_response|
+          Log.debug { "Streaming response #{http_response.status_code}" }
+          if http_response.status_code == 200
+            response = block.call(http_response.body_io)
+          else
+            http_response.body_io.gets_to_end # drain the response body
+            Log.error { "Streaming request failed: HTTP #{http_response.status_code}" }
+            response = Response.new(content: "Streaming error: HTTP #{http_response.status_code}", finish_reason: "error")
+          end
+        end
+
+        response || Response.new(content: "Streaming error: no response", finish_reason: "error")
+      ensure
+        client.try(&.close)
       end
 
       # -----------------------------------------------------------------

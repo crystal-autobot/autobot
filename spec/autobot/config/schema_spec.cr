@@ -327,6 +327,16 @@ describe Autobot::Config::TelegramConfig do
     tg.token.should eq("")
     tg.allow_from.should be_empty
   end
+
+  it "has streaming disabled by default" do
+    tg = Autobot::Config::TelegramConfig.from_yaml("--- {}")
+    tg.streaming?.should be_false
+  end
+
+  it "parses streaming enabled" do
+    tg = Autobot::Config::TelegramConfig.from_yaml("streaming: true")
+    tg.streaming?.should be_true
+  end
 end
 
 describe Autobot::Config::CustomCommandEntry do

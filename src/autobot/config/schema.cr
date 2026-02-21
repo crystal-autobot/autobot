@@ -7,6 +7,7 @@ module Autobot::Config
     property token : String = ""
     property allow_from : Array(String) = [] of String
     property? proxy : String? = nil
+    property? streaming : Bool = false
     property custom_commands : CustomCommandsConfig?
 
     def initialize

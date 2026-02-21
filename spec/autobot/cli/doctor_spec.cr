@@ -238,6 +238,24 @@ describe Autobot::CLI::Doctor do
 
         warnings.should eq(0)
         io.to_s.should contain("✓ Telegram configured")
+        io.to_s.should_not contain("streaming")
+      end
+    end
+
+    it "shows streaming label when streaming is enabled" do
+      telegram = Autobot::Config::TelegramConfig.from_yaml(<<-YAML
+      enabled: true
+      token: "123456:ABC-DEF"
+      allow_from: ["12345"]
+      streaming: true
+      YAML
+      )
+
+      with_doctor_io do |io|
+        warnings = Autobot::CLI::Doctor.check_telegram(telegram, 0)
+
+        warnings.should eq(0)
+        io.to_s.should contain("✓ Telegram configured, streaming")
       end
     end
   end

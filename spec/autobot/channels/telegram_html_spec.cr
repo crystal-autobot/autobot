@@ -78,12 +78,12 @@ describe Autobot::Channels::MarkdownToTelegramHTML do
       Autobot::Channels::MarkdownToTelegramHTML.convert("`**not bold**`").should eq("<code>**not bold**</code>")
     end
 
-    it "strips headers" do
-      Autobot::Channels::MarkdownToTelegramHTML.convert("# Title").should eq("Title")
+    it "converts headers to bold" do
+      Autobot::Channels::MarkdownToTelegramHTML.convert("# Title").should eq("<b>Title</b>")
     end
 
-    it "strips multi-level headers" do
-      Autobot::Channels::MarkdownToTelegramHTML.convert("### Subtitle").should eq("Subtitle")
+    it "converts multi-level headers to bold" do
+      Autobot::Channels::MarkdownToTelegramHTML.convert("### Subtitle").should eq("<b>Subtitle</b>")
     end
 
     it "strips blockquotes" do

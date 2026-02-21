@@ -113,8 +113,10 @@ module Autobot::Channels
             custom_commands: custom_cmds,
             session_manager: @session_manager,
             transcriber: @transcriber,
+            streaming_enabled: telegram_config.streaming?,
           )
-          Log.info { "Telegram channel enabled" }
+          streaming_label = telegram_config.streaming? ? " (streaming)" : ""
+          Log.info { "Telegram channel enabled#{streaming_label}" }
         end
       end
 

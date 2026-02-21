@@ -235,7 +235,8 @@ module Autobot
           hint("Add user IDs to channels.telegram.allow_from")
           warnings + 1
         else
-          report(Status::Pass, "Telegram configured")
+          streaming_label = telegram.streaming? ? ", streaming" : ""
+          report(Status::Pass, "Telegram configured#{streaming_label}")
           warnings
         end
       end

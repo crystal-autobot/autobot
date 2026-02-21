@@ -1,5 +1,8 @@
 module Autobot
   module Providers
+    # Callback invoked with text deltas during streaming responses.
+    alias StreamCallback = Proc(String, Nil)
+
     # Token usage from an LLM API response.
     struct TokenUsage
       include JSON::Serializable

@@ -40,7 +40,12 @@ module Autobot
           puts "\nChannels:"
           if ch = config.channels
             tg = ch.telegram
-            puts "  Telegram: #{tg.try(&.enabled?) ? "✓ enabled" : "disabled"}"
+            tg_status = if tg.try(&.enabled?)
+                          tg.try(&.streaming?) ? "✓ enabled (streaming)" : "✓ enabled"
+                        else
+                          "disabled"
+                        end
+            puts "  Telegram: #{tg_status}"
             sl = ch.slack
             puts "  Slack:    #{sl.try(&.enabled?) ? "✓ enabled" : "disabled"}"
             wa = ch.whatsapp

@@ -292,4 +292,59 @@ describe Autobot::Agent::Loop do
       FileUtils.rm_rf(tmp) if tmp
     end
   end
+
+  describe "streaming_callback_factory" do
+    it "is nil by default" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+      loop_inst.streaming_callback_factory.should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "can be set to a factory proc" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+
+      factory = ->(_channel : String, _chat_id : String) : Autobot::Providers::StreamCallback? {
+        Autobot::Providers::StreamCallback.new { |_delta| }
+      }
+      loop_inst.streaming_callback_factory = factory
+      loop_inst.streaming_callback_factory.should_not be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "factory returns nil for non-matching channels" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+
+      factory = ->(channel : String, _chat_id : String) : Autobot::Providers::StreamCallback? {
+        return nil unless channel == "telegram"
+        Autobot::Providers::StreamCallback.new { |_delta| }
+      }
+      loop_inst.streaming_callback_factory = factory
+
+      callback = factory.call("slack", "chat1")
+      callback.should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "factory returns callback for matching channel" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+
+      factory = ->(channel : String, _chat_id : String) : Autobot::Providers::StreamCallback? {
+        return nil unless channel == "telegram"
+        Autobot::Providers::StreamCallback.new { |_delta| }
+      }
+      loop_inst.streaming_callback_factory = factory
+
+      callback = factory.call("telegram", "chat1")
+      callback.should_not be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
 end
