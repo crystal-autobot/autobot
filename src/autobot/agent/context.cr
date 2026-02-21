@@ -74,14 +74,20 @@ module Autobot::Agent
         reasoning_content : String? = nil,
       ) : Array(Hash(String, JSON::Any))
         tool_call_data = tool_calls.map do |tool_call|
-          JSON::Any.new({
+          data = {
             "id"       => JSON::Any.new(tool_call.id),
             "type"     => JSON::Any.new("function"),
             "function" => JSON::Any.new({
               "name"      => JSON::Any.new(tool_call.name),
               "arguments" => JSON::Any.new(tool_call.arguments.to_json),
             }),
-          })
+          } of String => JSON::Any
+
+          if extra_content = tool_call.extra_content
+            data["extra_content"] = extra_content
+          end
+
+          JSON::Any.new(data)
         end
 
         msg = {
