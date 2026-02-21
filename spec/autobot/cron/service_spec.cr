@@ -892,6 +892,59 @@ describe Autobot::Cron::Service do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "raises when sandbox enabled but workspace is missing" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(
+        store_path: tmp / "cron.json",
+        sandbox_config: "docker",
+        workspace: nil,
+      )
+
+      job = service.add_job(
+        name: "exec_no_ws",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo test"
+      )
+
+      service.run_job(job.id, force: true)
+
+      jobs = service.list_jobs
+      jobs.first.state.last_status.should eq(Autobot::Cron::JobStatus::Error)
+      jobs.first.state.last_error.to_s.should contain("no workspace configured")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "runs exec job directly when sandbox is disabled" do
+      tmp = TestHelper.tmp_dir
+      exec_output = nil
+
+      on_exec = ->(_job : Autobot::Cron::CronJob, output : String) do
+        exec_output = output
+        nil
+      end
+
+      service = Autobot::Cron::Service.new(
+        store_path: tmp / "cron.json",
+        on_exec: on_exec,
+        sandbox_config: "none",
+      )
+
+      job = service.add_job(
+        name: "exec_direct",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo 'direct execution'"
+      )
+
+      service.run_job(job.id, force: true)
+
+      exec_output.should eq("direct execution")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "does not call on_job for exec jobs" do
       tmp = TestHelper.tmp_dir
       on_job_called = false

@@ -2,6 +2,7 @@ require "json"
 require "uuid"
 require "cron_parser"
 require "./types"
+require "../tools/sandbox"
 
 module Autobot
   module Cron
@@ -18,12 +19,20 @@ module Autobot
       @store_path : Path
       @on_job : JobCallback?
       @on_exec : ExecCallback?
+      @workspace : Path?
+      @sandbox_config : String
       @store : CronStore?
       @running : Bool = false
       @timer_generation : Int64 = 0
       @store_mtime : Time? = nil
 
-      def initialize(@store_path : Path, @on_job : JobCallback? = nil, @on_exec : ExecCallback? = nil)
+      def initialize(
+        @store_path : Path,
+        @on_job : JobCallback? = nil,
+        @on_exec : ExecCallback? = nil,
+        @workspace : Path? = nil,
+        @sandbox_config : String = "none",
+      )
       end
 
       # Start the cron service timer loop.
@@ -401,6 +410,44 @@ module Autobot
         command = job.payload.command
         return "" if command.nil? || command.empty?
 
+        if sandbox_enabled?
+          exec_command_sandboxed(command, job)
+        else
+          exec_command_direct(command, job)
+        end
+      end
+
+      private def sandbox_enabled? : Bool
+        @sandbox_config != "none"
+      end
+
+      private def exec_command_sandboxed(command : String, job : CronJob) : String
+        workspace = @workspace
+        raise "Sandbox is enabled but no workspace configured for cron exec" unless workspace
+
+        full_command = build_sandboxed_command(command, job)
+        status, stdout, stderr = Tools::Sandbox.exec(
+          full_command, workspace,
+          timeout: EXEC_TIMEOUT.total_seconds.to_i,
+        )
+
+        unless status.success?
+          raise "command exited with #{status.exit_code}: #{stderr.strip}"
+        end
+
+        stdout.strip
+      end
+
+      private def build_sandboxed_command(command : String, job : CronJob) : String
+        if prev = job.state.last_output
+          escaped = Tools::Sandbox.shell_escape(prev)
+          "export PREV_OUTPUT=#{escaped}; #{command}"
+        else
+          command
+        end
+      end
+
+      private def exec_command_direct(command : String, job : CronJob) : String
         env = {} of String => String
         if prev = job.state.last_output
           env["PREV_OUTPUT"] = prev
@@ -416,8 +463,7 @@ module Autobot
         )
 
         unless status.success?
-          err_msg = error.to_s.strip
-          raise "command exited with #{status.exit_code}: #{err_msg}"
+          raise "command exited with #{status.exit_code}: #{error.to_s.strip}"
         end
 
         output.to_s.strip

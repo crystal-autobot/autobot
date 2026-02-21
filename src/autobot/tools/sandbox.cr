@@ -31,6 +31,9 @@ module Autobot
       # Test override for sandbox detection (set to nil to use real detection)
       class_property detect_override : Type? = nil
 
+      # Custom Docker image (set from config at startup)
+      class_property docker_image : String? = nil
+
       # Detect available sandbox tool
       def self.detect : Type
         if override = @@detect_override
@@ -137,7 +140,7 @@ module Autobot
           "--network", "bridge",
           "--memory", DOCKER_MEMORY_LIMIT,
           "--cpus", DOCKER_CPU_LIMIT,
-          DOCKER_DEFAULT_IMAGE,
+          @@docker_image || DOCKER_DEFAULT_IMAGE,
           "sh", "-c", command,
         ]
 

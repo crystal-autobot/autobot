@@ -52,6 +52,9 @@ module Autobot
         tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config, verbose: true)
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
+        if img = config.tools.try(&.docker_image)
+          Tools::Sandbox.docker_image = img
+        end
         log_sandbox_info(sandbox_config)
 
         {tool_registry, plugin_registry, mcp_clients}
@@ -88,7 +91,14 @@ module Autobot
           end
         end
 
-        cron_service = Cron::Service.new(cron_store_path, on_job: on_job, on_exec: on_exec)
+        sandbox_config = config.tools.try(&.sandbox) || "auto"
+        cron_service = Cron::Service.new(
+          cron_store_path,
+          on_job: on_job,
+          on_exec: on_exec,
+          workspace: config.workspace_path,
+          sandbox_config: sandbox_config,
+        )
         cron_service.start
 
         cron_jobs = cron_service.list_jobs.size
