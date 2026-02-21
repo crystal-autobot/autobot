@@ -25,18 +25,21 @@ private class TestableTelegramChannel < Autobot::Channels::TelegramChannel
   end
 end
 
+# Text long enough to trigger the initial streaming message.
+private def streaming_text : String
+  "a" * Autobot::Channels::TelegramStreamingSession::MIN_INITIAL_LENGTH
+end
+
 describe "Telegram streaming finalization" do
   describe "send_message with active streaming session" do
     it "edits the streamed message with formatted HTML" do
       bus = Autobot::Bus::MessageBus.new(capacity: 10)
       channel = TestableTelegramChannel.new(bus)
 
-      # Create a streaming session and feed deltas
       callback = channel.create_stream_callback("chat1")
       callback.should_not be_nil
-      callback.try(&.call("Hello **world**"))
+      callback.try(&.call(streaming_text))
 
-      # send_message should finalize by editing the streamed message
       message = Autobot::Bus::OutboundMessage.new(
         channel: "telegram",
         chat_id: "chat1",
@@ -63,7 +66,7 @@ describe "Telegram streaming finalization" do
       channel = TestableTelegramChannel.new(bus)
 
       callback = channel.create_stream_callback("chat1")
-      callback.try(&.call("Start"))
+      callback.try(&.call(streaming_text))
 
       # Build content with paragraphs exceeding Telegram max (4096 chars)
       paragraphs = (1..25).map { |i| "Paragraph #{i}: " + "a" * 200 }
@@ -89,8 +92,6 @@ describe "Telegram streaming finalization" do
       bus = Autobot::Bus::MessageBus.new(capacity: 10)
       channel = TestableTelegramChannel.new(bus)
 
-      # Override to fail on HTML edits (first editMessageText returns nil)
-      # We test this by verifying both edit attempts are made
       message = Autobot::Bus::OutboundMessage.new(
         channel: "telegram",
         chat_id: "chat1",
@@ -98,7 +99,7 @@ describe "Telegram streaming finalization" do
       )
 
       callback = channel.create_stream_callback("chat1")
-      callback.try(&.call("Hello"))
+      callback.try(&.call(streaming_text))
       channel.send_message(message)
 
       # Verify the flow completed (sendMessage + at least one editMessageText)
@@ -148,6 +149,27 @@ describe "Telegram streaming finalization" do
       methods.should_not contain("editMessageText")
       methods.should contain("sendMessage")
     end
+
+    it "sends normally when streaming deltas were below threshold" do
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      channel = TestableTelegramChannel.new(bus)
+
+      # Create session but send short delta (below MIN_INITIAL_LENGTH)
+      callback = channel.create_stream_callback("chat1")
+      callback.try(&.call("Short"))
+
+      message = Autobot::Bus::OutboundMessage.new(
+        channel: "telegram",
+        chat_id: "chat1",
+        content: "Full response text here",
+      )
+      channel.send_message(message)
+
+      # No initial streaming message was sent (below threshold), so regular delivery
+      methods = channel.api_calls.map(&.[0])
+      methods.should_not contain("editMessageText")
+      methods.should contain("sendMessage")
+    end
   end
 
   describe "create_stream_callback" do
@@ -164,16 +186,16 @@ describe "Telegram streaming finalization" do
       channel = TestableTelegramChannel.new(bus)
 
       callback1 = channel.create_stream_callback("chat1")
-      callback1.try(&.call("First"))
+      callback1.try(&.call(streaming_text))
 
       # Creating a new session should deactivate the old one
       callback2 = channel.create_stream_callback("chat1")
       callback2.should_not be_nil
 
       # Old callback should be deactivated — deltas are silently dropped
-      callback1.try(&.call("Should be ignored"))
+      callback1.try(&.call(streaming_text))
 
-      # Only the first "First" sendMessage should have been called,
+      # Only the first sendMessage should have been called,
       # the second call is silently dropped due to deactivation
       send_calls = channel.api_calls.select { |call| call[0] == "sendMessage" }
       send_calls.size.should eq(1)

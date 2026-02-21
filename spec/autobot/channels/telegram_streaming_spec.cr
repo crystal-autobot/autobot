@@ -37,6 +37,11 @@ private def build_session(
   end
 end
 
+# Text long enough to trigger the initial message send.
+private def initial_text : String
+  "a" * Autobot::Channels::TelegramStreamingSession::MIN_INITIAL_LENGTH
+end
+
 describe Autobot::Channels::TelegramStreamingSession do
   describe "#message_id" do
     it "is nil before first delta" do
@@ -53,22 +58,31 @@ describe Autobot::Channels::TelegramStreamingSession do
   end
 
   describe "#on_delta" do
-    it "sends initial message on first call" do
+    it "buffers short deltas without sending" do
       api_calls = [] of {String, Hash(String, String)}
       session = build_session(api_calls: api_calls)
 
-      session.on_delta("Hello")
+      session.on_delta("Hi")
+
+      api_calls.size.should eq(0)
+      session.message_id.should be_nil
+    end
+
+    it "sends initial message once buffer reaches threshold" do
+      api_calls = [] of {String, Hash(String, String)}
+      session = build_session(api_calls: api_calls)
+
+      session.on_delta(initial_text)
 
       api_calls.size.should eq(1)
       api_calls[0][0].should eq("sendMessage")
       api_calls[0][1]["chat_id"].should eq("123")
-      api_calls[0][1]["text"].should eq("Hello")
     end
 
     it "sets message_id from API response" do
       session = build_session
 
-      session.on_delta("Hello")
+      session.on_delta(initial_text)
 
       session.message_id.should eq(42_i64)
     end
@@ -78,16 +92,16 @@ describe Autobot::Channels::TelegramStreamingSession do
       api_calls = [] of {String, Hash(String, String)}
       session = build_session(api_calls: api_calls, clock: clock)
 
-      session.on_delta("Hello")
+      session.on_delta(initial_text)
       clock.advance(2.seconds)
       session.on_delta(" world")
 
       api_calls[0][0].should eq("sendMessage")
-      api_calls[0][1]["text"].should eq("Hello")
+      api_calls[0][1]["text"].should eq(initial_text)
 
       api_calls.size.should eq(2)
       api_calls[1][0].should eq("editMessageText")
-      api_calls[1][1]["text"].should eq("Hello world")
+      api_calls[1][1]["text"].should eq("#{initial_text} world")
     end
 
     it "throttles edits within throttle period" do
@@ -95,7 +109,7 @@ describe Autobot::Channels::TelegramStreamingSession do
       api_calls = [] of {String, Hash(String, String)}
       session = build_session(api_calls: api_calls, clock: clock)
 
-      session.on_delta("Hello")
+      session.on_delta(initial_text)
       # Don't advance clock — still within throttle period
       session.on_delta(" world")
 
@@ -108,19 +122,18 @@ describe Autobot::Channels::TelegramStreamingSession do
       api_calls = [] of {String, Hash(String, String)}
       session = build_session(api_calls: api_calls, clock: clock)
 
-      session.on_delta("Hello")
-      # Throttled — no edit
+      session.on_delta(initial_text)
       session.on_delta(" world")
+
       edit_calls = api_calls.select { |call| call[0] == "editMessageText" }
       edit_calls.size.should eq(0)
 
-      # Advance past throttle and send another delta
       clock.advance(1.5.seconds)
       session.on_delta("!")
 
       edit_calls = api_calls.select { |call| call[0] == "editMessageText" }
       edit_calls.size.should eq(1)
-      edit_calls[0][1]["text"].should eq("Hello world!")
+      edit_calls[0][1]["text"].should eq("#{initial_text} world!")
     end
 
     it "does not send empty text on empty delta" do
@@ -153,7 +166,7 @@ describe Autobot::Channels::TelegramStreamingSession do
       api_calls = [] of {String, Hash(String, String)}
       session = build_session(api_calls: api_calls, clock: clock)
 
-      session.on_delta("Hello")
+      session.on_delta(initial_text)
       session.deactivate
       clock.advance(2.seconds)
       session.on_delta(" world")
@@ -168,7 +181,7 @@ describe Autobot::Channels::TelegramStreamingSession do
       api_calls = [] of {String, Hash(String, String)}
       session = build_session(api_calls: api_calls, clock: clock)
 
-      session.on_delta("A")
+      session.on_delta(initial_text)
       clock.advance(1.5.seconds)
       session.on_delta("B")
       clock.advance(1.5.seconds)
@@ -179,8 +192,24 @@ describe Autobot::Channels::TelegramStreamingSession do
 
       send_calls.size.should eq(1)
       edit_calls.size.should eq(2)
-      edit_calls[0][1]["text"].should eq("AB")
-      edit_calls[1][1]["text"].should eq("ABC")
+      edit_calls[0][1]["text"].should eq("#{initial_text}B")
+      edit_calls[1][1]["text"].should eq("#{initial_text}BC")
+    end
+
+    it "incremental deltas trigger send once combined length reaches threshold" do
+      api_calls = [] of {String, Hash(String, String)}
+      session = build_session(api_calls: api_calls)
+
+      # Send deltas that individually are below threshold
+      threshold = Autobot::Channels::TelegramStreamingSession::MIN_INITIAL_LENGTH
+      (threshold - 1).times { session.on_delta("x") }
+      api_calls.size.should eq(0)
+
+      # One more character pushes over the threshold
+      session.on_delta("x")
+      api_calls.size.should eq(1)
+      api_calls[0][0].should eq("sendMessage")
+      api_calls[0][1]["text"].should eq("x" * threshold)
     end
   end
 end

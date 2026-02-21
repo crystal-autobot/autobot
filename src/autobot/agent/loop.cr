@@ -373,9 +373,6 @@ module Autobot::Agent
 
         if response.has_tool_calls?
           messages = execute_tool_calls(messages, response, tools_used, session_key)
-          # Only stream the first LLM text generation; subsequent iterations
-          # after tool execution produce a new response that replaces the stream.
-          stream_callback = nil
           break if options.break_on_message && response.tool_calls.any? { |tool| tool.name == "message" }
         else
           final_content = response.content

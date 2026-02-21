@@ -206,9 +206,10 @@ module Autobot::Channels
   # respect Telegram rate limits). The final formatted message is applied
   # by the channel's `send_message` after the LLM response completes.
   class TelegramStreamingSession
-    EDIT_THROTTLE   = 1.second
-    TRUNCATION_TAIL = "..."
-    MAX_PLAIN_TEXT  = MarkdownToTelegramHTML::TELEGRAM_MAX_LENGTH - TRUNCATION_TAIL.size
+    EDIT_THROTTLE      = 1.second
+    TRUNCATION_TAIL    = "..."
+    MAX_PLAIN_TEXT     = MarkdownToTelegramHTML::TELEGRAM_MAX_LENGTH - TRUNCATION_TAIL.size
+    MIN_INITIAL_LENGTH = 40
 
     # Injectable time source for testable throttle behavior.
     alias Clock = Proc(Time)
@@ -234,7 +235,7 @@ module Autobot::Channels
       @accumulated.print(delta)
 
       if @message_id.nil?
-        send_initial_message
+        send_initial_message if @accumulated.size >= MIN_INITIAL_LENGTH
       else
         edit_if_throttle_allows
       end
