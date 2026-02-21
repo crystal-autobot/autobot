@@ -16,6 +16,14 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
     convert_content_for_anthropic(content)
   end
 
+  def test_build_compatible_headers(spec : Autobot::Providers::ProviderSpec? = nil) : HTTP::Headers
+    build_compatible_headers(spec)
+  end
+
+  def test_build_anthropic_headers(spec : Autobot::Providers::ProviderSpec? = nil) : HTTP::Headers
+    build_anthropic_headers(spec)
+  end
+
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
@@ -254,6 +262,83 @@ describe Autobot::Providers::HttpProvider do
       arr[1]["type"].as_s.should eq("image")
       arr[1]["source"]["media_type"].as_s.should eq("image/png")
       arr[1]["source"]["data"].as_s.should eq("cG5nZGF0YQ==")
+    end
+  end
+
+  describe "#build_compatible_headers" do
+    it "includes content-type and user-agent" do
+      provider = TestableHttpProvider.new(api_key: api_key)
+      headers = provider.test_build_compatible_headers
+      headers["Content-Type"].should eq("application/json")
+      headers["User-Agent"].should eq("Autobot/#{Autobot::VERSION}")
+    end
+
+    it "uses bearer token by default" do
+      provider = TestableHttpProvider.new(api_key: "sk-test123")
+      headers = provider.test_build_compatible_headers
+      headers["Authorization"].should eq("Bearer sk-test123")
+    end
+
+    it "uses x-api-key when spec specifies it" do
+      spec = Autobot::Providers::ProviderSpec.new(
+        name: "anthropic",
+        keywords: ["claude"],
+        auth_header: "x-api-key",
+      )
+      provider = TestableHttpProvider.new(api_key: "sk-ant-test")
+      headers = provider.test_build_compatible_headers(spec)
+      headers["x-api-key"].should eq("sk-ant-test")
+    end
+
+    it "includes extra headers" do
+      provider = TestableHttpProvider.new(
+        api_key: api_key,
+        extra_headers: {"X-Custom" => "value", "X-Another" => "test"},
+      )
+      headers = provider.test_build_compatible_headers
+      headers["X-Custom"].should eq("value")
+      headers["X-Another"].should eq("test")
+    end
+
+    it "does not include anthropic-version" do
+      provider = TestableHttpProvider.new(api_key: api_key)
+      headers = provider.test_build_compatible_headers
+      headers.has_key?("anthropic-version").should be_false
+    end
+  end
+
+  describe "#build_anthropic_headers" do
+    it "includes anthropic-version header" do
+      provider = TestableHttpProvider.new(api_key: api_key)
+      headers = provider.test_build_anthropic_headers
+      headers["anthropic-version"].should eq("2023-06-01")
+    end
+
+    it "includes content-type and user-agent" do
+      provider = TestableHttpProvider.new(api_key: api_key)
+      headers = provider.test_build_anthropic_headers
+      headers["Content-Type"].should eq("application/json")
+      headers["User-Agent"].should eq("Autobot/#{Autobot::VERSION}")
+    end
+
+    it "uses x-api-key when spec specifies it" do
+      spec = Autobot::Providers::ProviderSpec.new(
+        name: "anthropic",
+        keywords: ["claude"],
+        auth_header: "x-api-key",
+      )
+      provider = TestableHttpProvider.new(api_key: "sk-ant-key")
+      headers = provider.test_build_anthropic_headers(spec)
+      headers["x-api-key"].should eq("sk-ant-key")
+    end
+
+    it "includes extra headers" do
+      provider = TestableHttpProvider.new(
+        api_key: api_key,
+        extra_headers: {"X-Custom" => "extra"},
+      )
+      headers = provider.test_build_anthropic_headers
+      headers["X-Custom"].should eq("extra")
     end
   end
 end

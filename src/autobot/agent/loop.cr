@@ -249,8 +249,9 @@ module Autobot::Agent
     end
 
     private def log_tool_call(tool_call : Providers::ToolCall) : Nil
+      Log.info { "Tool call: #{tool_call.name}" }
       args_preview = truncate(tool_call.arguments.to_json, LONG_MESSAGE_PREVIEW_LENGTH)
-      Log.debug { "Tool call: #{tool_call.name}(#{args_preview})" }
+      Log.debug { "Tool args: #{tool_call.name}(#{args_preview})" }
     end
 
     private def truncate(text : String, max_length : Int32) : String

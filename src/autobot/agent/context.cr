@@ -243,6 +243,8 @@ module Autobot::Agent
         For delayed/scheduled tasks, use `cron` tool (never `exec sleep`).
 
         Always be helpful, accurate, and concise. When using tools, think step by step.
+        When multiple independent tool calls are needed, make them all in a single response
+        to minimize round trips. Only chain sequentially when one result depends on another.
         When remembering something important, write to memory/MEMORY.md
         To recall past events, grep memory/HISTORY.md
         IDENTITY
