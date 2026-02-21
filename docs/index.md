@@ -51,6 +51,23 @@ Autobot uses **kernel-enforced sandboxing** via Docker or bubblewrap — not app
 
 [Architecture Overview](architecture.md){ .md-button }
 
+## Providers
+
+Autobot works with all major LLM providers — pick the one that fits your needs:
+
+| Provider | Best for |
+|---|---|
+| [Anthropic](anthropic.md) | Claude models via native API |
+| [OpenAI](openai.md) | GPT-5 family, Whisper transcription |
+| [DeepSeek](deepseek.md) | Low-cost, strong reasoning |
+| [Groq](groq.md) | Ultra-fast inference, free tier |
+| [Google Gemini](gemini.md) | Gemini Pro and Flash |
+| [OpenRouter](openrouter.md) | Hundreds of models, one API key |
+| [AWS Bedrock](bedrock.md) | Enterprise, IAM-based access |
+| [vLLM / Local](vllm.md) | Full privacy, self-hosted |
+
+[All providers](providers.md){ .md-button .md-button--primary }
+
 ## Quick Start
 
 ```bash
