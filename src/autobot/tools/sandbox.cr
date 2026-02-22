@@ -137,6 +137,9 @@ module Autobot
         max_output_size : Int32,
       ) : {Process::Status, String, String}
         workspace_real = File.realpath(workspace.to_s)
+        image = @@docker_image || DOCKER_DEFAULT_IMAGE
+
+        ensure_docker_image(image)
 
         docker_args = [
           "run",
@@ -146,12 +149,35 @@ module Autobot
           "--network", "bridge",
           "--memory", DOCKER_MEMORY_LIMIT,
           "--cpus", DOCKER_CPU_LIMIT,
-          @@docker_image || DOCKER_DEFAULT_IMAGE,
+          image,
           "sh", "-c", command,
         ]
 
         Log.debug { "Executing in Docker: #{command}" }
         run_sandboxed_command("docker", docker_args, timeout, max_output_size)
+      end
+
+      # Pulls the Docker image if not available locally.
+      private def self.ensure_docker_image(image : String) : Nil
+        return if docker_image_exists?(image)
+
+        Log.info { "Pulling Docker image: #{image}" }
+        status = Process.run("docker", ["pull", image],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close)
+        if status.success?
+          Log.info { "Docker image pulled: #{image}" }
+        else
+          Log.warn { "Failed to pull Docker image: #{image}" }
+        end
+      end
+
+      private def self.docker_image_exists?(image : String) : Bool
+        Process.run("docker", ["image", "inspect", image],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close).success?
+      rescue
+        false
       end
 
       private def self.run_sandboxed_command(
