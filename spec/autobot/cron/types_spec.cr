@@ -1,5 +1,13 @@
 require "../../spec_helper"
 
+describe Autobot::Cron do
+  describe ".owner_key" do
+    it "builds channel:chat_id format" do
+      Autobot::Cron.owner_key("telegram", "12345").should eq("telegram:12345")
+    end
+  end
+end
+
 describe Autobot::Cron::CronSchedule do
   it "creates an every-interval schedule" do
     schedule = Autobot::Cron::CronSchedule.new(

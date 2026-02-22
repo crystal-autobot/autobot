@@ -553,8 +553,7 @@ module Autobot::Channels
         return
       end
 
-      owner_key = "telegram:#{chat_id}"
-      jobs = cron.list_jobs(owner: owner_key)
+      jobs = cron.list_jobs(owner: Cron.owner_key("telegram", chat_id))
 
       if jobs.empty?
         send_reply(chat_id, "No scheduled jobs.\n\nAsk me in chat to schedule something.")

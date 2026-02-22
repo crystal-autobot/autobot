@@ -185,7 +185,7 @@ module Autobot
 
       private def owner_context : String?
         return nil if @channel.empty? || @chat_id.empty?
-        "#{@channel}:#{@chat_id}"
+        Cron.owner_key(@channel, @chat_id)
       end
 
       private def derive_job_name(params : Hash(String, JSON::Any), message : String) : String

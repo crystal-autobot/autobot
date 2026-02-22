@@ -2,6 +2,12 @@ require "json"
 
 module Autobot
   module Cron
+    # Build a canonical owner key from channel and chat_id.
+    # Used for job ownership across CronTool and channel commands.
+    def self.owner_key(channel : String, chat_id : String) : String
+      "#{channel}:#{chat_id}"
+    end
+
     enum ScheduleKind
       At    # One-time at a specific timestamp
       Every # Recurring interval
