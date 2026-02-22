@@ -103,7 +103,8 @@ module Autobot::Agent
 
       usage = response.usage
       unless usage.zero?
-        Log.info { "Tokens: prompt=#{usage.prompt_tokens} completion=#{usage.completion_tokens} total=#{usage.total_tokens}" }
+        cache_info = usage.cached? ? " cache_create=#{usage.cache_creation_tokens} cache_read=#{usage.cache_read_tokens}" : ""
+        Log.info { "Tokens: prompt=#{usage.prompt_tokens} completion=#{usage.completion_tokens} total=#{usage.total_tokens}#{cache_info}" }
       end
 
       response

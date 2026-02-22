@@ -16,6 +16,18 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
     convert_content_for_anthropic(content)
   end
 
+  def test_build_anthropic_system_block(text : String) : Array(JSON::Any)
+    build_anthropic_system_block(text)
+  end
+
+  def test_convert_tools_to_anthropic(tools, cache : Bool = false) : Array(JSON::Any)
+    convert_tools_to_anthropic(tools, cache: cache)
+  end
+
+  def test_parse_anthropic_response(body : String) : Autobot::Providers::Response
+    parse_anthropic_response(body)
+  end
+
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
@@ -201,6 +213,85 @@ describe Autobot::Providers::HttpProvider do
       response = provider.test_parse_compatible_response(body)
       response.has_tool_calls?.should be_true
       response.tool_calls.first.extra_content.should be_nil
+    end
+  end
+
+  describe "prompt caching" do
+    provider = TestableHttpProvider.new(api_key: api_key)
+
+    it "adds cache_control to system prompt block" do
+      blocks = provider.test_build_anthropic_system_block("You are a helpful assistant.")
+      blocks.size.should eq(1)
+
+      block = blocks[0]
+      block["type"].as_s.should eq("text")
+      block["text"].as_s.should eq("You are a helpful assistant.")
+      block["cache_control"]["type"].as_s.should eq("ephemeral")
+    end
+
+    it "adds cache_control to last tool definition when cache enabled" do
+      tools = [
+        JSON::Any.new({
+          "type"     => JSON::Any.new("function"),
+          "function" => JSON::Any.new({
+            "name"        => JSON::Any.new("read_file"),
+            "description" => JSON::Any.new("Read a file"),
+            "parameters"  => JSON::Any.new({} of String => JSON::Any),
+          } of String => JSON::Any),
+        } of String => JSON::Any),
+        JSON::Any.new({
+          "type"     => JSON::Any.new("function"),
+          "function" => JSON::Any.new({
+            "name"        => JSON::Any.new("exec"),
+            "description" => JSON::Any.new("Execute command"),
+            "parameters"  => JSON::Any.new({} of String => JSON::Any),
+          } of String => JSON::Any),
+        } of String => JSON::Any),
+      ]
+
+      result = provider.test_convert_tools_to_anthropic(tools, cache: true)
+      result.size.should eq(2)
+
+      # First tool should not have cache_control
+      result[0]["cache_control"]?.should be_nil
+
+      # Last tool should have cache_control
+      result[1]["cache_control"]["type"].as_s.should eq("ephemeral")
+    end
+
+    it "does not add cache_control when cache is false" do
+      tools = [
+        JSON::Any.new({
+          "type"     => JSON::Any.new("function"),
+          "function" => JSON::Any.new({
+            "name"        => JSON::Any.new("echo"),
+            "description" => JSON::Any.new("Echo"),
+            "parameters"  => JSON::Any.new({} of String => JSON::Any),
+          } of String => JSON::Any),
+        } of String => JSON::Any),
+      ]
+
+      result = provider.test_convert_tools_to_anthropic(tools, cache: false)
+      result[0]["cache_control"]?.should be_nil
+    end
+
+    it "parses cache tokens from Anthropic usage" do
+      body = %({"type":"message","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":80,"cache_read_input_tokens":20}})
+      response = provider.test_parse_anthropic_response(body)
+
+      response.usage.prompt_tokens.should eq(100)
+      response.usage.cache_creation_tokens.should eq(80)
+      response.usage.cache_read_tokens.should eq(20)
+      response.usage.cached?.should be_true
+    end
+
+    it "handles missing cache tokens gracefully" do
+      body = %({"type":"message","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":50,"output_tokens":25}})
+      response = provider.test_parse_anthropic_response(body)
+
+      response.usage.cache_creation_tokens.should eq(0)
+      response.usage.cache_read_tokens.should eq(0)
+      response.usage.cached?.should be_false
     end
   end
 

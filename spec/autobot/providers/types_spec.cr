@@ -31,6 +31,28 @@ describe Autobot::Providers::TokenUsage do
     parsed = Autobot::Providers::TokenUsage.from_json(json)
     parsed.total_tokens.should eq(30)
   end
+
+  it "tracks cache tokens" do
+    usage = Autobot::Providers::TokenUsage.new(
+      prompt_tokens: 100,
+      completion_tokens: 50,
+      total_tokens: 150,
+      cache_creation_tokens: 80,
+      cache_read_tokens: 0,
+    )
+    usage.cache_creation_tokens.should eq(80)
+    usage.cache_read_tokens.should eq(0)
+    usage.cached?.should be_true
+  end
+
+  it "reports not cached when no cache tokens" do
+    usage = Autobot::Providers::TokenUsage.new(
+      prompt_tokens: 100,
+      completion_tokens: 50,
+      total_tokens: 150,
+    )
+    usage.cached?.should be_false
+  end
 end
 
 describe Autobot::Providers::ToolCall do
