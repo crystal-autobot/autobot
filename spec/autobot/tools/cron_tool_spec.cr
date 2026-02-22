@@ -202,6 +202,25 @@ describe Autobot::Tools::CronTool do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "rejects past at timestamp" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      past = (Time.utc - 1.hour).to_rfc3339
+      result = tool.execute({
+        "action"  => JSON::Any.new("add"),
+        "message" => JSON::Any.new("Past reminder"),
+        "at"      => JSON::Any.new(past),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("at must be in the future")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "rejects negative every_seconds" do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")

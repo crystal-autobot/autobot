@@ -202,6 +202,13 @@ describe Autobot::Cron::ScheduleBuilder do
     end
   end
 
+  it "raises on past at timestamp" do
+    past = (Time.utc - 1.hour).to_rfc3339
+    expect_raises(ArgumentError, /at must be in the future/) do
+      Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: nil, at: past)
+    end
+  end
+
   it "prefers every_seconds over other params" do
     result = Autobot::Cron::ScheduleBuilder.build(every_seconds: 60_i64, cron_expr: "0 9 * * *", at: nil)
     if r = result
