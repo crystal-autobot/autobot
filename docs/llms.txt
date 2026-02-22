@@ -1,6 +1,6 @@
 # Autobot
 
-> Ultra-efficient personal AI assistant powered by Crystal. 2MB binary, ~5MB RAM, <10ms startup, zero runtime dependencies.
+> Ultra-efficient personal AI assistant powered by Crystal. 2MB binary, ~5MB RAM, <20ms startup, zero runtime dependencies.
 
 Autobot is a multi-provider AI assistant that runs as a Telegram/Slack/WhatsApp bot or CLI agent. Built in Crystal with kernel-enforced sandboxing (Docker/bubblewrap), it supports multiple LLM providers, vision, voice transcription, memory, cron scheduling, MCP servers, and plugins.
 
