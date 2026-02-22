@@ -151,6 +151,19 @@ module Autobot::Channels
           Log.info { "WhatsApp channel enabled" }
         end
       end
+
+      if zulip_config = channels_config.zulip
+        if zulip_config.enabled?
+          @channels["zulip"] = ZulipChannel.new(
+            bus: @bus,
+            site: zulip_config.site,
+            email: zulip_config.email,
+            api_key: zulip_config.api_key,
+            allow_from: zulip_config.allow_from,
+          )
+          Log.info { "Zulip channel enabled" }
+        end
+      end
     end
 
     # Dispatch outbound messages from the bus to the appropriate channel.

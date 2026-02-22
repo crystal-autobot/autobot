@@ -119,11 +119,24 @@ module Autobot::Config
     end
   end
 
+  class ZulipConfig
+    include YAML::Serializable
+    property? enabled : Bool = false
+    property site : String = ""
+    property email : String = ""
+    property api_key : String = ""
+    property allow_from : Array(String) = [] of String
+
+    def initialize
+    end
+  end
+
   class ChannelsConfig
     include YAML::Serializable
     property telegram : TelegramConfig?
     property slack : SlackConfig?
     property whatsapp : WhatsAppConfig?
+    property zulip : ZulipConfig?
 
     def initialize
     end

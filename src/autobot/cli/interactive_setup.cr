@@ -18,6 +18,7 @@ module Autobot
         "telegram" => "Telegram",
         "slack"    => "Slack",
         "whatsapp" => "WhatsApp",
+        "zulip"    => "Zulip",
       }
 
       # Configuration collected from user
@@ -32,6 +33,9 @@ module Autobot
         property aws_access_key_id : String?
         property aws_secret_access_key : String?
         property aws_region : String?
+        property zulip_site : String?
+        property zulip_email : String?
+        property zulip_api_key : String?
 
         def initialize(
           @provider : String,
@@ -44,6 +48,9 @@ module Autobot
           @aws_access_key_id = nil,
           @aws_secret_access_key = nil,
           @aws_region = nil,
+          @zulip_site = nil,
+          @zulip_email = nil,
+          @zulip_api_key = nil,
         )
         end
       end
@@ -235,6 +242,20 @@ module Autobot
           output.flush
           url = input.gets.try(&.strip) || ""
           config.whatsapp_bridge_url = url.empty? ? "ws://localhost:3001" : url
+          output.puts "  ✓ Configured\n"
+        when "zulip"
+          output.puts "━" * 50
+          output.puts "Zulip Configuration"
+          output.puts ""
+          output.print "  Zulip Site URL (e.g. https://zulip.example.com): "
+          output.flush
+          config.zulip_site = input.gets.try(&.strip) || ""
+          output.print "  Bot Email: "
+          output.flush
+          config.zulip_email = input.gets.try(&.strip) || ""
+          output.print "  API Key: "
+          output.flush
+          config.zulip_api_key = input.gets.try(&.strip) || ""
           output.puts "  ✓ Configured\n"
         end
       end

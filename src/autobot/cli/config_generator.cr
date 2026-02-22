@@ -28,6 +28,16 @@ module Autobot
               if token = config.slack_app_token
                 lines << "SLACK_APP_TOKEN=#{token}" if !token.empty?
               end
+            when "zulip"
+              if site = config.zulip_site
+                lines << "ZULIP_SITE=#{site}" if !site.empty?
+              end
+              if email = config.zulip_email
+                lines << "ZULIP_EMAIL=#{email}" if !email.empty?
+              end
+              if api_key = config.zulip_api_key
+                lines << "ZULIP_API_KEY=#{api_key}" if !api_key.empty?
+              end
             end
           end
 
@@ -132,6 +142,13 @@ module Autobot
           lines << "    enabled: true"
           lines << "    bridge_url: \"#{config.whatsapp_bridge_url || "ws://localhost:3001"}\""
           lines << "    allow_from: []  # Add phone numbers to enable"
+        when "zulip"
+          lines << "  zulip:"
+          lines << "    enabled: true"
+          lines << "    site: \"${ZULIP_SITE}\""
+          lines << "    email: \"${ZULIP_EMAIL}\""
+          lines << "    api_key: \"${ZULIP_API_KEY}\""
+          lines << "    allow_from: []  # Add user emails to enable"
         end
 
         lines
