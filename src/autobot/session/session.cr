@@ -32,7 +32,7 @@ module Autobot
 
     # A conversation session that stores messages in JSONL format.
     class Session
-      DEFAULT_MAX_HISTORY = 50
+      DEFAULT_MAX_HISTORY = 25
 
       property key : String
       property messages : Array(Message)

@@ -39,9 +39,9 @@ Fetches a URL and extracts readable text content. Supports HTML (with tag stripp
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `url` | string | yes | URL to fetch (http/https only) |
-| `maxChars` | integer | no | Max content chars to return (default: 50,000) |
+| `maxChars` | integer | no | Max content chars to return (default: 20,000) |
 
-**Returns:** JSON with URL, status code, extracted text, and metadata.
+**Returns:** Plain text with URL header and extracted content. Includes truncation notice when content exceeds `maxChars`.
 
 **Features:**
 
