@@ -160,10 +160,12 @@ module Autobot
           "temperature" => JSON::Any.new(temperature),
         } of String => JSON::Any
 
-        body["system"] = JSON::Any.new(system_text) unless system_text.empty?
+        unless system_text.empty?
+          body["system"] = JSON::Any.new(build_anthropic_system_block(system_text))
+        end
 
         if tools && !tools.empty?
-          body["tools"] = JSON::Any.new(convert_tools_to_anthropic(tools))
+          body["tools"] = JSON::Any.new(convert_tools_to_anthropic(tools, cache: true))
           body["tool_choice"] = JSON::Any.new({"type" => JSON::Any.new("auto")} of String => JSON::Any)
         end
 
@@ -175,6 +177,20 @@ module Autobot
           .select { |message| message["role"]?.try(&.as_s?) == Constants::ROLE_SYSTEM }
           .compact_map { |message| message["content"]?.try(&.as_s?) }
           .join("\n\n")
+      end
+
+      # Build system prompt as a content block array with cache_control.
+      # Anthropic's prompt caching caches everything up to and including
+      # the block marked with cache_control, avoiding re-processing of
+      # the static system prompt on subsequent calls.
+      private def build_anthropic_system_block(text : String) : Array(JSON::Any)
+        [
+          JSON::Any.new({
+            "type"          => JSON::Any.new("text"),
+            "text"          => JSON::Any.new(text),
+            "cache_control" => JSON::Any.new({"type" => JSON::Any.new("ephemeral")} of String => JSON::Any),
+          } of String => JSON::Any),
+        ]
       end
 
       private def convert_to_anthropic_messages(messages) : Array(JSON::Any)
@@ -292,8 +308,11 @@ module Autobot
         end
       end
 
-      private def convert_tools_to_anthropic(tools) : Array(JSON::Any)
-        tools.map do |tool_def|
+      # Convert tool definitions to Anthropic format.
+      # When `cache` is true, adds cache_control to the last tool so the
+      # entire tool definition block is cached along with the system prompt.
+      private def convert_tools_to_anthropic(tools, cache : Bool = false) : Array(JSON::Any)
+        converted = tools.map do |tool_def|
           func = tool_def["function"]?
           next JSON::Any.new(nil) unless func
           JSON::Any.new({
@@ -302,6 +321,22 @@ module Autobot
             "input_schema" => func["parameters"]? || JSON::Any.new({} of String => JSON::Any),
           } of String => JSON::Any)
         end
+
+        if cache && !converted.empty?
+          apply_cache_control_to_last(converted)
+        end
+
+        converted
+      end
+
+      # Mark the last element with cache_control for Anthropic prompt caching.
+      private def apply_cache_control_to_last(items : Array(JSON::Any)) : Nil
+        last_item = items.last
+        return unless hash = last_item.as_h?
+
+        updated = hash.dup
+        updated["cache_control"] = JSON::Any.new({"type" => JSON::Any.new("ephemeral")} of String => JSON::Any)
+        items[-1] = JSON::Any.new(updated)
       end
 
       private def parse_anthropic_response(body : String) : Response
@@ -491,10 +526,14 @@ module Autobot
         return TokenUsage.new unless node
         input = node["input_tokens"]?.try(&.as_i?) || 0
         output = node["output_tokens"]?.try(&.as_i?) || 0
+        cache_creation = node["cache_creation_input_tokens"]?.try(&.as_i?) || 0
+        cache_read = node["cache_read_input_tokens"]?.try(&.as_i?) || 0
         TokenUsage.new(
           prompt_tokens: input,
           completion_tokens: output,
           total_tokens: input + output,
+          cache_creation_tokens: cache_creation,
+          cache_read_tokens: cache_read,
         )
       end
 

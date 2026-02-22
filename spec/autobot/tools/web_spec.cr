@@ -140,11 +140,8 @@ describe Autobot::Tools::WebFetchTool do
 
       result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
       result.success?.should be_true
-
-      parsed = JSON.parse(result.content)
-      parsed["status"].as_i.should eq(200)
-      parsed["extractor"].as_s.should eq("html")
-      parsed["text"].as_s.should contain("Example Domain")
+      result.content.should contain("[https://example.com]")
+      result.content.should contain("Example Domain")
     end
   end
 
@@ -154,9 +151,7 @@ describe Autobot::Tools::WebFetchTool do
 
       result = tool.execute({"url" => JSON::Any.new("http://example.com")} of String => JSON::Any)
       result.success?.should be_true
-
-      parsed = JSON.parse(result.content)
-      parsed["status"].as_i.should eq(200)
+      result.content.should contain("[http://example.com]")
     end
   end
 
@@ -167,11 +162,9 @@ describe Autobot::Tools::WebFetchTool do
       result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
       result.success?.should be_true
 
-      parsed = JSON.parse(result.content)
-      text = parsed["text"].as_s
-      text.should_not contain("<html")
-      text.should_not contain("<body")
-      text.should contain("Example Domain")
+      result.content.should_not contain("<html")
+      result.content.should_not contain("<body")
+      result.content.should contain("Example Domain")
     end
 
     it "respects maxChars limit" do
@@ -182,10 +175,7 @@ describe Autobot::Tools::WebFetchTool do
         "maxChars" => JSON::Any.new(100_i64),
       } of String => JSON::Any)
       result.success?.should be_true
-
-      parsed = JSON.parse(result.content)
-      parsed["truncated"].as_bool.should be_true
-      parsed["length"].as_i.should eq(100)
+      result.content.should contain("truncated to 100 chars")
     end
   end
 

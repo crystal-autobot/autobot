@@ -147,4 +147,29 @@ describe Autobot::Tools::Registry do
     defs = registry.definitions(exclude: nil)
     defs.size.should eq(2)
   end
+
+  it "returns compact schemas for specified tools" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(DummyTool.new)
+    registry.register(FailingTool.new)
+
+    defs = registry.definitions(compact: ["dummy"])
+    defs.size.should eq(2)
+
+    # Compact tool: no description
+    dummy_def = defs.find! { |definition| definition["function"]["name"].as_s == "dummy" }
+    dummy_def["function"]["description"]?.should be_nil
+
+    # Non-compact tool: has description
+    failing_def = defs.find! { |definition| definition["function"]["name"].as_s == "failing" }
+    failing_def["function"]["description"].as_s.should eq("A tool that always fails")
+  end
+
+  it "returns full schemas when compact is nil" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(DummyTool.new)
+
+    defs = registry.definitions(compact: nil)
+    defs[0]["function"]["description"].as_s.should eq("A dummy tool for testing")
+  end
 end

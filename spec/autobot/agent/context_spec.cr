@@ -6,6 +6,22 @@ describe Autobot::Agent::Context::Builder do
   after_all { FileUtils.rm_rf(workspace) }
 
   describe "#build_messages" do
+    it "produces a compact system prompt" do
+      builder = Autobot::Agent::Context::Builder.new(workspace)
+      messages = builder.build_messages(
+        history: [] of Hash(String, String),
+        current_message: "Hello"
+      )
+
+      system_prompt = messages.first["content"].as_s
+      system_prompt.should contain("autobot")
+      system_prompt.should contain("Workspace:")
+      # Compressed prompt should not contain the verbose tool list
+      system_prompt.should_not contain("You have access to tools that allow you to:")
+      # Should contain concise rules
+      system_prompt.should contain("Batch independent tool calls")
+    end
+
     it "builds text-only content when no media data" do
       builder = Autobot::Agent::Context::Builder.new(workspace)
       messages = builder.build_messages(

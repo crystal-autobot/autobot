@@ -58,6 +58,49 @@ describe Autobot::Tools::ToolSchema do
   end
 end
 
+# Simple tool for schema tests.
+class SchemaDemoTool < Autobot::Tools::Tool
+  def name : String
+    "demo"
+  end
+
+  def description : String
+    "A demo tool for testing schema output"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new(
+      properties: {"input" => Autobot::Tools::PropertySchema.new(type: "string", description: "Input text")},
+      required: ["input"],
+    )
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.success("ok")
+  end
+end
+
+describe "Tool#to_compact_schema" do
+  it "omits description from compact schema" do
+    tool = SchemaDemoTool.new
+    schema = tool.to_compact_schema
+    func = schema["function"]
+
+    func["name"].as_s.should eq("demo")
+    func["parameters"].should_not be_nil
+    func["description"]?.should be_nil
+  end
+
+  it "includes full description in regular schema" do
+    tool = SchemaDemoTool.new
+    schema = tool.to_schema
+    func = schema["function"]
+
+    func["name"].as_s.should eq("demo")
+    func["description"].as_s.should eq("A demo tool for testing schema output")
+  end
+end
+
 describe Autobot::Tools::PropertySchema do
   describe "#validate" do
     it "validates string type" do

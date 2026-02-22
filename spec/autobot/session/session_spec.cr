@@ -53,6 +53,17 @@ describe Autobot::Session::Session do
       history[0]["content"].should eq("msg50")
       history[9]["content"].should eq("msg59")
     end
+
+    it "uses default max history of 25" do
+      Autobot::Session::Session::DEFAULT_MAX_HISTORY.should eq(25)
+
+      session = Autobot::Session::Session.new(key: "test:1")
+      40.times { |i| session.add_message("user", "msg#{i}") }
+
+      history = session.get_history
+      history.size.should eq(25)
+      history[0]["content"].should eq("msg15")
+    end
   end
 
   describe "#clear" do
