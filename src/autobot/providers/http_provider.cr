@@ -80,9 +80,7 @@ module Autobot
         apply_auth_headers(headers, spec)
 
         Log.debug { "POST #{url} model=#{model}" }
-        Log.debug { body.to_pretty_json }
         response = http_post(url, headers, body.to_json)
-        Log.debug { response.body }
         parse_compatible_response(response.body)
       end
 
