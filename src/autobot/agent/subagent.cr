@@ -8,6 +8,9 @@ require "../tools/registry"
 require "../tools/filesystem"
 require "../tools/exec"
 require "../tools/web"
+require "../constants"
+require "./context"
+require "./tool_executor"
 
 module Autobot
   module Agent
@@ -19,7 +22,14 @@ module Autobot
     class SubagentManager
       Log = ::Log.for("subagent")
 
-      MAX_ITERATIONS = 15
+      MAX_ITERATIONS   = 15
+      LABEL_MAX_LENGTH = 30
+      TASK_ID_LENGTH   =  8
+
+      enum Status
+        Ok
+        Error
+      end
 
       @provider : Providers::Provider
       @workspace : Path
@@ -39,17 +49,18 @@ module Autobot
         @exec_timeout : Int32 = 60,
         @sandbox_config : String = "auto",
       )
+        @context = Context::Builder.new(@workspace)
       end
 
       # Spawn a subagent to execute a task in the background.
       def spawn(
         task : String,
         label : String? = nil,
-        origin_channel : String = "cli",
-        origin_chat_id : String = "direct",
+        origin_channel : String = Constants::CHANNEL_CLI,
+        origin_chat_id : String = Constants::DEFAULT_CHAT_ID,
       ) : String
-        task_id = UUID.random.to_s[0, 8]
-        display_label = label || (task.size > 30 ? task[0, 30] + "..." : task)
+        task_id = UUID.random.to_s[0, TASK_ID_LENGTH]
+        display_label = label || truncate_label(task)
 
         origin = {"channel" => origin_channel, "chat_id" => origin_chat_id}
 
@@ -78,8 +89,6 @@ module Autobot
         Log.info { "Subagent [#{task_id}] starting task: #{label}" }
 
         begin
-          # Build isolated tool registry (no message or spawn tools)
-          # Uses the same sandbox config as the parent agent
           tools = Tools.create_subagent_registry(
             workspace: @workspace,
             exec_timeout: @exec_timeout,
@@ -87,59 +96,32 @@ module Autobot
             brave_api_key: @brave_api_key,
           )
 
-          # Build messages with subagent-specific prompt
-          system_prompt = build_subagent_prompt(task)
-          messages = [
-            build_message("system", system_prompt),
-            build_message("user", task),
-          ]
+          executor = ToolExecutor.new(
+            provider: @provider,
+            context: @context,
+            model: @model || @provider.default_model,
+            max_iterations: MAX_ITERATIONS
+          )
 
-          # Run agent loop (limited iterations)
-          final_result : String? = nil
+          messages = build_initial_messages(task)
+          result = executor.execute(messages, tools)
 
-          MAX_ITERATIONS.times do |_|
-            response = @provider.chat(
-              messages: messages,
-              tools: tools.definitions,
-              model: @model
-            )
-
-            if response.has_tool_calls?
-              # Add assistant message with tool calls
-              tool_call_dicts = response.tool_calls.map do |tool_call|
-                JSON::Any.new({
-                  "id"       => JSON::Any.new(tool_call.id),
-                  "type"     => JSON::Any.new("function"),
-                  "function" => JSON::Any.new({
-                    "name"      => JSON::Any.new(tool_call.name),
-                    "arguments" => JSON::Any.new(tool_call.arguments.to_json),
-                  }),
-                })
-              end
-
-              messages << build_message_with_tools("assistant", response.content || "", tool_call_dicts)
-
-              # Execute tools
-              response.tool_calls.each do |tool_call|
-                Log.debug { "Subagent [#{task_id}] executing: #{tool_call.name}" }
-                result = tools.execute(tool_call.name, tool_call.arguments)
-                messages << build_tool_result(tool_call.id, tool_call.name, result)
-              end
-            else
-              final_result = response.content
-              break
-            end
-          end
-
-          final_result ||= "Task completed but no final response was generated."
+          final_result = result.content || "Task completed but no final response was generated."
 
           Log.info { "Subagent [#{task_id}] completed successfully" }
-          announce_result(task_id, label, task, final_result, origin, "ok")
+          announce_result(task_id, label, task, final_result, origin, Status::Ok)
         rescue ex
           error_msg = "Error: #{ex.message}"
           Log.error { "Subagent [#{task_id}] failed: #{ex.message}" }
-          announce_result(task_id, label, task, error_msg, origin, "error")
+          announce_result(task_id, label, task, error_msg, origin, Status::Error)
         end
+      end
+
+      private def build_initial_messages(task : String) : Array(Hash(String, JSON::Any))
+        [
+          {"role" => JSON::Any.new(Constants::ROLE_SYSTEM), "content" => JSON::Any.new(build_subagent_prompt(task))},
+          {"role" => JSON::Any.new(Constants::ROLE_USER), "content" => JSON::Any.new(task)},
+        ]
       end
 
       private def announce_result(
@@ -148,9 +130,9 @@ module Autobot
         task : String,
         result : String,
         origin : Hash(String, String),
-        status : String,
+        status : Status,
       ) : Nil
-        status_text = status == "ok" ? "completed successfully" : "failed"
+        status_text = status.ok? ? "completed successfully" : "failed"
 
         announce_content = <<-CONTENT
         [Subagent '#{label}' #{status_text}]
@@ -164,8 +146,8 @@ module Autobot
         CONTENT
 
         msg = Bus::InboundMessage.new(
-          channel: "system",
-          sender_id: "subagent",
+          channel: Constants::CHANNEL_SYSTEM,
+          sender_id: Constants::SUBAGENT_SENDER_ID,
           chat_id: "#{origin["channel"]}:#{origin["chat_id"]}",
           content: announce_content
         )
@@ -210,28 +192,8 @@ module Autobot
         PROMPT
       end
 
-      private def build_message(role : String, content : String) : Hash(String, JSON::Any)
-        {
-          "role"    => JSON::Any.new(role),
-          "content" => JSON::Any.new(content),
-        }
-      end
-
-      private def build_message_with_tools(role : String, content : String, tool_calls : Array(JSON::Any)) : Hash(String, JSON::Any)
-        {
-          "role"       => JSON::Any.new(role),
-          "content"    => JSON::Any.new(content),
-          "tool_calls" => JSON::Any.new(tool_calls),
-        }
-      end
-
-      private def build_tool_result(tool_call_id : String, tool_name : String, result : String) : Hash(String, JSON::Any)
-        {
-          "role"         => JSON::Any.new("tool"),
-          "tool_call_id" => JSON::Any.new(tool_call_id),
-          "name"         => JSON::Any.new(tool_name),
-          "content"      => JSON::Any.new(result),
-        }
+      private def truncate_label(task : String) : String
+        task.size > LABEL_MAX_LENGTH ? task[0, LABEL_MAX_LENGTH] + "..." : task
       end
     end
   end
