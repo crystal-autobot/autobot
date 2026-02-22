@@ -560,12 +560,15 @@ module Autobot::Channels
         return
       end
 
-      lines = ["<b>Scheduled jobs (#{jobs.size})</b>\n"]
+      lines = ["<b>Scheduled jobs (#{jobs.size})</b>"]
       jobs.each_with_index do |job, idx|
         lines << format_cron_job_html(job, idx + 1, cron)
       end
 
-      send_reply(chat_id, lines.join("\n"))
+      text = lines.join("\n\n")
+      MarkdownToTelegramHTML.split_message(text).each do |chunk|
+        send_reply(chat_id, chunk)
+      end
     end
 
     private def format_cron_job_html(job : Cron::CronJob, index : Int32, cron : Cron::Service) : String

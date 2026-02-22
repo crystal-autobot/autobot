@@ -174,6 +174,32 @@ describe Autobot::Channels::TelegramChannel do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "produces output that splits within Telegram limits" do
+      tmp = TestHelper.tmp_dir
+      cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      channel = build_channel(cron_service: cron)
+
+      lines = ["<b>Scheduled jobs (20)</b>"]
+      20.times do |i|
+        job = Autobot::Cron::CronJob.new(
+          id: "job#{i}",
+          name: "A long job name for testing #{"x" * 20}",
+          schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 600_000_i64),
+          payload: Autobot::Cron::CronPayload.new(message: "Detailed instruction " * 10),
+        )
+        lines << channel.test_format_cron_job_html(job, i + 1, cron)
+      end
+
+      text = lines.join("\n\n")
+      text.size.should be > Autobot::Channels::MarkdownToTelegramHTML::TELEGRAM_MAX_LENGTH
+
+      chunks = Autobot::Channels::MarkdownToTelegramHTML.split_message(text)
+      chunks.size.should be > 1
+      chunks.each { |chunk| chunk.size.should be <= Autobot::Channels::MarkdownToTelegramHTML::TELEGRAM_MAX_LENGTH }
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "escapes HTML in job name and message" do
       tmp = TestHelper.tmp_dir
       cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
