@@ -172,7 +172,7 @@ module Autobot
         end
       end
 
-      private def self.docker_image_exists?(image : String) : Bool
+      def self.docker_image_exists?(image : String) : Bool
         Process.run("docker", ["image", "inspect", image],
           output: Process::Redirect::Close,
           error: Process::Redirect::Close).success?

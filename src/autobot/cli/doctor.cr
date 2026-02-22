@@ -180,6 +180,20 @@ module Autobot
         sandbox_type = Tools::Sandbox.detect
         report(Status::Pass, "Sandbox available (#{sandbox_type.to_s.downcase})")
 
+        check_docker_image(config, errors)
+      end
+
+      def self.check_docker_image(config : Config::Config, errors : Int32) : Int32
+        image = config.tools.try(&.docker_image)
+        return errors unless image
+
+        if Tools::Sandbox.docker_image_exists?(image)
+          report(Status::Pass, "Docker image available (#{image})")
+        else
+          report(Status::Warn, "Docker image not found locally (#{image})")
+          hint("It will be pulled on first use: docker pull #{image}")
+        end
+
         errors
       end
 
