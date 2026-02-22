@@ -22,16 +22,16 @@ agents:
 
 ## Providers
 
-Supported provider blocks:
+Supported provider blocks — see the **[Providers overview](providers.md)** for a full comparison.
 
-- `anthropic`
-- `openai`
-- `deepseek`
-- `groq`
-- `gemini`
-- `openrouter`
-- `vllm` (local/hosted OpenAI-compatible endpoint)
-- `bedrock` (AWS Bedrock via Converse API) — **[Bedrock docs](bedrock.md)**
+- **[`anthropic`](anthropic.md)** — Claude models via Messages API
+- **[`openai`](openai.md)** — GPT-5 family, o3 models
+- **[`deepseek`](deepseek.md)** — DeepSeek-V3, R1
+- **[`groq`](groq.md)** — Ultra-fast inference (Llama, Mixtral, Gemma)
+- **[`gemini`](gemini.md)** — Google Gemini Pro, Flash
+- **[`openrouter`](openrouter.md)** — Gateway to hundreds of models
+- **[`bedrock`](bedrock.md)** — AWS Bedrock via Converse API
+- **[`vllm`](vllm.md)** — Local/hosted OpenAI-compatible endpoint
 
 ## Voice Transcription
 

@@ -129,4 +129,60 @@ describe Autobot::Agent::Context::Builder do
       blocks[0]["type"].as_s.should eq("image_url")
     end
   end
+
+  describe "#add_assistant_message" do
+    it "preserves extra_content on tool calls" do
+      builder = Autobot::Agent::Context::Builder.new(workspace)
+
+      extra = JSON::Any.new({
+        "google" => JSON::Any.new({
+          "thought_signature" => JSON::Any.new("sig_abc"),
+        } of String => JSON::Any),
+      } of String => JSON::Any)
+
+      tool_call = Autobot::Providers::ToolCall.new(
+        id: "tc_1",
+        name: "read_file",
+        arguments: {"path" => JSON::Any.new("test.cr")},
+        extra_content: extra
+      )
+
+      messages = [] of Hash(String, JSON::Any)
+      messages = builder.add_assistant_message(messages, "Let me check.", [tool_call])
+
+      tc_data = messages.last["tool_calls"].as_a.first
+      tc_data["id"].as_s.should eq("tc_1")
+      tc_data["extra_content"]["google"]["thought_signature"].as_s.should eq("sig_abc")
+    end
+
+    it "omits extra_content when nil" do
+      builder = Autobot::Agent::Context::Builder.new(workspace)
+
+      tool_call = Autobot::Providers::ToolCall.new(
+        id: "tc_2",
+        name: "exec",
+        arguments: {"cmd" => JSON::Any.new("ls")}
+      )
+
+      messages = [] of Hash(String, JSON::Any)
+      messages = builder.add_assistant_message(messages, "Running.", [tool_call])
+
+      tc_data = messages.last["tool_calls"].as_a.first
+      tc_data["extra_content"]?.should be_nil
+    end
+
+    it "preserves reasoning_content" do
+      builder = Autobot::Agent::Context::Builder.new(workspace)
+
+      tool_call = Autobot::Providers::ToolCall.new(id: "tc_3", name: "search")
+
+      messages = [] of Hash(String, JSON::Any)
+      messages = builder.add_assistant_message(
+        messages, "Thinking...", [tool_call],
+        reasoning_content: "Step by step analysis"
+      )
+
+      messages.last["reasoning_content"].as_s.should eq("Step by step analysis")
+    end
+  end
 end
