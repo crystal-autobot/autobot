@@ -34,12 +34,18 @@ module Autobot
       # Custom Docker image (set from config at startup)
       class_property docker_image : String? = nil
 
-      # Detect available sandbox tool
+      # Cached result of detect_type (avoids redundant subprocess calls)
+      @@cached_type : Type? = nil
+
+      # Detect available sandbox tool (memoized)
       def self.detect : Type
         if override = @@detect_override
           return override
         end
+        @@cached_type ||= detect_type
+      end
 
+      private def self.detect_type : Type
         if command_exists?("bwrap")
           Type::Bubblewrap
         elsif command_exists?("docker")

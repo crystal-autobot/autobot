@@ -34,10 +34,11 @@ module Autobot::Agent
         channel : String? = nil,
         chat_id : String? = nil,
         background : Bool = false,
+        tool_names : Array(String)? = nil,
       ) : Array(Hash(String, JSON::Any))
         messages = [] of Hash(String, JSON::Any)
 
-        system_prompt = build_system_prompt(background)
+        system_prompt = build_system_prompt(background, tool_names)
         unless background
           if channel && chat_id
             system_prompt += "\n\n## Current Session\nChannel: #{channel}\nChat ID: #{chat_id}"
@@ -123,7 +124,7 @@ module Autobot::Agent
 
       # Build the complete system prompt from identity, bootstrap files, memory, and skills.
       # When `background` is true, uses minimal identity and skips skills summary.
-      private def build_system_prompt(background : Bool = false) : String
+      private def build_system_prompt(background : Bool = false, tool_names : Array(String)? = nil) : String
         parts = [] of String
 
         parts << (background ? background_identity_section : identity_section)
@@ -135,11 +136,16 @@ module Autobot::Agent
         memory_ctx = @memory.memory_context
         parts << "# Memory\n\n#{memory_ctx}" unless memory_ctx.empty?
 
-        # Always-loaded skills: include full content
-        always_skills = @skills.always_skills
-        unless always_skills.empty?
-          always_content = @skills.load_skills_for_context(always_skills)
-          parts << "# Active Skills\n\n#{always_content}" unless always_content.empty?
+        # Auto-loaded skills: always=true + tool-linked skills
+        auto_skills = @skills.always_skills
+        if tool_names && !tool_names.empty?
+          auto_skills.concat(@skills.tool_skills(tool_names))
+          auto_skills.uniq!
+        end
+
+        unless auto_skills.empty?
+          auto_content = @skills.load_skills_for_context(auto_skills)
+          parts << "# Active Skills\n\n#{auto_content}" unless auto_content.empty?
         end
 
         # Available skills: show summary for progressive loading (skip for background)
@@ -207,50 +213,17 @@ module Autobot::Agent
         <<-IDENTITY
         # autobot
 
-        You are Autobot, an AI agent powered by Crystal - fast, type-safe, and extensible.
+        You are Autobot, an AI agent. Time: #{now} (UTC). Workspace: #{workspace_path}
 
-        You have access to tools that allow you to:
-        - Read, write, and edit files
-        - Execute shell commands
-        - Search the web and fetch web pages
-        - Send messages to users on chat channels
-        - Spawn subagents for complex background tasks
-        - Schedule cron jobs for reminders, deferred tasks, and recurring checks
-
-        ## Current Time
-        #{now} (UTC)
-
-        ## Workspace
-        Your workspace is at: #{workspace_path}
-
-        Use relative paths for workspace files:
-        - read_file("memory/MEMORY.md")
-        - write_file("skills/my_tool/tool.sh", content)
-
-        Important workspace files:
-        - Long-term memory: memory/MEMORY.md
-        - History log: memory/HISTORY.md (grep-searchable)
-        - Custom skills: skills/{skill-name}/SKILL.md
-
+        Key files: memory/MEMORY.md (long-term), memory/HISTORY.md (grep-searchable log), skills/*/SKILL.md
         #{build_security_policy(workspace_path)}
-        ## Response Formatting
-        Use simple Markdown for formatting:
-        - **bold** for emphasis (use ** not __)
-        - `code` for inline code and ```language for code blocks
-        - _italic_ for secondary emphasis
-        - - for bullet lists (not nested)
-        - Avoid horizontal rules (---), complex tables, or HTML tags
-        - Keep responses concise, well-structured, and readable
-
-        IMPORTANT: When responding to direct questions or conversations, reply directly with your text response.
-        Only use the 'message' tool when you need to send a message to a specific chat channel.
-        For normal conversation, just respond with text - do not call the message tool.
-
-        For delayed/scheduled tasks, use `cron` tool (never `exec sleep`).
-
-        Always be helpful, accurate, and concise. When using tools, think step by step.
-        When remembering something important, write to memory/MEMORY.md
-        To recall past events, grep memory/HISTORY.md
+        Rules:
+        - Use relative paths for workspace files
+        - Reply with text for conversations; use 'message' tool only for chat channels
+        - Use `cron` for delayed tasks (never `exec sleep`)
+        - Batch independent tool calls in a single response to reduce round-trips
+        - Use simple Markdown: **bold**, `code`, _italic_, bullet lists
+        - Be helpful, accurate, and concise
         IDENTITY
       end
 

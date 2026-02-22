@@ -239,10 +239,8 @@ describe "Security Tests" do
 
       result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
       result.success?.should be_true
-
-      parsed = JSON.parse(result.content)
-      parsed["status"].as_i.should eq(200)
-      parsed["text"].as_s.should contain("Example Domain")
+      result.content.should contain("[https://example.com]")
+      result.content.should contain("Example Domain")
     end
 
     it "still blocks private IPs over HTTPS" do

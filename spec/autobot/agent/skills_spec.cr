@@ -137,6 +137,110 @@ describe Autobot::Agent::SkillsLoader do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  it "parses tool field from frontmatter" do
+    tmp = TestHelper.tmp_dir
+    skills_dir = tmp / "skills" / "scheduler"
+    Dir.mkdir_p(skills_dir)
+    File.write(skills_dir / "SKILL.md", <<-MD
+    ---
+    description: "Scheduling rules"
+    tool: cron
+    ---
+
+    # Scheduler Skill
+    MD
+    )
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: tmp / "no_builtin")
+    meta = loader.get_skill_metadata("scheduler")
+    meta.tool.should eq("cron")
+    meta.always?.should be_false
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "returns tool-linked skills matching given tool names" do
+    tmp = TestHelper.tmp_dir
+
+    # Skill linked to "cron" tool
+    cron_dir = tmp / "skills" / "scheduler"
+    Dir.mkdir_p(cron_dir)
+    File.write(cron_dir / "SKILL.md", "---\ntool: cron\n---\nCron rules")
+
+    # Skill linked to "exec" tool
+    exec_dir = tmp / "skills" / "executor"
+    Dir.mkdir_p(exec_dir)
+    File.write(exec_dir / "SKILL.md", "---\ntool: exec\n---\nExec rules")
+
+    # Skill with no tool link
+    plain_dir = tmp / "skills" / "general"
+    Dir.mkdir_p(plain_dir)
+    File.write(plain_dir / "SKILL.md", "---\ndescription: General\n---\nGeneral skill")
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: tmp / "no_builtin")
+
+    # Only cron tool registered
+    result = loader.tool_skills(["cron"])
+    result.should contain("scheduler")
+    result.should_not contain("executor")
+    result.should_not contain("general")
+
+    # Both tools registered
+    result = loader.tool_skills(["cron", "exec"])
+    result.should contain("scheduler")
+    result.should contain("executor")
+    result.should_not contain("general")
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "returns empty array when no tool names given" do
+    tmp = TestHelper.tmp_dir
+    cron_dir = tmp / "skills" / "scheduler"
+    Dir.mkdir_p(cron_dir)
+    File.write(cron_dir / "SKILL.md", "---\ntool: cron\n---\nCron rules")
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: tmp / "no_builtin")
+    result = loader.tool_skills([] of String)
+    result.should be_empty
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "caches tool skill resolution across calls" do
+    tmp = TestHelper.tmp_dir
+
+    cron_dir = tmp / "skills" / "scheduler"
+    Dir.mkdir_p(cron_dir)
+    File.write(cron_dir / "SKILL.md", "---\ntool: cron\n---\nCron rules")
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: tmp / "no_builtin")
+
+    # First call builds the cache
+    result1 = loader.tool_skills(["cron"])
+    result1.should contain("scheduler")
+
+    # Remove the skill file — cache should still return it
+    FileUtils.rm_rf(cron_dir)
+    result2 = loader.tool_skills(["cron"])
+    result2.should contain("scheduler")
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "returns empty array when no skills match tool names" do
+    tmp = TestHelper.tmp_dir
+    plain_dir = tmp / "skills" / "general"
+    Dir.mkdir_p(plain_dir)
+    File.write(plain_dir / "SKILL.md", "---\ndescription: General\n---\nGeneral skill")
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: tmp / "no_builtin")
+    result = loader.tool_skills(["cron"])
+    result.should be_empty
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "workspace skills override builtin skills" do
     tmp = TestHelper.tmp_dir
     builtin = TestHelper.tmp_dir

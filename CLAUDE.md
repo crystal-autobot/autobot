@@ -1,5 +1,9 @@
 # Autobot
 
+## Rules
+
+1. When making changes, ensure the docs/ also reflect it.
+
 ## Code Quality Standards
 
 **IMPORTANT:** Always follow Ameba linter rules. All code must pass ameba checks without warnings or failures before committing.

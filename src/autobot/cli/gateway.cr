@@ -5,6 +5,8 @@ module Autobot
   module CLI
     module Gateway
       def self.run(config_path : String?, port : Int32, verbose : Bool) : Nil
+        started_at = Time.instant
+
         config = Config::Loader.load(config_path)
 
         # Run security and configuration validation
@@ -18,12 +20,14 @@ module Autobot
         session_manager = Session::Manager.new(config.workspace_path)
 
         tool_registry, plugin_registry, mcp_clients = setup_tools(config)
-        cron_service = setup_cron(config, bus)
-        channel_manager = setup_channels(config, bus, session_manager)
-
-        puts "✓ Gateway ready\n"
-
         provider = create_provider(config)
+
+        elapsed_ms = (Time.instant - started_at).total_milliseconds.to_i
+        puts "✓ Gateway ready in #{elapsed_ms}ms\n"
+
+        # Post-ready setup: cron, channels, agent loop
+        cron_service = setup_cron(config, bus)
+        channel_manager = setup_channels(config, bus, session_manager, cron_service)
         agent_loop = create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service)
 
         # Handle shutdown signals
@@ -49,7 +53,7 @@ module Autobot
       end
 
       private def self.setup_tools(config : Config::Config)
-        tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config, verbose: true)
+        tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config)
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
         if img = config.tools.try(&.docker_image)
@@ -109,8 +113,8 @@ module Autobot
         cron_service
       end
 
-      private def self.setup_channels(config : Config::Config, bus : Bus::MessageBus, session_manager : Session::Manager) : Channels::Manager
-        channel_manager = Channels::Manager.new(config, bus, session_manager)
+      private def self.setup_channels(config : Config::Config, bus : Bus::MessageBus, session_manager : Session::Manager, cron_service : Cron::Service? = nil) : Channels::Manager
+        channel_manager = Channels::Manager.new(config, bus, session_manager, cron_service: cron_service)
         channel_manager.start
 
         enabled = channel_manager.enabled_channels

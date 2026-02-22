@@ -14,6 +14,7 @@ module Autobot
     struct SkillMetadata
       property description : String?
       property? always : Bool
+      property tool : String?
       property requires_bins : Array(String)
       property requires_env : Array(String)
       property raw : Hash(String, String)
@@ -21,6 +22,7 @@ module Autobot
       def initialize(
         @description = nil,
         @always = false,
+        @tool = nil,
         @requires_bins = [] of String,
         @requires_env = [] of String,
         @raw = {} of String => String,
@@ -39,6 +41,7 @@ module Autobot
       @workspace : Path
       @workspace_skills : Path
       @builtin_skills : Path
+      @tool_skill_cache : Hash(String, String)? = nil
 
       def initialize(@workspace : Path, builtin_skills_dir : Path? = nil)
         @workspace_skills = @workspace / "skills"
@@ -138,12 +141,32 @@ module Autobot
           .map(&.name)
       end
 
+      # Get skills linked to specific tools via the `tool` frontmatter field.
+      # Results are cached after the first scan since skills don't change at runtime.
+      def tool_skills(tool_names : Array(String)) : Array(String)
+        return [] of String if tool_names.empty?
+
+        cache = @tool_skill_cache ||= build_tool_skill_cache
+        tool_set = tool_names.to_set
+        cache.compact_map { |tool, skill| skill if tool_set.includes?(tool) }
+      end
+
       # Parse frontmatter metadata from a SKILL.md file.
       def get_skill_metadata(name : String) : SkillMetadata
         content = load_skill(name)
         return SkillMetadata.new unless content
 
         parse_frontmatter(content)
+      end
+
+      # Build a tool_name -> skill_name mapping by scanning all available skills once.
+      private def build_tool_skill_cache : Hash(String, String)
+        cache = {} of String => String
+        list_skills(filter_unavailable: true).each do |skill_info|
+          tool = get_skill_metadata(skill_info.name).tool
+          cache[tool] = skill_info.name if tool
+        end
+        cache
       end
 
       private def parse_frontmatter(content : String) : SkillMetadata
@@ -164,6 +187,7 @@ module Autobot
           SkillMetadata.new(
             description: raw["description"]?,
             always: raw["always"]? == "true",
+            tool: raw["tool"]?,
             requires_bins: bins,
             requires_env: env,
             raw: raw

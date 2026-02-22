@@ -15,9 +15,9 @@ DOCKER_TAG   := $(VERSION)
 # Crystal compiler flags
 CRYSTAL       := crystal
 SHARDS        := shards
-RELEASE_FLAGS := --release --no-debug --progress
+RELEASE_FLAGS := --release --no-debug --progress -Dpreview_mt --single-module
 STATIC_FLAGS  := $(RELEASE_FLAGS) --static
-DEBUG_FLAGS   := --debug --error-trace --progress
+DEBUG_FLAGS   := --debug --error-trace --progress -Dpreview_mt
 
 # Platform detection
 UNAME_S  := $(shell uname -s)

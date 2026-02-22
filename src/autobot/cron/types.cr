@@ -1,7 +1,14 @@
+require "cron_parser"
 require "json"
 
 module Autobot
   module Cron
+    # Build a canonical owner key from channel and chat_id.
+    # Used for job ownership across CronTool and channel commands.
+    def self.owner_key(channel : String, chat_id : String) : String
+      "#{channel}:#{chat_id}"
+    end
+
     enum ScheduleKind
       At    # One-time at a specific timestamp
       Every # Recurring interval
@@ -28,9 +35,43 @@ module Autobot
       property at_ms : Int64? = nil    # For "at": timestamp in ms
       property every_ms : Int64? = nil # For "every": interval in ms
       property expr : String? = nil    # For "cron": cron expression
-      property tz : String? = nil      # Timezone for cron expressions
 
-      def initialize(@kind : ScheduleKind, @at_ms = nil, @every_ms = nil, @expr = nil, @tz = nil)
+      def initialize(@kind : ScheduleKind, @at_ms = nil, @every_ms = nil, @expr = nil)
+      end
+    end
+
+    # Builds a CronSchedule from user-provided parameters.
+    # Shared by both CronTool and CLI to avoid schedule construction duplication.
+    module ScheduleBuilder
+      MIN_INTERVAL_SECONDS = 1
+
+      # Build a schedule from raw parameters.
+      # Returns {schedule, delete_after_run} or nil if no schedule params given.
+      # Raises on validation errors (invalid interval, bad time format).
+      def self.build(every_seconds : Int64?, cron_expr : String?, at : String?) : {CronSchedule, Bool}?
+        if every_seconds
+          if every_seconds < MIN_INTERVAL_SECONDS
+            raise ArgumentError.new("every_seconds must be at least #{MIN_INTERVAL_SECONDS}")
+          end
+          {CronSchedule.new(kind: ScheduleKind::Every, every_ms: every_seconds * 1000), false}
+        elsif cron_expr
+          validate_cron_expr(cron_expr)
+          {CronSchedule.new(kind: ScheduleKind::Cron, expr: cron_expr), false}
+        elsif at
+          at_ms = Time.parse_iso8601(at).to_unix_ms
+          if at_ms <= Time.utc.to_unix_ms
+            raise ArgumentError.new("at must be in the future")
+          end
+          {CronSchedule.new(kind: ScheduleKind::At, at_ms: at_ms), true}
+        else
+          nil
+        end
+      end
+
+      private def self.validate_cron_expr(expr : String) : Nil
+        CronParser.new(expr).next(Time.utc)
+      rescue ex : ArgumentError
+        raise ArgumentError.new("invalid cron expression '#{expr}': #{ex.message}")
       end
     end
 

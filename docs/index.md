@@ -6,7 +6,7 @@
 
 **Ultra-efficient personal AI assistant powered by Crystal**
 
-2MB binary · ~5MB RAM · <10ms startup · Zero runtime dependencies
+2MB binary · ~5MB RAM · <20ms startup · Zero runtime dependencies
 
 </div>
 
@@ -16,7 +16,7 @@
 
 Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://crystal-lang.org) with security and efficiency first.
 
-2.0MB binary, ~5MB RAM, boots in under 10ms, zero runtime dependencies. Run dozens of bots on a single machine — each with its own personality, workspace, and config.
+2.0MB binary, ~5MB RAM, boots in under 20ms, zero runtime dependencies. Run dozens of bots on a single machine — each with its own personality, workspace, and config.
 
 ## Features
 

@@ -93,7 +93,7 @@ module Autobot
     class WebFetchTool < Tool
       Log = ::Log.for(self)
 
-      DEFAULT_MAX_CHARS = 50_000
+      DEFAULT_MAX_CHARS = 20_000
 
       # SSRF protection patterns for alternate IP notation
       OCTAL_IP_PATTERN      = /\b0[0-7]+\.\d+\.\d+\.\d+/
@@ -139,20 +139,16 @@ module Autobot
         content_type = response.headers["Content-Type"]? || ""
         body = response.body
 
-        text, extractor = extract_content(body, content_type)
+        text, _extractor = extract_content(body, content_type)
 
         truncated = text.size > max_chars
         text = text[0, max_chars] if truncated
 
-        result = {
-          url:       url_str,
-          finalUrl:  uri.to_s,
-          status:    response.status_code,
-          extractor: extractor,
-          truncated: truncated,
-          length:    text.size,
-          text:      text,
-        }.to_json
+        result = String.build do |io|
+          io << "[" << url_str << "]\n"
+          io << "(truncated to " << max_chars << " chars)\n" if truncated
+          io << text
+        end
 
         ToolResult.success(result)
       rescue ex

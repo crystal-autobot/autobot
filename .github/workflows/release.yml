@@ -21,7 +21,7 @@ jobs:
         run: shards install --production
       - name: Build static binary
         run: |
-          crystal build src/main.cr -o autobot --release --no-debug --static
+          crystal build src/main.cr -o autobot --release --no-debug --static -Dpreview_mt --single-module
           strip autobot
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -41,7 +41,7 @@ jobs:
           docker run --rm --platform linux/arm64 \
             -v $PWD:/src -w /src \
             crystallang/crystal:latest-alpine \
-            sh -c "shards install --production && crystal build src/main.cr -o autobot --release --no-debug --static && strip autobot"
+            sh -c "shards install --production && crystal build src/main.cr -o autobot --release --no-debug --static -Dpreview_mt --single-module && strip autobot"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -59,7 +59,7 @@ jobs:
         run: shards install --production
       - name: Build binary
         run: |
-          crystal build src/main.cr -o autobot --release --no-debug
+          crystal build src/main.cr -o autobot --release --no-debug -Dpreview_mt --single-module
           strip autobot
       - name: Upload artifact
         uses: actions/upload-artifact@v4

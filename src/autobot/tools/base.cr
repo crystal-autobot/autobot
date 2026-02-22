@@ -28,6 +28,18 @@ module Autobot
         }
       end
 
+      # Compact schema with minimal description.
+      # Used for tools the LLM has already called (it knows what they do).
+      def to_compact_schema : Hash(String, JSON::Any)
+        {
+          "type"     => JSON::Any.new("function"),
+          "function" => JSON::Any.new({
+            "name"       => JSON::Any.new(name),
+            "parameters" => parameters.to_json_any,
+          }),
+        }
+      end
+
       # Validate parameters against the tool's JSON Schema.
       # Returns an array of error messages (empty if valid).
       def validate_params(params : Hash(String, JSON::Any)) : Array(String)

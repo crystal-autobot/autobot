@@ -4,6 +4,7 @@ require "./slack"
 require "./whatsapp"
 require "../config/schema"
 require "../bus/queue"
+require "../cron/service"
 require "../transcriber"
 
 module Autobot::Channels
@@ -21,7 +22,12 @@ module Autobot::Channels
     getter channels : Hash(String, Channel) = {} of String => Channel
     getter transcriber : Transcriber? = nil
 
-    def initialize(@config : Config::Config, @bus : Bus::MessageBus, @session_manager : Session::Manager? = nil)
+    def initialize(
+      @config : Config::Config,
+      @bus : Bus::MessageBus,
+      @session_manager : Session::Manager? = nil,
+      @cron_service : Cron::Service? = nil,
+    )
       @transcriber = detect_transcriber
       init_channels
     end
@@ -113,6 +119,7 @@ module Autobot::Channels
             custom_commands: custom_cmds,
             session_manager: @session_manager,
             transcriber: @transcriber,
+            cron_service: @cron_service,
           )
           Log.info { "Telegram channel enabled" }
         end

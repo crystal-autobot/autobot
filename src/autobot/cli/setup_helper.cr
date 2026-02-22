@@ -59,7 +59,7 @@ module Autobot
 
       # Sets up tool registry with built-in tools, MCP servers, and plugins.
       # Returns {tool_registry, plugin_registry, mcp_clients}.
-      def self.setup_tools(config : Config::Config, verbose : Bool = false)
+      def self.setup_tools(config : Config::Config)
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
         tool_registry = Tools.create_registry(
@@ -86,11 +86,6 @@ module Autobot
         )
         Plugins::Loader.load_all(plugin_registry, plugin_context)
         plugin_registry.start_all
-
-        if verbose
-          puts "✓ Plugins: #{plugin_registry.size} loaded"
-          puts "✓ Tools: #{tool_registry.size} registered"
-        end
 
         {tool_registry, plugin_registry, mcp_clients}
       end

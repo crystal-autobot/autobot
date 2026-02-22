@@ -64,6 +64,14 @@ module Autobot
         jobs.sort_by { |j| compute_next_run_for(j) || Int64::MAX }
       end
 
+      # Find a single job by ID, optionally enforcing owner access.
+      def get_job(job_id : String, owner : String? = nil) : CronJob?
+        job = store.jobs.find { |j| j.id == job_id }
+        return nil unless job
+        return nil if owner && job.owner != owner
+        job
+      end
+
       # Add a new scheduled job.
       def add_job(
         name : String,
@@ -172,9 +180,11 @@ module Autobot
       end
 
       # Enable or disable a job.
-      def enable_job(job_id : String, enabled : Bool = true) : CronJob?
+      # If owner is provided, only modifies job if it matches the owner.
+      def enable_job(job_id : String, enabled : Bool = true, owner : String? = nil) : CronJob?
         store.jobs.each do |job|
           if job.id == job_id
+            return nil if owner && job.owner != owner
             job.enabled = enabled
             job.updated_at_ms = now_ms
             save_store
@@ -287,7 +297,7 @@ module Autobot
           every = schedule.every_ms
           (every && every > 0) ? current_ms + every : nil
         when .cron?
-          parse_cron_next(schedule.expr, schedule.tz, current_ms)
+          parse_cron_next(schedule.expr, current_ms)
         else
           nil
         end
@@ -297,7 +307,7 @@ module Autobot
       # Delegates to the cron_parser shard which supports:
       # *, fixed values, ranges (1-5), steps (*/5), lists (1,15,30),
       # combos (1-30/10), named months/days, and @hourly/@daily etc.
-      private def parse_cron_next(expr : String?, tz : String? = nil, after_ms : Int64? = nil) : Int64?
+      private def parse_cron_next(expr : String?, after_ms : Int64? = nil) : Int64?
         return nil unless expr
         base_time = after_ms ? Time.unix_ms(after_ms) : Time.utc
         CronParser.new(expr).next(base_time).to_unix_ms

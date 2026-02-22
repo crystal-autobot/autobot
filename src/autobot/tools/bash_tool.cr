@@ -123,8 +123,9 @@ module Autobot
       end
     end
 
-    # Discovers bash scripts in workspace skills directory
-    # Only searches within workspace for security
+    # Discovers bash scripts in workspace skills directory.
+    # Uses direct filesystem access for discovery (read-only, config-controlled paths).
+    # Actual script execution at runtime still goes through sandbox.
     class BashToolDiscovery
       Log = ::Log.for(self)
 
@@ -143,14 +144,14 @@ module Autobot
       end
 
       private def self.discover_in_dir(executor : SandboxExecutor, dir : String, tools : Array(BashTool)) : Nil
-        list_result = executor.list_dir(dir)
-        return unless list_result.success?
+        return unless Dir.exists?(dir)
 
-        list_result.content.split("\n").each do |entry|
+        entries = Dir.entries(dir).reject { |e| e == "." || e == ".." }.sort!
+        entries.each do |entry|
           next unless entry.ends_with?(".sh")
 
           script_path = "#{dir}/#{entry}"
-          desc = extract_description(executor, script_path)
+          desc = extract_description(script_path)
           tool_name = derive_tool_name(entry)
 
           Log.debug { "Found bash tool: #{tool_name} -> #{script_path}" }
@@ -163,11 +164,8 @@ module Autobot
         end
       end
 
-      private def self.extract_description(executor : SandboxExecutor, script_path : String) : String
-        result = executor.read_file(script_path)
-        return default_description(script_path) unless result.success?
-
-        result.content.each_line do |line|
+      private def self.extract_description(script_path : String) : String
+        File.each_line(script_path) do |line|
           next if line.starts_with?("#!")
           if line.starts_with?("#")
             desc = line.lstrip('#').strip
@@ -175,7 +173,8 @@ module Autobot
           end
           break
         end
-
+        default_description(script_path)
+      rescue
         default_description(script_path)
       end
 

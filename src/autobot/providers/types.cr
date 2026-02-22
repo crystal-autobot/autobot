@@ -1,22 +1,33 @@
 module Autobot
   module Providers
     # Token usage from an LLM API response.
+    #
+    # Includes optional cache token fields reported by providers that
+    # support prompt caching (e.g. Anthropic).
     struct TokenUsage
       include JSON::Serializable
 
       getter prompt_tokens : Int32
       getter completion_tokens : Int32
       getter total_tokens : Int32
+      getter cache_creation_tokens : Int32
+      getter cache_read_tokens : Int32
 
       def initialize(
         @prompt_tokens = 0,
         @completion_tokens = 0,
         @total_tokens = 0,
+        @cache_creation_tokens = 0,
+        @cache_read_tokens = 0,
       )
       end
 
       def zero? : Bool
         total_tokens == 0
+      end
+
+      def cached? : Bool
+        cache_creation_tokens > 0 || cache_read_tokens > 0
       end
     end
 

@@ -1,5 +1,13 @@
 require "../../spec_helper"
 
+describe Autobot::Cron do
+  describe ".owner_key" do
+    it "builds channel:chat_id format" do
+      Autobot::Cron.owner_key("telegram", "12345").should eq("telegram:12345")
+    end
+  end
+end
+
 describe Autobot::Cron::CronSchedule do
   it "creates an every-interval schedule" do
     schedule = Autobot::Cron::CronSchedule.new(
@@ -145,5 +153,97 @@ describe Autobot::Cron::CronStore do
     restored = Autobot::Cron::CronStore.from_json(json)
     restored.jobs.size.should eq(2)
     restored.jobs[0].name.should eq("job1")
+  end
+end
+
+describe Autobot::Cron::ScheduleBuilder do
+  it "builds an every-interval schedule" do
+    result = Autobot::Cron::ScheduleBuilder.build(every_seconds: 300_i64, cron_expr: nil, at: nil)
+    if r = result
+      schedule, delete_after = r
+      schedule.kind.should eq(Autobot::Cron::ScheduleKind::Every)
+      schedule.every_ms.should eq(300000_i64)
+      delete_after.should be_false
+    else
+      fail "expected a schedule result"
+    end
+  end
+
+  it "builds a cron expression schedule" do
+    result = Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: "0 9 * * *", at: nil)
+    if r = result
+      schedule, delete_after = r
+      schedule.kind.should eq(Autobot::Cron::ScheduleKind::Cron)
+      schedule.expr.should eq("0 9 * * *")
+      delete_after.should be_false
+    else
+      fail "expected a schedule result"
+    end
+  end
+
+  it "builds a one-time schedule with delete_after_run" do
+    result = Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: nil, at: "2026-03-01T10:00:00Z")
+    if r = result
+      schedule, delete_after = r
+      schedule.kind.should eq(Autobot::Cron::ScheduleKind::At)
+      schedule.at_ms.should_not be_nil
+      delete_after.should be_true
+    else
+      fail "expected a schedule result"
+    end
+  end
+
+  it "returns nil when no params given" do
+    result = Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: nil, at: nil)
+    result.should be_nil
+  end
+
+  it "raises on zero every_seconds" do
+    expect_raises(ArgumentError, /at least 1/) do
+      Autobot::Cron::ScheduleBuilder.build(every_seconds: 0_i64, cron_expr: nil, at: nil)
+    end
+  end
+
+  it "raises on negative every_seconds" do
+    expect_raises(ArgumentError, /at least 1/) do
+      Autobot::Cron::ScheduleBuilder.build(every_seconds: -10_i64, cron_expr: nil, at: nil)
+    end
+  end
+
+  it "raises on past at timestamp" do
+    past = (Time.utc - 1.hour).to_rfc3339
+    expect_raises(ArgumentError, /at must be in the future/) do
+      Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: nil, at: past)
+    end
+  end
+
+  it "raises on invalid cron expression" do
+    expect_raises(ArgumentError, /invalid cron expression/) do
+      Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: "not a cron", at: nil)
+    end
+  end
+
+  it "raises on cron expression with too few fields" do
+    expect_raises(ArgumentError, /invalid cron expression/) do
+      Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: "* *", at: nil)
+    end
+  end
+
+  it "accepts valid cron expressions" do
+    ["*/5 * * * *", "0 9 * * 1-5", "30 18 * * 0", "0 0 1 * *"].each do |expr|
+      result = Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: expr, at: nil)
+      result.should_not be_nil
+      result.try(&.first.expr).should eq(expr)
+    end
+  end
+
+  it "prefers every_seconds over other params" do
+    result = Autobot::Cron::ScheduleBuilder.build(every_seconds: 60_i64, cron_expr: "0 9 * * *", at: nil)
+    if r = result
+      schedule, _ = r
+      schedule.kind.should eq(Autobot::Cron::ScheduleKind::Every)
+    else
+      fail "expected a schedule result"
+    end
   end
 end
