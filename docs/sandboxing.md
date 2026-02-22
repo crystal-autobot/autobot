@@ -117,7 +117,7 @@ Configure sandboxing in `config.yml`:
 ```yaml
 tools:
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
-  docker_image: "python:3.12-alpine"  # optional, default: alpine:latest
+  docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
 ```
 
 **Options:**
