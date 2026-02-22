@@ -129,7 +129,8 @@ module Autobot
       private def update_job(params : Hash(String, JSON::Any)) : ToolResult
         job_id = params["job_id"]?.try(&.as_s)
         return ToolResult.error("job_id is required for update") unless job_id
-        return ToolResult.error("no session context (channel/chat_id)") unless owner_context
+        owner = owner_context
+        return ToolResult.error("no session context (channel/chat_id)") unless owner
 
         message = params["message"]?.try(&.as_s)
         result = build_schedule(params)
@@ -137,7 +138,7 @@ module Autobot
 
         return ToolResult.error("provide message, every_seconds, cron_expr, or at to update") unless message || schedule
 
-        if job = @cron.update_job(job_id, owner: owner_context, schedule: schedule, message: message)
+        if job = @cron.update_job(job_id, owner: owner, schedule: schedule, message: message)
           ToolResult.success("Updated job '#{job.name}' (id: #{job.id})")
         else
           ToolResult.error("Job #{job_id} not found or access denied")
@@ -147,8 +148,9 @@ module Autobot
       end
 
       private def list_jobs : ToolResult
-        return ToolResult.error("no session context (channel/chat_id)") unless owner_context
-        jobs = @cron.list_jobs(owner: owner_context)
+        owner = owner_context
+        return ToolResult.error("no session context (channel/chat_id)") unless owner
+        jobs = @cron.list_jobs(owner: owner)
         return ToolResult.success("No scheduled jobs.") if jobs.empty?
 
         lines = jobs.map { |j| format_job_line(j) }
@@ -158,9 +160,10 @@ module Autobot
       private def show_job(params : Hash(String, JSON::Any)) : ToolResult
         job_id = params["job_id"]?.try(&.as_s)
         return ToolResult.error("job_id is required for show") unless job_id
-        return ToolResult.error("no session context (channel/chat_id)") unless owner_context
+        owner = owner_context
+        return ToolResult.error("no session context (channel/chat_id)") unless owner
 
-        jobs = @cron.list_jobs(include_disabled: true, owner: owner_context)
+        jobs = @cron.list_jobs(include_disabled: true, owner: owner)
         job = jobs.find { |j| j.id == job_id }
         return ToolResult.error("Job #{job_id} not found or access denied") unless job
 
@@ -170,9 +173,10 @@ module Autobot
       private def remove_job(params : Hash(String, JSON::Any)) : ToolResult
         job_id = params["job_id"]?.try(&.as_s)
         return ToolResult.error("job_id is required for remove") unless job_id
-        return ToolResult.error("no session context (channel/chat_id)") unless owner_context
+        owner = owner_context
+        return ToolResult.error("no session context (channel/chat_id)") unless owner
 
-        if @cron.remove_job(job_id, owner: owner_context)
+        if @cron.remove_job(job_id, owner: owner)
           ToolResult.success("Removed job #{job_id}")
         else
           ToolResult.error("Job #{job_id} not found or access denied")
