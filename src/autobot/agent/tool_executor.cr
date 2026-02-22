@@ -62,10 +62,16 @@ module Autobot::Agent
       # so we know which results are "old" and eligible for truncation.
       iteration_boundaries = [] of Int32
 
+      # Track called tools for progressive disclosure.
+      # On iteration 2+, previously-called tool schemas are sent in
+      # compact form (no description) to save tokens.
+      called_tools = Set(String).new
+
       @max_iterations.times do
         truncate_old_tool_results(messages, iteration_boundaries)
 
-        response = call_llm(messages, tools, exclude_tools)
+        compact_tools = called_tools.empty? ? nil : called_tools.to_a
+        response = call_llm(messages, tools, exclude_tools, compact_tools)
         total_tokens += response.usage.total_tokens
 
         if response.finish_reason == "guardrail_intervened"
@@ -77,6 +83,7 @@ module Autobot::Agent
         if response.has_tool_calls?
           iteration_boundaries << messages.size
           messages = process_tool_calls(messages, response, tools, tools_used, session_key)
+          response.tool_calls.each { |tool_call| called_tools << tool_call.name }
 
           if stop_tool = stop_after_tool
             break if response.tool_calls.any? { |tool_call| tool_call.name == stop_tool }
@@ -94,10 +101,11 @@ module Autobot::Agent
       messages : Array(Hash(String, JSON::Any)),
       tools : Tools::Registry,
       exclude_tools : Array(String)?,
+      compact_tools : Array(String)?,
     ) : Providers::Response
       response = @provider.chat(
         messages: messages,
-        tools: tools.definitions(exclude: exclude_tools),
+        tools: tools.definitions(exclude: exclude_tools, compact: compact_tools),
         model: @model
       )
 

@@ -424,4 +424,68 @@ describe Autobot::Agent::ToolExecutor do
       tool_results[2]["content"].as_s.should eq("x" * 1000)
     end
   end
+
+  describe "progressive tool disclosure" do
+    it "sends full tool definitions on first iteration" do
+      provider = SequenceMockProvider.new([
+        tool_call_response("echo", "tc_1", %({"text":"hi"})),
+        text_response("Done"),
+      ])
+      executor = build_executor(provider)
+      tools = create_echo_tool
+
+      executor.execute(build_messages, tools)
+
+      # First call should include full tool description
+      first_body = JSON.parse(provider.sent_bodies.first)
+      tool_defs = first_body["tools"].as_a
+      tool_defs.size.should eq(1)
+      tool_defs[0]["function"]["description"].as_s.should eq("Echoes input back")
+    end
+
+    it "sends compact schemas for called tools on subsequent iterations" do
+      provider = SequenceMockProvider.new([
+        tool_call_response("echo", "tc_1", %({"text":"a"})),
+        tool_call_response("echo", "tc_2", %({"text":"b"})),
+        text_response("Done"),
+      ])
+      executor = build_executor(provider)
+      tools = create_echo_tool
+
+      executor.execute(build_messages, tools)
+
+      # Third call (after echo was called): echo should be compact
+      third_body = JSON.parse(provider.sent_bodies[2])
+      tool_defs = third_body["tools"].as_a
+      tool_defs.size.should eq(1)
+      tool_defs[0]["function"]["name"].as_s.should eq("echo")
+      tool_defs[0]["function"]["description"]?.should be_nil
+    end
+
+    it "keeps full schema for uncalled tools while compacting called ones" do
+      provider = SequenceMockProvider.new([
+        tool_call_response("echo", "tc_1", %({"text":"a"})),
+        text_response("Done"),
+      ])
+      executor = build_executor(provider)
+      tools = Autobot::Tools::Registry.new
+      tools.register(EchoTool.new)
+      tools.register(MessageMockTool.new)
+
+      executor.execute(build_messages, tools)
+
+      # Second call: echo was called, message was not
+      second_body = JSON.parse(provider.sent_bodies[1])
+      tool_defs = second_body["tools"].as_a
+
+      echo_def = tool_defs.find! { |tool_def| tool_def["function"]["name"].as_s == "echo" }
+      message_def = tool_defs.find! { |tool_def| tool_def["function"]["name"].as_s == "message" }
+
+      # Echo should be compact (no description)
+      echo_def["function"]["description"]?.should be_nil
+
+      # Message should still have full description
+      message_def["function"]["description"].as_s.should eq("Send a message")
+    end
+  end
 end
