@@ -217,6 +217,26 @@ describe Autobot::Cron::ScheduleBuilder do
     end
   end
 
+  it "raises on invalid cron expression" do
+    expect_raises(ArgumentError, /invalid cron expression/) do
+      Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: "not a cron", at: nil)
+    end
+  end
+
+  it "raises on cron expression with too few fields" do
+    expect_raises(ArgumentError, /invalid cron expression/) do
+      Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: "* *", at: nil)
+    end
+  end
+
+  it "accepts valid cron expressions" do
+    ["*/5 * * * *", "0 9 * * 1-5", "30 18 * * 0", "0 0 1 * *"].each do |expr|
+      result = Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: expr, at: nil)
+      result.should_not be_nil
+      result.try(&.first.expr).should eq(expr)
+    end
+  end
+
   it "prefers every_seconds over other params" do
     result = Autobot::Cron::ScheduleBuilder.build(every_seconds: 60_i64, cron_expr: "0 9 * * *", at: nil)
     if r = result

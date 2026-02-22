@@ -238,6 +238,24 @@ describe Autobot::Tools::CronTool do
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
+
+    it "rejects invalid cron expression" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"    => JSON::Any.new("add"),
+        "message"   => JSON::Any.new("Bad cron"),
+        "cron_expr" => JSON::Any.new("not valid"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("invalid cron expression")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
   end
 
   describe "owner context" do

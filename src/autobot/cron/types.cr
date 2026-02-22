@@ -1,3 +1,4 @@
+require "cron_parser"
 require "json"
 
 module Autobot
@@ -53,6 +54,7 @@ module Autobot
           end
           {CronSchedule.new(kind: ScheduleKind::Every, every_ms: every_seconds * 1000), false}
         elsif cron_expr
+          validate_cron_expr(cron_expr)
           {CronSchedule.new(kind: ScheduleKind::Cron, expr: cron_expr), false}
         elsif at
           dt = Time.parse_iso8601(at)
@@ -63,6 +65,12 @@ module Autobot
         else
           nil
         end
+      end
+
+      private def self.validate_cron_expr(expr : String) : Nil
+        CronParser.new(expr).next(Time.utc)
+      rescue ex : ArgumentError
+        raise ArgumentError.new("invalid cron expression '#{expr}': #{ex.message}")
       end
     end
 
