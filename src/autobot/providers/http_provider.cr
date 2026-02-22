@@ -455,7 +455,12 @@ module Autobot
           name = func["name"]?.try(&.as_s?) || ""
           args = parse_arguments_field(func["arguments"]?)
 
-          ToolCall.new(id: id, name: name, arguments: args.as_h? || {} of String => JSON::Any)
+          ToolCall.new(
+            id: id,
+            name: name,
+            arguments: args.as_h? || {} of String => JSON::Any,
+            extra_content: tool_call["extra_content"]?
+          )
         end
       end
 
