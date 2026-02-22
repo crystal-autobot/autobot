@@ -52,6 +52,14 @@ module Autobot
         jobs.sort_by { |j| compute_next_run_for(j) || Int64::MAX }
       end
 
+      # Find a single job by ID, optionally enforcing owner access.
+      def get_job(job_id : String, owner : String? = nil) : CronJob?
+        job = store.jobs.find { |j| j.id == job_id }
+        return nil unless job
+        return nil if owner && job.owner != owner
+        job
+      end
+
       # Add a new scheduled job.
       def add_job(
         name : String,

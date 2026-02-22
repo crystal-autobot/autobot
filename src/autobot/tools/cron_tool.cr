@@ -163,8 +163,7 @@ module Autobot
         owner = owner_context
         return ToolResult.error("no session context (channel/chat_id)") unless owner
 
-        jobs = @cron.list_jobs(include_disabled: true, owner: owner)
-        job = jobs.find { |j| j.id == job_id }
+        job = @cron.get_job(job_id, owner: owner)
         return ToolResult.error("Job #{job_id} not found or access denied") unless job
 
         format_job_details(job)

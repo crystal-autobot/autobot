@@ -179,6 +179,66 @@ describe Autobot::Cron::Service do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "gets a job by ID" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "findable",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "find me",
+        owner: "telegram:user1"
+      )
+
+      found = service.get_job(job.id)
+      found.should_not be_nil
+      found.try(&.name).should eq("findable")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "gets a job by ID with matching owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "owned",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "mine",
+        owner: "telegram:user1"
+      )
+
+      found = service.get_job(job.id, owner: "telegram:user1")
+      found.should_not be_nil
+      found.try(&.name).should eq("owned")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns nil for wrong owner" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "secret",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "hidden",
+        owner: "telegram:user1"
+      )
+
+      service.get_job(job.id, owner: "telegram:user2").should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns nil for nonexistent job ID" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service.get_job("nonexistent").should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "allows removing job with correct owner" do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
