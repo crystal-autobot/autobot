@@ -5,6 +5,8 @@ module Autobot
   module CLI
     module Gateway
       def self.run(config_path : String?, port : Int32, verbose : Bool) : Nil
+        started_at = Time.instant
+
         config = Config::Loader.load(config_path)
 
         # Run security and configuration validation
@@ -18,12 +20,14 @@ module Autobot
         session_manager = Session::Manager.new(config.workspace_path)
 
         tool_registry, plugin_registry, mcp_clients = setup_tools(config)
+        provider = create_provider(config)
+
+        elapsed_ms = (Time.instant - started_at).total_milliseconds.to_i
+        puts "✓ Gateway ready in #{elapsed_ms}ms\n"
+
+        # Post-ready setup: cron, channels, agent loop
         cron_service = setup_cron(config, bus)
         channel_manager = setup_channels(config, bus, session_manager)
-
-        puts "✓ Gateway ready\n"
-
-        provider = create_provider(config)
         agent_loop = create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service)
 
         # Handle shutdown signals
@@ -49,7 +53,7 @@ module Autobot
       end
 
       private def self.setup_tools(config : Config::Config)
-        tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config, verbose: true)
+        tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config)
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
         log_sandbox_info(sandbox_config)
