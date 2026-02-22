@@ -31,7 +31,7 @@ module Autobot
 
       def self.show(config_path : String?, job_id : String) : Nil
         service = cron_service
-        job = service.list_jobs(include_disabled: true).find { |j| j.id == job_id }
+        job = service.get_job(job_id)
         unless job
           STDERR.puts "Job #{job_id} not found"
           exit 1

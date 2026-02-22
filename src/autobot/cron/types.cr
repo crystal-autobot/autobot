@@ -57,11 +57,11 @@ module Autobot
           validate_cron_expr(cron_expr)
           {CronSchedule.new(kind: ScheduleKind::Cron, expr: cron_expr), false}
         elsif at
-          dt = Time.parse_iso8601(at)
-          if dt.to_unix_ms <= Time.utc.to_unix_ms
+          at_ms = Time.parse_iso8601(at).to_unix_ms
+          if at_ms <= Time.utc.to_unix_ms
             raise ArgumentError.new("at must be in the future")
           end
-          {CronSchedule.new(kind: ScheduleKind::At, at_ms: dt.to_unix_ms), true}
+          {CronSchedule.new(kind: ScheduleKind::At, at_ms: at_ms), true}
         else
           nil
         end

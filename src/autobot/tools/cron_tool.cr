@@ -106,7 +106,8 @@ module Autobot
       private def add_job(params : Hash(String, JSON::Any)) : ToolResult
         message = params["message"]?.try(&.as_s) || ""
         return ToolResult.error("message is required for add") if message.empty?
-        return ToolResult.error("no session context (channel/chat_id)") if @channel.empty? || @chat_id.empty?
+        owner = owner_context
+        return ToolResult.error("no session context (channel/chat_id)") unless owner
 
         result = build_schedule(params)
         return ToolResult.error("either every_seconds, cron_expr, or at is required") unless result
@@ -122,7 +123,7 @@ module Autobot
           channel: @channel,
           to: @chat_id,
           delete_after_run: delete_after,
-          owner: owner_context
+          owner: owner
         )
 
         ToolResult.success("Created job '#{job.name}' (id: #{job.id})")

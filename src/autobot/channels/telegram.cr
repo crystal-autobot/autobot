@@ -562,7 +562,7 @@ module Autobot::Channels
 
       lines = ["<b>Scheduled jobs (#{jobs.size})</b>"]
       jobs.each_with_index do |job, idx|
-        lines << format_cron_job_html(job, idx + 1, cron)
+        lines << format_cron_job_html(job, idx + 1)
       end
 
       text = lines.join("\n\n")
@@ -571,42 +571,14 @@ module Autobot::Channels
       end
     end
 
-    private def format_cron_job_html(job : Cron::CronJob, index : Int32, cron : Cron::Service) : String
-      schedule = format_cron_schedule_html(job.schedule)
-      last_run = format_cron_last_run(job)
-      message = MarkdownToTelegramHTML.escape_html(job.payload.message.strip)
+    private def format_cron_job_html(job : Cron::CronJob, index : Int32) : String
+      schedule = Cron::Formatter.format_schedule_html(job.schedule)
+      last_run = Cron::Formatter.format_last_run_html(job.state.last_run_at_ms)
+      message = Cron::Formatter.escape_html(job.payload.message.strip)
 
-      "<b>#{index}.</b> #{MarkdownToTelegramHTML.escape_html(job.id)} — #{MarkdownToTelegramHTML.escape_html(job.name)}\n" \
+      "<b>#{index}.</b> #{Cron::Formatter.escape_html(job.id)} — #{Cron::Formatter.escape_html(job.name)}\n" \
       "   #{schedule} | #{last_run}\n" \
       "   📝 <i>#{message}</i>"
-    end
-
-    private def format_cron_schedule_html(schedule : Cron::CronSchedule) : String
-      case schedule.kind
-      when .every?
-        every = schedule.every_ms
-        every ? "⏱ Every #{Cron::Formatter.format_duration(every)}" : "⏱ Every ?"
-      when .cron?
-        "🕐 #{MarkdownToTelegramHTML.escape_html(schedule.expr || "")} (UTC)"
-      when .at?
-        at_ms = schedule.at_ms
-        if at_ms
-          time = Time.unix_ms(at_ms)
-          "📌 One-time: #{time.to_s("%b %-d, %H:%M UTC")}"
-        else
-          "📌 One-time"
-        end
-      else
-        "❓ Unknown"
-      end
-    end
-
-    private def format_cron_last_run(job : Cron::CronJob) : String
-      if job.state.last_run_at_ms
-        "✅ #{Cron::Formatter.format_relative_time(job.state.last_run_at_ms)}"
-      else
-        "⏳ pending"
-      end
     end
 
     private def send_help(chat_id : String) : Nil

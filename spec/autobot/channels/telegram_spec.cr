@@ -10,16 +10,8 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     command_description(entry, name)
   end
 
-  def test_format_cron_job_html(job : Autobot::Cron::CronJob, index : Int32, cron : Autobot::Cron::Service) : String
-    format_cron_job_html(job, index, cron)
-  end
-
-  def test_format_cron_schedule_html(schedule : Autobot::Cron::CronSchedule) : String
-    format_cron_schedule_html(schedule)
-  end
-
-  def test_format_cron_last_run(job : Autobot::Cron::CronJob) : String
-    format_cron_last_run(job)
+  def test_format_cron_job_html(job : Autobot::Cron::CronJob, index : Int32) : String
+    format_cron_job_html(job, index)
   end
 end
 
@@ -89,66 +81,6 @@ describe Autobot::Channels::TelegramChannel do
     end
   end
 
-  describe "#format_cron_schedule_html" do
-    it "formats every-interval schedule" do
-      channel = build_channel
-      schedule = Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 600_000_i64)
-      channel.test_format_cron_schedule_html(schedule).should eq("⏱ Every 10 min")
-    end
-
-    it "formats every schedule with nil ms" do
-      channel = build_channel
-      schedule = Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every)
-      channel.test_format_cron_schedule_html(schedule).should eq("⏱ Every ?")
-    end
-
-    it "formats cron expression with UTC label" do
-      channel = build_channel
-      schedule = Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "0 9 * * 1-5")
-      channel.test_format_cron_schedule_html(schedule).should eq("🕐 0 9 * * 1-5 (UTC)")
-    end
-
-    it "formats at schedule with timestamp" do
-      channel = build_channel
-      at_ms = Time.utc(2026, 3, 1, 14, 0, 0).to_unix_ms
-      schedule = Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::At, at_ms: at_ms)
-      result = channel.test_format_cron_schedule_html(schedule)
-      result.should contain("📌 One-time:")
-      result.should contain("14:00 UTC")
-    end
-
-    it "formats at schedule without timestamp" do
-      channel = build_channel
-      schedule = Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::At)
-      channel.test_format_cron_schedule_html(schedule).should eq("📌 One-time")
-    end
-
-    it "escapes HTML in cron expression" do
-      channel = build_channel
-      schedule = Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Cron, expr: "<bad>")
-      result = channel.test_format_cron_schedule_html(schedule)
-      result.should contain("&lt;bad&gt;")
-      result.should_not contain("<bad>")
-    end
-  end
-
-  describe "#format_cron_last_run" do
-    it "returns pending when no last run" do
-      channel = build_channel
-      job = Autobot::Cron::CronJob.new(id: "j1", name: "test")
-      channel.test_format_cron_last_run(job).should eq("⏳ pending")
-    end
-
-    it "returns relative time when last run exists" do
-      channel = build_channel
-      state = Autobot::Cron::CronJobState.new(last_run_at_ms: Time.utc.to_unix_ms - 300_000)
-      job = Autobot::Cron::CronJob.new(id: "j1", name: "test", state: state)
-      result = channel.test_format_cron_last_run(job)
-      result.should start_with("✅")
-      result.should contain("5 min ago")
-    end
-  end
-
   describe "#format_cron_job_html" do
     it "formats a complete job entry" do
       tmp = TestHelper.tmp_dir
@@ -162,7 +94,7 @@ describe Autobot::Channels::TelegramChannel do
         payload: Autobot::Cron::CronPayload.new(message: "Check GitHub stars"),
       )
 
-      result = channel.test_format_cron_job_html(job, 1, cron)
+      result = channel.test_format_cron_job_html(job, 1)
       result.should contain("<b>1.</b>")
       result.should contain("abc123")
       result.should contain("Stars check")
@@ -187,7 +119,7 @@ describe Autobot::Channels::TelegramChannel do
           schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 600_000_i64),
           payload: Autobot::Cron::CronPayload.new(message: "Detailed instruction " * 10),
         )
-        lines << channel.test_format_cron_job_html(job, i + 1, cron)
+        lines << channel.test_format_cron_job_html(job, i + 1)
       end
 
       text = lines.join("\n\n")
@@ -212,7 +144,7 @@ describe Autobot::Channels::TelegramChannel do
         payload: Autobot::Cron::CronPayload.new(message: "Use <tool> to check"),
       )
 
-      result = channel.test_format_cron_job_html(job, 1, cron)
+      result = channel.test_format_cron_job_html(job, 1)
       result.should_not contain("<script>")
       result.should contain("&lt;script&gt;")
       result.should contain("&lt;tool&gt;")
