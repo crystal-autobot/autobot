@@ -231,6 +231,7 @@ module Autobot::Config
     property web : WebToolsConfig?
     property exec : ExecToolConfig?
     property sandbox : String = "auto" # "auto", "bubblewrap", "docker", "none"
+    property docker_image : String? = nil
 
     def initialize
     end
