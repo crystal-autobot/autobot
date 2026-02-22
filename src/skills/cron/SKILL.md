@@ -1,7 +1,7 @@
 ---
 name: cron
 description: Scheduling rules for reminders and recurring tasks.
-always: false
+tool: cron
 ---
 
 ## Cron scheduling rules

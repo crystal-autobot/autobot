@@ -159,7 +159,8 @@ module Autobot::Agent
         current_message: msg.content,
         media: msg.media?,
         channel: msg.channel,
-        chat_id: msg.chat_id
+        chat_id: msg.chat_id,
+        tool_names: @tools.tool_names
       )
 
       result = @executor.execute(messages, @tools, session_key: session.key)
@@ -218,7 +219,8 @@ module Autobot::Agent
         history: session.get_history,
         current_message: msg.content,
         channel: origin_channel,
-        chat_id: origin_chat_id
+        chat_id: origin_chat_id,
+        tool_names: @tools.tool_names
       )
 
       result = @executor.execute(messages, @tools, session_key: session.key)

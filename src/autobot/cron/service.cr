@@ -272,7 +272,7 @@ module Autobot
           every = schedule.every_ms
           (every && every > 0) ? current_ms + every : nil
         when .cron?
-          parse_cron_next(schedule.expr, schedule.tz, current_ms)
+          parse_cron_next(schedule.expr, current_ms)
         else
           nil
         end
@@ -282,7 +282,7 @@ module Autobot
       # Delegates to the cron_parser shard which supports:
       # *, fixed values, ranges (1-5), steps (*/5), lists (1,15,30),
       # combos (1-30/10), named months/days, and @hourly/@daily etc.
-      private def parse_cron_next(expr : String?, tz : String? = nil, after_ms : Int64? = nil) : Int64?
+      private def parse_cron_next(expr : String?, after_ms : Int64? = nil) : Int64?
         return nil unless expr
         base_time = after_ms ? Time.unix_ms(after_ms) : Time.utc
         CronParser.new(expr).next(base_time).to_unix_ms

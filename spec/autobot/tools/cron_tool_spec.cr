@@ -183,6 +183,106 @@ describe Autobot::Tools::CronTool do
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
+
+    it "rejects every_seconds less than 1" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Bad interval"),
+        "every_seconds" => JSON::Any.new(0_i64),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("every_seconds must be at least 1")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "rejects negative every_seconds" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Negative interval"),
+        "every_seconds" => JSON::Any.new(-5_i64),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("every_seconds must be at least 1")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "owner context" do
+    it "list fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({"action" => JSON::Any.new("list")})
+
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "remove fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action" => JSON::Any.new("remove"),
+        "job_id" => JSON::Any.new("abc123"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "show fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action" => JSON::Any.new("show"),
+        "job_id" => JSON::Any.new("abc123"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "update fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("update"),
+        "job_id"        => JSON::Any.new("abc123"),
+        "every_seconds" => JSON::Any.new(120_i64),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
   end
 
   describe "list action" do
@@ -190,6 +290,7 @@ describe Autobot::Tools::CronTool do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
       tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "123")
 
       result = tool.execute({"action" => JSON::Any.new("list")})
 

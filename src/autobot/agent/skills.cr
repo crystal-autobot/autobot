@@ -14,6 +14,7 @@ module Autobot
     struct SkillMetadata
       property description : String?
       property? always : Bool
+      property tool : String?
       property requires_bins : Array(String)
       property requires_env : Array(String)
       property raw : Hash(String, String)
@@ -21,6 +22,7 @@ module Autobot
       def initialize(
         @description = nil,
         @always = false,
+        @tool = nil,
         @requires_bins = [] of String,
         @requires_env = [] of String,
         @raw = {} of String => String,
@@ -138,6 +140,19 @@ module Autobot
           .map(&.name)
       end
 
+      # Get skills linked to specific tools via the `tool` frontmatter field.
+      def tool_skills(tool_names : Array(String)) : Array(String)
+        return [] of String if tool_names.empty?
+
+        tool_set = tool_names.to_set
+        list_skills(filter_unavailable: true)
+          .select { |skill_info|
+            tool = get_skill_metadata(skill_info.name).tool
+            tool && tool_set.includes?(tool)
+          }
+          .map(&.name)
+      end
+
       # Parse frontmatter metadata from a SKILL.md file.
       def get_skill_metadata(name : String) : SkillMetadata
         content = load_skill(name)
@@ -164,6 +179,7 @@ module Autobot
           SkillMetadata.new(
             description: raw["description"]?,
             always: raw["always"]? == "true",
+            tool: raw["tool"]?,
             requires_bins: bins,
             requires_env: env,
             raw: raw

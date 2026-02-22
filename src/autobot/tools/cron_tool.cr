@@ -108,7 +108,6 @@ module Autobot
         return ToolResult.error("either every_seconds, cron_expr, or at is required") unless result
 
         schedule, delete_after = result
-        owner_key = "#{@channel}:#{@chat_id}"
         job_name = derive_job_name(params, message)
 
         job = @cron.add_job(
@@ -119,15 +118,18 @@ module Autobot
           channel: @channel,
           to: @chat_id,
           delete_after_run: delete_after,
-          owner: owner_key
+          owner: owner_context
         )
 
         ToolResult.success("Created job '#{job.name}' (id: #{job.id})")
+      rescue ex : ArgumentError
+        ToolResult.error(ex.message || "Invalid schedule parameters")
       end
 
       private def update_job(params : Hash(String, JSON::Any)) : ToolResult
         job_id = params["job_id"]?.try(&.as_s)
         return ToolResult.error("job_id is required for update") unless job_id
+        return ToolResult.error("no session context (channel/chat_id)") unless owner_context
 
         message = params["message"]?.try(&.as_s)
         result = build_schedule(params)
@@ -135,17 +137,18 @@ module Autobot
 
         return ToolResult.error("provide message, every_seconds, cron_expr, or at to update") unless message || schedule
 
-        owner_key = owner_context
-        if job = @cron.update_job(job_id, owner: owner_key, schedule: schedule, message: message)
+        if job = @cron.update_job(job_id, owner: owner_context, schedule: schedule, message: message)
           ToolResult.success("Updated job '#{job.name}' (id: #{job.id})")
         else
           ToolResult.error("Job #{job_id} not found or access denied")
         end
+      rescue ex : ArgumentError
+        ToolResult.error(ex.message || "Invalid schedule parameters")
       end
 
       private def list_jobs : ToolResult
-        owner_key = owner_context
-        jobs = @cron.list_jobs(owner: owner_key)
+        return ToolResult.error("no session context (channel/chat_id)") unless owner_context
+        jobs = @cron.list_jobs(owner: owner_context)
         return ToolResult.success("No scheduled jobs.") if jobs.empty?
 
         lines = jobs.map { |j| format_job_line(j) }
@@ -155,9 +158,9 @@ module Autobot
       private def show_job(params : Hash(String, JSON::Any)) : ToolResult
         job_id = params["job_id"]?.try(&.as_s)
         return ToolResult.error("job_id is required for show") unless job_id
+        return ToolResult.error("no session context (channel/chat_id)") unless owner_context
 
-        owner_key = owner_context
-        jobs = @cron.list_jobs(include_disabled: true, owner: owner_key)
+        jobs = @cron.list_jobs(include_disabled: true, owner: owner_context)
         job = jobs.find { |j| j.id == job_id }
         return ToolResult.error("Job #{job_id} not found or access denied") unless job
 
@@ -167,10 +170,9 @@ module Autobot
       private def remove_job(params : Hash(String, JSON::Any)) : ToolResult
         job_id = params["job_id"]?.try(&.as_s)
         return ToolResult.error("job_id is required for remove") unless job_id
+        return ToolResult.error("no session context (channel/chat_id)") unless owner_context
 
-        owner_key = owner_context
-
-        if @cron.remove_job(job_id, owner: owner_key)
+        if @cron.remove_job(job_id, owner: owner_context)
           ToolResult.success("Removed job #{job_id}")
         else
           ToolResult.error("Job #{job_id} not found or access denied")
@@ -220,22 +222,13 @@ module Autobot
         ToolResult.success(lines.join("\n"))
       end
 
-      # Parse schedule params. Returns {schedule, delete_after_run} or nil if none provided.
+      # Parse schedule params via the shared ScheduleBuilder.
       private def build_schedule(params : Hash(String, JSON::Any)) : Tuple(Cron::CronSchedule, Bool)?
-        every_seconds = params["every_seconds"]?.try(&.as_i64)
-        cron_expr = params["cron_expr"]?.try(&.as_s)
-        at = params["at"]?.try(&.as_s)
-
-        if every_seconds
-          {Cron::CronSchedule.new(kind: Cron::ScheduleKind::Every, every_ms: every_seconds * 1000), false}
-        elsif cron_expr
-          {Cron::CronSchedule.new(kind: Cron::ScheduleKind::Cron, expr: cron_expr), false}
-        elsif at
-          dt = Time.parse_iso8601(at)
-          {Cron::CronSchedule.new(kind: Cron::ScheduleKind::At, at_ms: dt.to_unix_ms), true}
-        else
-          nil
-        end
+        Cron::ScheduleBuilder.build(
+          every_seconds: params["every_seconds"]?.try(&.as_i64),
+          cron_expr: params["cron_expr"]?.try(&.as_s),
+          at: params["at"]?.try(&.as_s),
+        )
       end
     end
   end

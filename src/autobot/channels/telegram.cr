@@ -569,26 +569,14 @@ module Autobot::Channels
       send_reply(chat_id, lines.join("\n"))
     end
 
-    MESSAGE_PREVIEW_MAX_LENGTH = 120
-
     private def format_cron_job_html(job : Cron::CronJob, index : Int32, cron : Cron::Service) : String
       schedule = format_cron_schedule_html(job.schedule)
       last_run = format_cron_last_run(job)
-      message_preview = truncate_message(job.payload.message)
+      message = MarkdownToTelegramHTML.escape_html(job.payload.message.strip)
 
       "<b>#{index}.</b> #{MarkdownToTelegramHTML.escape_html(job.id)} — #{MarkdownToTelegramHTML.escape_html(job.name)}\n" \
       "   #{schedule} | #{last_run}\n" \
-      "   📝 <i>#{MarkdownToTelegramHTML.escape_html(message_preview)}</i>"
-    end
-
-    private def truncate_message(message : String) : String
-      # Collapse newlines to spaces for a single-line preview
-      preview = message.gsub('\n', ' ').strip
-      if preview.size > MESSAGE_PREVIEW_MAX_LENGTH
-        "#{preview[0, MESSAGE_PREVIEW_MAX_LENGTH]}..."
-      else
-        preview
-      end
+      "   📝 <i>#{message}</i>"
     end
 
     private def format_cron_schedule_html(schedule : Cron::CronSchedule) : String

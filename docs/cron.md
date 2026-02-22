@@ -138,14 +138,14 @@ Empty state shows: "No scheduled jobs. Ask me in chat to schedule something."
 
 ## Built-in Cron Skill
 
-A built-in skill (`src/skills/cron/SKILL.md`) is available for the agent to load on demand. It teaches the agent:
+A built-in skill (`src/skills/cron/SKILL.md`) is automatically loaded when the cron tool is registered. It teaches the agent:
 
 - **Message quality** — write self-contained prompts with specific tool names and URLs
 - **Timezone handling** — ask the user, convert to UTC, confirm both times
 - **Update-first rule** — list existing jobs before creating, update instead of duplicate
 - **Schedule type selection** — when to use `every_seconds` vs `cron_expr` vs `at`
 
-The agent loads this skill when handling scheduling requests, keeping non-cron prompts lightweight.
+The skill declares `tool: cron` in its frontmatter, so it's included automatically whenever the cron tool is available — both in interactive and background turns.
 
 ---
 
