@@ -207,6 +207,27 @@ describe Autobot::Agent::SkillsLoader do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  it "caches tool skill resolution across calls" do
+    tmp = TestHelper.tmp_dir
+
+    cron_dir = tmp / "skills" / "scheduler"
+    Dir.mkdir_p(cron_dir)
+    File.write(cron_dir / "SKILL.md", "---\ntool: cron\n---\nCron rules")
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: tmp / "no_builtin")
+
+    # First call builds the cache
+    result1 = loader.tool_skills(["cron"])
+    result1.should contain("scheduler")
+
+    # Remove the skill file — cache should still return it
+    FileUtils.rm_rf(cron_dir)
+    result2 = loader.tool_skills(["cron"])
+    result2.should contain("scheduler")
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "returns empty array when no skills match tool names" do
     tmp = TestHelper.tmp_dir
     plain_dir = tmp / "skills" / "general"
