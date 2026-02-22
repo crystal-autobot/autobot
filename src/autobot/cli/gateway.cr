@@ -27,7 +27,7 @@ module Autobot
 
         # Post-ready setup: cron, channels, agent loop
         cron_service = setup_cron(config, bus)
-        channel_manager = setup_channels(config, bus, session_manager)
+        channel_manager = setup_channels(config, bus, session_manager, cron_service)
         agent_loop = create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service)
 
         # Handle shutdown signals
@@ -91,8 +91,8 @@ module Autobot
         cron_service
       end
 
-      private def self.setup_channels(config : Config::Config, bus : Bus::MessageBus, session_manager : Session::Manager) : Channels::Manager
-        channel_manager = Channels::Manager.new(config, bus, session_manager)
+      private def self.setup_channels(config : Config::Config, bus : Bus::MessageBus, session_manager : Session::Manager, cron_service : Cron::Service? = nil) : Channels::Manager
+        channel_manager = Channels::Manager.new(config, bus, session_manager, cron_service: cron_service)
         channel_manager.start
 
         enabled = channel_manager.enabled_channels

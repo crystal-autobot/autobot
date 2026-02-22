@@ -4,6 +4,8 @@ require "http_proxy"
 require "json"
 require "uri"
 require "./base"
+require "../cron/formatter"
+require "../cron/service"
 
 module Autobot::Channels
   # Converts Markdown to Telegram-safe HTML.
@@ -211,6 +213,7 @@ module Autobot::Channels
       @custom_commands : Config::CustomCommandsConfig = Config::CustomCommandsConfig.new,
       @session_manager : Session::Manager? = nil,
       @transcriber : Transcriber? = nil,
+      @cron_service : Cron::Service? = nil,
     )
       super("telegram", @bus, @allow_from)
     end
@@ -507,6 +510,8 @@ module Autobot::Channels
         send_reply(chat_id, "Hi #{first_name}! I'm Autobot.\n\nSend me a message and I'll respond!\nType /help to see available commands.")
       when "reset"
         handle_reset(chat_id)
+      when "cron"
+        send_cron_list(chat_id)
       when "help"
         send_help(chat_id)
       else
@@ -541,11 +546,85 @@ module Autobot::Channels
       {session_key, cleared_count}
     end
 
+    private def send_cron_list(chat_id : String) : Nil
+      cron = @cron_service
+      unless cron
+        send_reply(chat_id, "Cron service is not available.")
+        return
+      end
+
+      owner_key = "telegram:#{chat_id}"
+      jobs = cron.list_jobs(owner: owner_key)
+
+      if jobs.empty?
+        send_reply(chat_id, "No scheduled jobs.\n\nAsk me in chat to schedule something.")
+        return
+      end
+
+      lines = ["<b>Scheduled jobs (#{jobs.size})</b>\n"]
+      jobs.each_with_index do |job, idx|
+        lines << format_cron_job_html(job, idx + 1, cron)
+      end
+
+      send_reply(chat_id, lines.join("\n"))
+    end
+
+    MESSAGE_PREVIEW_MAX_LENGTH = 120
+
+    private def format_cron_job_html(job : Cron::CronJob, index : Int32, cron : Cron::Service) : String
+      schedule = format_cron_schedule_html(job.schedule)
+      last_run = format_cron_last_run(job)
+      message_preview = truncate_message(job.payload.message)
+
+      "<b>#{index}.</b> #{MarkdownToTelegramHTML.escape_html(job.id)} — #{MarkdownToTelegramHTML.escape_html(job.name)}\n" \
+      "   #{schedule} | #{last_run}\n" \
+      "   📝 <i>#{MarkdownToTelegramHTML.escape_html(message_preview)}</i>"
+    end
+
+    private def truncate_message(message : String) : String
+      # Collapse newlines to spaces for a single-line preview
+      preview = message.gsub('\n', ' ').strip
+      if preview.size > MESSAGE_PREVIEW_MAX_LENGTH
+        "#{preview[0, MESSAGE_PREVIEW_MAX_LENGTH]}..."
+      else
+        preview
+      end
+    end
+
+    private def format_cron_schedule_html(schedule : Cron::CronSchedule) : String
+      case schedule.kind
+      when .every?
+        every = schedule.every_ms
+        every ? "⏱ Every #{Cron::Formatter.format_duration(every)}" : "⏱ Every ?"
+      when .cron?
+        "🕐 #{MarkdownToTelegramHTML.escape_html(schedule.expr || "")} (UTC)"
+      when .at?
+        at_ms = schedule.at_ms
+        if at_ms
+          time = Time.unix_ms(at_ms)
+          "📌 One-time: #{time.to_s("%b %-d, %H:%M UTC")}"
+        else
+          "📌 One-time"
+        end
+      else
+        "❓ Unknown"
+      end
+    end
+
+    private def format_cron_last_run(job : Cron::CronJob) : String
+      if job.state.last_run_at_ms
+        "✅ #{Cron::Formatter.format_relative_time(job.state.last_run_at_ms)}"
+      else
+        "⏳ pending"
+      end
+    end
+
     private def send_help(chat_id : String) : Nil
       lines = [
         "<b>Autobot commands</b>\n",
         "/start - Start the bot",
         "/reset - Reset conversation history",
+        "/cron - Show scheduled jobs",
         "/help - Show this help message",
       ]
 
@@ -715,6 +794,7 @@ module Autobot::Channels
       commands = [
         {"command" => "start", "description" => "Start the bot"},
         {"command" => "reset", "description" => "Reset conversation history"},
+        {"command" => "cron", "description" => "Show scheduled jobs"},
         {"command" => "help", "description" => "Show available commands"},
       ]
 

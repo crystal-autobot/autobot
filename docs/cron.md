@@ -110,8 +110,42 @@ The agent creates cron jobs via the `cron` tool when users make scheduling reque
 |--------|-------------|---------------------|
 | `add` | Create a new job | `message` + one of: `every_seconds`, `cron_expr`, `at` |
 | `list` | List jobs for current owner | — |
+| `show` | Show full job details | `job_id` |
 | `update` | Update schedule or message in-place | `job_id` + at least one of: `message`, `every_seconds`, `cron_expr`, `at` |
 | `remove` | Delete a job | `job_id` |
+
+---
+
+## Telegram `/cron` Command
+
+Send `/cron` in Telegram to instantly see all your scheduled jobs — no LLM round-trip needed.
+
+**Example output:**
+
+```
+Scheduled jobs (2)
+
+1. abc123 — Check GitHub stars
+   ⏱ Every 10 min | ✅ 2 min ago
+
+2. def456 — Morning briefing
+   🕐 0 9 * * 1-5 (UTC) | ⏳ pending
+```
+
+Empty state shows: "No scheduled jobs. Ask me in chat to schedule something."
+
+---
+
+## Built-in Cron Skill
+
+A built-in skill (`src/skills/cron/SKILL.md`) is available for the agent to load on demand. It teaches the agent:
+
+- **Message quality** — write self-contained prompts with specific tool names and URLs
+- **Timezone handling** — ask the user, convert to UTC, confirm both times
+- **Update-first rule** — list existing jobs before creating, update instead of duplicate
+- **Schedule type selection** — when to use `every_seconds` vs `cron_expr` vs `at`
+
+The agent loads this skill when handling scheduling requests, keeping non-cron prompts lightweight.
 
 ---
 

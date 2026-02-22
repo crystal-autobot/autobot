@@ -1,4 +1,5 @@
 require "./base"
+require "../cron/formatter"
 require "../cron/service"
 require "../cron/types"
 require "./result"
@@ -29,7 +30,7 @@ module Autobot
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
         "Each firing triggers a background agent turn — the `message` is the turn's prompt. " \
-        "Actions: add, list, remove, update. " \
+        "Actions: add, list, remove, update, show. " \
         "To remove or update a job, always use `list` first to get the job ID. " \
         "Always confirm with the user before add, remove, or update."
       end
@@ -39,8 +40,13 @@ module Autobot
           properties: {
             "action" => PropertySchema.new(
               type: "string",
-              enum_values: ["add", "list", "remove", "update"],
+              enum_values: ["add", "list", "remove", "update", "show"],
               description: "Action to perform"
+            ),
+            "name" => PropertySchema.new(
+              type: "string",
+              description: "Short human-readable label for the job (max 30 chars). " \
+                           "Shown in /cron and list output. Example: 'GitHub stars check'"
             ),
             "message" => PropertySchema.new(
               type: "string",
@@ -67,7 +73,7 @@ module Autobot
             ),
             "job_id" => PropertySchema.new(
               type: "string",
-              description: "Job ID (for remove/update). Use `list` action first to get the ID."
+              description: "Job ID (for show/remove/update). Use `list` action first to get the ID."
             ),
           },
           required: ["action"]
@@ -82,6 +88,8 @@ module Autobot
           add_job(params)
         when "list"
           list_jobs
+        when "show"
+          show_job(params)
         when "remove"
           remove_job(params)
         when "update"
@@ -101,9 +109,10 @@ module Autobot
 
         schedule, delete_after = result
         owner_key = "#{@channel}:#{@chat_id}"
+        job_name = derive_job_name(params, message)
 
         job = @cron.add_job(
-          name: message.size > JOB_NAME_MAX_LENGTH ? message[0, JOB_NAME_MAX_LENGTH] : message,
+          name: job_name,
           schedule: schedule,
           message: message,
           deliver: true,
@@ -139,8 +148,20 @@ module Autobot
         jobs = @cron.list_jobs(owner: owner_key)
         return ToolResult.success("No scheduled jobs.") if jobs.empty?
 
-        lines = jobs.map { |j| "- #{j.name} (id: #{j.id}, #{j.schedule.kind})" }
-        ToolResult.success("Scheduled jobs:\n#{lines.join("\n")}")
+        lines = jobs.map { |j| format_job_line(j) }
+        ToolResult.success("Scheduled jobs (#{jobs.size}):\n#{lines.join("\n")}")
+      end
+
+      private def show_job(params : Hash(String, JSON::Any)) : ToolResult
+        job_id = params["job_id"]?.try(&.as_s)
+        return ToolResult.error("job_id is required for show") unless job_id
+
+        owner_key = owner_context
+        jobs = @cron.list_jobs(include_disabled: true, owner: owner_key)
+        job = jobs.find { |j| j.id == job_id }
+        return ToolResult.error("Job #{job_id} not found or access denied") unless job
+
+        format_job_details(job)
       end
 
       private def remove_job(params : Hash(String, JSON::Any)) : ToolResult
@@ -159,6 +180,44 @@ module Autobot
       private def owner_context : String?
         return nil if @channel.empty? || @chat_id.empty?
         "#{@channel}:#{@chat_id}"
+      end
+
+      private def derive_job_name(params : Hash(String, JSON::Any), message : String) : String
+        name = params["name"]?.try(&.as_s)
+        if name && !name.empty?
+          name.size > JOB_NAME_MAX_LENGTH ? name[0, JOB_NAME_MAX_LENGTH] : name
+        else
+          message.size > JOB_NAME_MAX_LENGTH ? message[0, JOB_NAME_MAX_LENGTH] : message
+        end
+      end
+
+      private def format_job_line(job : Cron::CronJob) : String
+        next_run = @cron.compute_next_run_for(job)
+        last_run = Cron::Formatter.format_relative_time(job.state.last_run_at_ms)
+        last_status = job.state.last_status.try(&.to_s.downcase) || "n/a"
+        next_run_str = next_run ? Cron::Formatter.format_relative_time(next_run) : "n/a"
+
+        "- #{job.id} | #{job.name}\n" \
+        "  Schedule: #{Cron::Formatter.format_schedule(job.schedule)} | Last: #{last_run} (#{last_status}) | Next: #{next_run_str}"
+      end
+
+      private def format_job_details(job : Cron::CronJob) : ToolResult
+        next_run = @cron.compute_next_run_for(job)
+        status = job.enabled? ? "enabled" : "disabled"
+        last_run = Cron::Formatter.format_relative_time(job.state.last_run_at_ms)
+        last_status = job.state.last_status.try(&.to_s.downcase) || "n/a"
+
+        lines = [
+          "ID: #{job.id}",
+          "Name: #{job.name}",
+          "Status: #{status}",
+          "Schedule: #{Cron::Formatter.format_schedule(job.schedule)}",
+          "Next run: #{next_run ? Cron::Formatter.format_relative_time(next_run) : "n/a"}",
+          "Last run: #{last_run} (#{last_status})",
+          "Message: #{job.payload.message}",
+        ]
+
+        ToolResult.success(lines.join("\n"))
       end
 
       # Parse schedule params. Returns {schedule, delete_after_run} or nil if none provided.
