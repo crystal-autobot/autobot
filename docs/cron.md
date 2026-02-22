@@ -133,7 +133,7 @@ graph LR
     style SKIP fill:#78909c,stroke:#546e7a,color:#fff
 ```
 
-Exec commands run inside the sandbox (bubblewrap or Docker) by default. Set `sandbox: none` to run directly on the host. If your commands need runtimes not available in Alpine (e.g. Python), set `docker_image` in config — see [sandboxing docs](sandboxing.md).
+Exec commands run inside the sandbox (bubblewrap or Docker) by default. Set `sandbox: none` to run directly on the host.
 
 ### Examples
 
