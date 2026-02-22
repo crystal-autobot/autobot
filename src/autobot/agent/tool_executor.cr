@@ -10,6 +10,10 @@ module Autobot::Agent
   # and repeats until the LLM returns a text response or max iterations
   # is reached.
   #
+  # Applies a sliding-window truncation strategy: tool results older than
+  # one iteration are compressed when they exceed TRUNCATION_THRESHOLD to
+  # reduce prompt tokens on subsequent LLM calls.
+  #
   # Used by Loop (for user messages, system messages, cron) and
   # SubagentManager (for background tasks) to avoid duplicating the
   # core agentic loop logic.
@@ -17,6 +21,11 @@ module Autobot::Agent
     Log = ::Log.for("agent.tool_executor")
 
     MESSAGE_PREVIEW_LENGTH = 120
+
+    # Tool results smaller than this (in chars) are kept verbatim.
+    # Short results like "Successfully edited file" or error messages
+    # are cheap and often useful as ongoing context.
+    TRUNCATION_THRESHOLD = 500
 
     record Result,
       content : String?,
@@ -49,7 +58,13 @@ module Autobot::Agent
       tools_used = [] of String
       total_tokens = 0
 
+      # Track indices where each iteration's tool results start,
+      # so we know which results are "old" and eligible for truncation.
+      iteration_boundaries = [] of Int32
+
       @max_iterations.times do
+        truncate_old_tool_results(messages, iteration_boundaries)
+
         response = call_llm(messages, tools, exclude_tools)
         total_tokens += response.usage.total_tokens
 
@@ -60,6 +75,7 @@ module Autobot::Agent
         end
 
         if response.has_tool_calls?
+          iteration_boundaries << messages.size
           messages = process_tool_calls(messages, response, tools, tools_used, session_key)
 
           if stop_tool = stop_after_tool
@@ -117,6 +133,30 @@ module Autobot::Agent
       end
 
       messages
+    end
+
+    # Truncate tool results from iterations older than the most recent one.
+    # Keeps the last iteration's results intact so the LLM can still reference
+    # them for its next decision. Only truncates results exceeding TRUNCATION_THRESHOLD.
+    private def truncate_old_tool_results(
+      messages : Array(Hash(String, JSON::Any)),
+      iteration_boundaries : Array(Int32),
+    ) : Nil
+      return if iteration_boundaries.size < 2
+
+      # Everything before the last boundary is "old" — eligible for truncation
+      cutoff = iteration_boundaries[-1]
+
+      messages.each_with_index do |msg, idx|
+        break if idx >= cutoff
+        next unless msg["role"]?.try(&.as_s?) == "tool"
+
+        content = msg["content"]?.try(&.as_s?) || ""
+        next if content.size <= TRUNCATION_THRESHOLD
+
+        tool_name = msg["name"]?.try(&.as_s?) || "tool"
+        msg["content"] = JSON::Any.new("[#{tool_name} result: #{content.size} chars, truncated]")
+      end
     end
 
     private def log_reasoning(content : String?) : Nil
