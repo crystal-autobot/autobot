@@ -4,6 +4,8 @@ require "http_proxy"
 require "json"
 require "uri"
 require "./base"
+require "../cron/formatter"
+require "../cron/service"
 
 module Autobot::Channels
   # Converts Markdown to Telegram-safe HTML.
@@ -211,6 +213,7 @@ module Autobot::Channels
       @custom_commands : Config::CustomCommandsConfig = Config::CustomCommandsConfig.new,
       @session_manager : Session::Manager? = nil,
       @transcriber : Transcriber? = nil,
+      @cron_service : Cron::Service? = nil,
     )
       super("telegram", @bus, @allow_from)
     end
@@ -507,6 +510,8 @@ module Autobot::Channels
         send_reply(chat_id, "Hi #{first_name}! I'm Autobot.\n\nSend me a message and I'll respond!\nType /help to see available commands.")
       when "reset"
         handle_reset(chat_id)
+      when "cron"
+        send_cron_list(chat_id)
       when "help"
         send_help(chat_id)
       else
@@ -541,11 +546,47 @@ module Autobot::Channels
       {session_key, cleared_count}
     end
 
+    private def send_cron_list(chat_id : String) : Nil
+      cron = @cron_service
+      unless cron
+        send_reply(chat_id, "Cron service is not available.")
+        return
+      end
+
+      jobs = cron.list_jobs(owner: Cron.owner_key("telegram", chat_id))
+
+      if jobs.empty?
+        send_reply(chat_id, "No scheduled jobs.\n\nAsk me in chat to schedule something.")
+        return
+      end
+
+      lines = ["<b>Scheduled jobs (#{jobs.size})</b>"]
+      jobs.each_with_index do |job, idx|
+        lines << format_cron_job_html(job, idx + 1)
+      end
+
+      text = lines.join("\n\n")
+      MarkdownToTelegramHTML.split_message(text).each do |chunk|
+        send_reply(chat_id, chunk)
+      end
+    end
+
+    private def format_cron_job_html(job : Cron::CronJob, index : Int32) : String
+      schedule = Cron::Formatter.format_schedule_html(job.schedule)
+      last_run = Cron::Formatter.format_last_run_html(job.state.last_run_at_ms)
+      message = Cron::Formatter.escape_html(job.payload.message.strip)
+
+      "<b>#{index}.</b> #{Cron::Formatter.escape_html(job.id)} — #{Cron::Formatter.escape_html(job.name)}\n" \
+      "   #{schedule} | #{last_run}\n" \
+      "   📝 <i>#{message}</i>"
+    end
+
     private def send_help(chat_id : String) : Nil
       lines = [
         "<b>Autobot commands</b>\n",
         "/start - Start the bot",
         "/reset - Reset conversation history",
+        "/cron - Show scheduled jobs",
         "/help - Show this help message",
       ]
 
@@ -715,6 +756,7 @@ module Autobot::Channels
       commands = [
         {"command" => "start", "description" => "Start the bot"},
         {"command" => "reset", "description" => "Reset conversation history"},
+        {"command" => "cron", "description" => "Show scheduled jobs"},
         {"command" => "help", "description" => "Show available commands"},
       ]
 

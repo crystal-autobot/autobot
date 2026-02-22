@@ -79,6 +79,43 @@ describe Autobot::Tools::CronTool do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "uses name parameter when provided" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "name"          => JSON::Any.new("GitHub stars check"),
+        "message"       => JSON::Any.new("Use web_search to check https://github.com/user/repo for new stars"),
+        "every_seconds" => JSON::Any.new(600_i64),
+      })
+
+      result.success?.should be_true
+      service.list_jobs.first.name.should eq("GitHub stars check")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "falls back to truncated message without name" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      long_message = "Use web_search to check https://github.com/user/repo for new stars published in the last 24 hours"
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new(long_message),
+        "every_seconds" => JSON::Any.new(600_i64),
+      })
+
+      service.list_jobs.first.name.should eq(long_message[0, 30])
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "sets owner from context" do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
@@ -146,6 +183,143 @@ describe Autobot::Tools::CronTool do
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
+
+    it "rejects every_seconds less than 1" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Bad interval"),
+        "every_seconds" => JSON::Any.new(0_i64),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("every_seconds must be at least 1")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "rejects past at timestamp" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      past = (Time.utc - 1.hour).to_rfc3339
+      result = tool.execute({
+        "action"  => JSON::Any.new("add"),
+        "message" => JSON::Any.new("Past reminder"),
+        "at"      => JSON::Any.new(past),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("at must be in the future")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "rejects negative every_seconds" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Negative interval"),
+        "every_seconds" => JSON::Any.new(-5_i64),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("every_seconds must be at least 1")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "rejects invalid cron expression" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"    => JSON::Any.new("add"),
+        "message"   => JSON::Any.new("Bad cron"),
+        "cron_expr" => JSON::Any.new("not valid"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("invalid cron expression")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "owner context" do
+    it "list fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({"action" => JSON::Any.new("list")})
+
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "remove fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action" => JSON::Any.new("remove"),
+        "job_id" => JSON::Any.new("abc123"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "show fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action" => JSON::Any.new("show"),
+        "job_id" => JSON::Any.new("abc123"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "update fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("update"),
+        "job_id"        => JSON::Any.new("abc123"),
+        "every_seconds" => JSON::Any.new(120_i64),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
   end
 
   describe "list action" do
@@ -153,6 +327,7 @@ describe Autobot::Tools::CronTool do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
       tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "123")
 
       result = tool.execute({"action" => JSON::Any.new("list")})
 
@@ -372,6 +547,222 @@ describe Autobot::Tools::CronTool do
 
       result.success?.should be_false
       result.content.should contain("not found or access denied")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "show action" do
+    it "shows job details" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Check GitHub stars"),
+        "every_seconds" => JSON::Any.new(600_i64),
+      })
+
+      job_id = service.list_jobs.first.id
+      result = tool.execute({
+        "action" => JSON::Any.new("show"),
+        "job_id" => JSON::Any.new(job_id),
+      })
+
+      result.success?.should be_true
+      result.content.should contain("ID: #{job_id}")
+      result.content.should contain("Name: Check GitHub stars")
+      result.content.should contain("Status: enabled")
+      result.content.should contain("Schedule: every 10 min")
+      result.content.should contain("Message: Check GitHub stars")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails without job_id" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action" => JSON::Any.new("show"),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("job_id is required for show")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "prevents showing other owner's job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      job = service.add_job(
+        name: "secret_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "Not yours",
+        owner: "telegram:user2"
+      )
+
+      result = tool.execute({
+        "action" => JSON::Any.new("show"),
+        "job_id" => JSON::Any.new(job.id),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("not found or access denied")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "enable/disable actions" do
+    it "disables a job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Check stars"),
+        "every_seconds" => JSON::Any.new(600_i64),
+      })
+
+      job_id = service.list_jobs.first.id
+      result = tool.execute({
+        "action" => JSON::Any.new("disable"),
+        "job_id" => JSON::Any.new(job_id),
+      })
+
+      result.success?.should be_true
+      result.content.should contain("disabled")
+      service.list_jobs(include_disabled: true).first.enabled?.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "re-enables a disabled job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Check stars"),
+        "every_seconds" => JSON::Any.new(600_i64),
+      })
+
+      job_id = service.list_jobs.first.id
+      tool.execute({"action" => JSON::Any.new("disable"), "job_id" => JSON::Any.new(job_id)})
+
+      result = tool.execute({
+        "action" => JSON::Any.new("enable"),
+        "job_id" => JSON::Any.new(job_id),
+      })
+
+      result.success?.should be_true
+      result.content.should contain("enabled")
+      service.list_jobs.first.enabled?.should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails without job_id" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      result = tool.execute({"action" => JSON::Any.new("disable")})
+      result.success?.should be_false
+      result.content.should contain("job_id is required for disable")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action" => JSON::Any.new("enable"),
+        "job_id" => JSON::Any.new("abc123"),
+      })
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "prevents disabling another owner's job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      job = service.add_job(
+        name: "other_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "Not yours",
+        owner: "telegram:user2"
+      )
+
+      result = tool.execute({
+        "action" => JSON::Any.new("disable"),
+        "job_id" => JSON::Any.new(job.id),
+      })
+      result.success?.should be_false
+      result.content.should contain("not found or access denied")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "list action format" do
+    it "includes schedule and job id in list output" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Check stars"),
+        "every_seconds" => JSON::Any.new(600_i64),
+      })
+
+      result = tool.execute({"action" => JSON::Any.new("list")})
+      result.success?.should be_true
+      result.content.should contain("Scheduled jobs (1)")
+      result.content.should contain("every 10 min")
+      result.content.should contain("Check stars")
+      result.content.should contain("Schedule:")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "shows cron expression in list output" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"    => JSON::Any.new("add"),
+        "message"   => JSON::Any.new("Morning report"),
+        "cron_expr" => JSON::Any.new("0 9 * * 1-5"),
+      })
+
+      result = tool.execute({"action" => JSON::Any.new("list")})
+      result.content.should contain("0 9 * * 1-5")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

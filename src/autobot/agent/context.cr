@@ -34,10 +34,11 @@ module Autobot::Agent
         channel : String? = nil,
         chat_id : String? = nil,
         background : Bool = false,
+        tool_names : Array(String)? = nil,
       ) : Array(Hash(String, JSON::Any))
         messages = [] of Hash(String, JSON::Any)
 
-        system_prompt = build_system_prompt(background)
+        system_prompt = build_system_prompt(background, tool_names)
         unless background
           if channel && chat_id
             system_prompt += "\n\n## Current Session\nChannel: #{channel}\nChat ID: #{chat_id}"
@@ -123,7 +124,7 @@ module Autobot::Agent
 
       # Build the complete system prompt from identity, bootstrap files, memory, and skills.
       # When `background` is true, uses minimal identity and skips skills summary.
-      private def build_system_prompt(background : Bool = false) : String
+      private def build_system_prompt(background : Bool = false, tool_names : Array(String)? = nil) : String
         parts = [] of String
 
         parts << (background ? background_identity_section : identity_section)
@@ -135,11 +136,16 @@ module Autobot::Agent
         memory_ctx = @memory.memory_context
         parts << "# Memory\n\n#{memory_ctx}" unless memory_ctx.empty?
 
-        # Always-loaded skills: include full content
-        always_skills = @skills.always_skills
-        unless always_skills.empty?
-          always_content = @skills.load_skills_for_context(always_skills)
-          parts << "# Active Skills\n\n#{always_content}" unless always_content.empty?
+        # Auto-loaded skills: always=true + tool-linked skills
+        auto_skills = @skills.always_skills
+        if tool_names && !tool_names.empty?
+          auto_skills.concat(@skills.tool_skills(tool_names))
+          auto_skills.uniq!
+        end
+
+        unless auto_skills.empty?
+          auto_content = @skills.load_skills_for_context(auto_skills)
+          parts << "# Active Skills\n\n#{auto_content}" unless auto_content.empty?
         end
 
         # Available skills: show summary for progressive loading (skip for background)
