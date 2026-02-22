@@ -24,7 +24,6 @@ theme:
   features:
     - navigation.instant
     - navigation.tracking
-    - navigation.sections
     - navigation.top
     - search.suggest
     - search.highlight
@@ -59,7 +58,15 @@ nav:
       - Quick Start: quickstart.md
       - Configuration: configuration.md
   - Providers:
+      - Overview: providers.md
+      - Anthropic: anthropic.md
+      - OpenAI: openai.md
+      - DeepSeek: deepseek.md
+      - Groq: groq.md
+      - Google Gemini: gemini.md
+      - OpenRouter: openrouter.md
       - AWS Bedrock: bedrock.md
+      - vLLM / Local: vllm.md
   - Channels:
       - Telegram: telegram.md
       - Slack: slack.md

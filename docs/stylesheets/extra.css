@@ -33,6 +33,16 @@
   max-width: 73%;
 }
 
+/* Navigation: larger section headers */
+.md-nav--primary > .md-nav__list > .md-nav__item > .md-nav__link,
+.md-nav--primary > .md-nav__list > .md-nav__item > label.md-nav__link {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-top: 0.8rem;
+}
+
 @media (max-width: 768px) {
   .demo-screenshots {
     flex-direction: column;

@@ -48,7 +48,10 @@ module Autobot::Agent
     end
 
     # Check if session needs consolidation and perform it if necessary.
-    # Runs consolidation in background to avoid blocking the agent loop.
+    #
+    # Trims the session synchronously to avoid racing with the agent loop's
+    # save_to_session. The LLM summarization runs in a background fiber and
+    # only writes to memory files (no session mutation).
     def consolidate_if_needed(session : Session::Session) : Nil
       return unless enabled?
       return unless needs_consolidation?(session)
@@ -63,9 +66,12 @@ module Autobot::Agent
       current_memory = @memory.read_long_term
       prompt = build_prompt(current_memory, conversation)
 
-      # Run consolidation in background to avoid blocking
+      # Trim session synchronously so the agent loop can safely append new messages
+      trim_session(session, keep_count)
+
+      # Run LLM summarization in background (only updates memory files, not session)
       spawn do
-        perform_consolidation(session, prompt, current_memory, keep_count)
+        summarize_to_memory(prompt, current_memory)
       end
     end
 
@@ -114,12 +120,9 @@ module Autobot::Agent
       PROMPT
     end
 
-    private def perform_consolidation(
-      session : Session::Session,
-      prompt : String,
-      current_memory : String,
-      keep_count : Int32,
-    ) : Nil
+    # Run LLM summarization and update memory files.
+    # This runs in a background fiber and does NOT touch the session.
+    private def summarize_to_memory(prompt : String, current_memory : String) : Nil
       response = @provider.chat(
         messages: [
           {"role" => JSON::Any.new(Constants::ROLE_SYSTEM), "content" => JSON::Any.new("You are a memory consolidation agent. Respond only with valid JSON.")},
@@ -130,7 +133,6 @@ module Autobot::Agent
 
       result = parse_result((response.content || "").strip)
       apply_result(result, current_memory)
-      trim_session(session, keep_count)
     rescue ex
       Log.error { "Memory consolidation failed: #{ex.message}" }
     end
@@ -153,13 +155,11 @@ module Autobot::Agent
     end
 
     private def apply_result(result : JSON::Any, current_memory : String) : Nil
-      # Extract history_entry (string or convert from hash)
       if entry_json = result["history_entry"]?
         entry = entry_json.as_s? || entry_json.to_json
         @memory.append_history(entry) unless entry.empty?
       end
 
-      # Extract memory_update (string or convert from hash)
       if update_json = result["memory_update"]?
         update = update_json.as_s? || update_json.to_json
         @memory.write_long_term(update) if update != current_memory

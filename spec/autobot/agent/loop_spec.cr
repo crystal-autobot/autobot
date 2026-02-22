@@ -292,4 +292,56 @@ describe Autobot::Agent::Loop do
       FileUtils.rm_rf(tmp) if tmp
     end
   end
+
+  describe "error handling" do
+    it "does not leak exception details to user" do
+      Autobot::Agent::Loop::GENERIC_ERROR_MESSAGE.should_not contain(":")
+      Autobot::Agent::Loop::GENERIC_ERROR_MESSAGE.should contain("unexpected error")
+    end
+  end
+
+  describe "constants" do
+    it "has a fallback response message" do
+      Autobot::Agent::Loop::FALLBACK_RESPONSE.should_not be_empty
+    end
+  end
+
+  describe "#parse_origin" do
+    it "splits channel:chat_id format" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "subagent:task1",
+        chat_id: "slack:C12345",
+        content: "Result"
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.should_not be_nil
+      response.try(&.channel).should eq("slack")
+      response.try(&.chat_id).should eq("C12345")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "defaults to CLI for chat_id without colon" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "subagent:task1",
+        chat_id: "direct",
+        content: "Result"
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.should_not be_nil
+      response.try(&.channel).should eq("cli")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
 end

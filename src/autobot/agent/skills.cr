@@ -159,26 +159,7 @@ module Autobot
             end
           end
 
-          # Parse requires from metadata JSON if present
-          bins = [] of String
-          env = [] of String
-          if metadata_json = raw["metadata"]?
-            begin
-              parsed = JSON.parse(metadata_json)
-              config = parsed["autobot"]? || parsed["nanobot"]?
-              if config
-                if requires = config["requires"]?
-                  if b = requires["bins"]?
-                    bins = b.as_a.map(&.as_s)
-                  end
-                  if e = requires["env"]?
-                    env = e.as_a.map(&.as_s)
-                  end
-                end
-              end
-            rescue
-            end
-          end
+          bins, env = parse_requires(raw["metadata"]?)
 
           SkillMetadata.new(
             description: raw["description"]?,
@@ -190,6 +171,24 @@ module Autobot
         else
           SkillMetadata.new
         end
+      end
+
+      private def parse_requires(metadata_json : String?) : {Array(String), Array(String)}
+        empty = {[] of String, [] of String}
+        return empty unless metadata_json
+
+        parsed = JSON.parse(metadata_json)
+        config = parsed["autobot"]? || parsed["nanobot"]?
+        return empty unless config
+
+        requires = config["requires"]?
+        return empty unless requires
+
+        bins = requires["bins"]?.try(&.as_a.map(&.as_s)) || [] of String
+        env = requires["env"]?.try(&.as_a.map(&.as_s)) || [] of String
+        {bins, env}
+      rescue
+        empty || {[] of String, [] of String}
       end
 
       private def strip_frontmatter(content : String) : String

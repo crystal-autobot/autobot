@@ -27,8 +27,9 @@ module Autobot
       getter id : String
       getter name : String
       getter arguments : Hash(String, JSON::Any)
+      getter extra_content : JSON::Any?
 
-      def initialize(@id, @name, @arguments = {} of String => JSON::Any)
+      def initialize(@id, @name, @arguments = {} of String => JSON::Any, @extra_content = nil)
       end
     end
 

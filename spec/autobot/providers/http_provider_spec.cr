@@ -185,6 +185,23 @@ describe Autobot::Providers::HttpProvider do
       response.finish_reason.should eq("stop")
       response.content.should eq("hello")
     end
+
+    it "parses tool calls with extra_content" do
+      body = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"tc_1","type":"function","function":{"name":"search","arguments":"{\\"q\\":\\"test\\"}"},"extra_content":{"google":{"thought_signature":"sig_123"}}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
+      response = provider.test_parse_compatible_response(body)
+      response.has_tool_calls?.should be_true
+      tc = response.tool_calls.first
+      tc.name.should eq("search")
+      tc.extra_content.should_not be_nil
+      tc.extra_content.try(&.["google"]["thought_signature"].as_s).should eq("sig_123")
+    end
+
+    it "parses tool calls without extra_content" do
+      body = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"tc_2","type":"function","function":{"name":"ping","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}})
+      response = provider.test_parse_compatible_response(body)
+      response.has_tool_calls?.should be_true
+      response.tool_calls.first.extra_content.should be_nil
+    end
   end
 
   describe "#convert_content_for_anthropic" do
