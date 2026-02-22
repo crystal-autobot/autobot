@@ -16,6 +16,7 @@ module Autobot
 
     # Sender ID prefixes
     CRON_SENDER_PREFIX = "cron:"
+    SUBAGENT_SENDER_ID = "subagent"
 
     # Session keys
     DEFAULT_SESSION_KEY = "cli:direct"
