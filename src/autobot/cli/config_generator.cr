@@ -14,37 +14,51 @@ module Autobot
         # Channel tokens
         unless config.channels.empty?
           lines << "# Chat Channels"
-
           config.channels.each do |channel|
-            case channel
-            when "telegram"
-              if token = config.telegram_token
-                lines << "TELEGRAM_BOT_TOKEN=#{token}" if !token.empty?
-              end
-            when "slack"
-              if token = config.slack_bot_token
-                lines << "SLACK_BOT_TOKEN=#{token}" if !token.empty?
-              end
-              if token = config.slack_app_token
-                lines << "SLACK_APP_TOKEN=#{token}" if !token.empty?
-              end
-            when "zulip"
-              if site = config.zulip_site
-                lines << "ZULIP_SITE=#{site}" if !site.empty?
-              end
-              if email = config.zulip_email
-                lines << "ZULIP_EMAIL=#{email}" if !email.empty?
-              end
-              if api_key = config.zulip_api_key
-                lines << "ZULIP_API_KEY=#{api_key}" if !api_key.empty?
-              end
-            end
+            generate_channel_env(channel, config, lines)
           end
-
           lines << ""
         end
 
         lines.join("\n")
+      end
+
+      private def self.generate_channel_env(channel : String, config : InteractiveSetup::Configuration, lines : Array(String))
+        case channel
+        when "telegram"
+          generate_telegram_env(config, lines)
+        when "slack"
+          generate_slack_env(config, lines)
+        when "zulip"
+          generate_zulip_env(config, lines)
+        end
+      end
+
+      private def self.generate_telegram_env(config, lines)
+        if token = config.telegram_token
+          lines << "TELEGRAM_BOT_TOKEN=#{token}" if !token.empty?
+        end
+      end
+
+      private def self.generate_slack_env(config, lines)
+        if token = config.slack_bot_token
+          lines << "SLACK_BOT_TOKEN=#{token}" if !token.empty?
+        end
+        if token = config.slack_app_token
+          lines << "SLACK_APP_TOKEN=#{token}" if !token.empty?
+        end
+      end
+
+      private def self.generate_zulip_env(config, lines)
+        if site = config.zulip_site
+          lines << "ZULIP_SITE=#{site}" if !site.empty?
+        end
+        if email = config.zulip_email
+          lines << "ZULIP_EMAIL=#{email}" if !email.empty?
+        end
+        if api_key = config.zulip_api_key
+          lines << "ZULIP_API_KEY=#{api_key}" if !api_key.empty?
+        end
       end
 
       # Generates config.yml content

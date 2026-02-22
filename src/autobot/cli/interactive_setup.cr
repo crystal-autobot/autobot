@@ -216,48 +216,64 @@ module Autobot
       def self.prompt_channel_config(channel : String, config : Configuration, input : IO, output : IO)
         case channel
         when "telegram"
-          output.puts "━" * 50
-          output.puts "Telegram Configuration"
-          output.puts ""
-          output.print "  Bot Token: "
-          output.flush
-          config.telegram_token = input.gets.try(&.strip) || ""
-          output.puts "  ✓ Configured\n"
+          prompt_telegram_config(config, input, output)
         when "slack"
-          output.puts "━" * 50
-          output.puts "Slack Configuration"
-          output.puts ""
-          output.print "  Bot Token (xoxb-...): "
-          output.flush
-          config.slack_bot_token = input.gets.try(&.strip) || ""
-          output.print "  App Token (xapp-...): "
-          output.flush
-          config.slack_app_token = input.gets.try(&.strip) || ""
-          output.puts "  ✓ Configured\n"
+          prompt_slack_config(config, input, output)
         when "whatsapp"
-          output.puts "━" * 50
-          output.puts "WhatsApp Configuration"
-          output.puts ""
-          output.print "  Bridge URL [ws://localhost:3001]: "
-          output.flush
-          url = input.gets.try(&.strip) || ""
-          config.whatsapp_bridge_url = url.empty? ? "ws://localhost:3001" : url
-          output.puts "  ✓ Configured\n"
+          prompt_whatsapp_config(config, input, output)
         when "zulip"
-          output.puts "━" * 50
-          output.puts "Zulip Configuration"
-          output.puts ""
-          output.print "  Zulip Site URL (e.g. https://zulip.example.com): "
-          output.flush
-          config.zulip_site = input.gets.try(&.strip) || ""
-          output.print "  Bot Email: "
-          output.flush
-          config.zulip_email = input.gets.try(&.strip) || ""
-          output.print "  API Key: "
-          output.flush
-          config.zulip_api_key = input.gets.try(&.strip) || ""
-          output.puts "  ✓ Configured\n"
+          prompt_zulip_config(config, input, output)
         end
+      end
+
+      private def self.prompt_telegram_config(config : Configuration, input : IO, output : IO)
+        output.puts "━" * 50
+        output.puts "Telegram Configuration"
+        output.puts ""
+        output.print "  Bot Token: "
+        output.flush
+        config.telegram_token = input.gets.try(&.strip) || ""
+        output.puts "  ✓ Configured\n"
+      end
+
+      private def self.prompt_slack_config(config : Configuration, input : IO, output : IO)
+        output.puts "━" * 50
+        output.puts "Slack Configuration"
+        output.puts ""
+        output.print "  Bot Token (xoxb-...): "
+        output.flush
+        config.slack_bot_token = input.gets.try(&.strip) || ""
+        output.print "  App Token (xapp-...): "
+        output.flush
+        config.slack_app_token = input.gets.try(&.strip) || ""
+        output.puts "  ✓ Configured\n"
+      end
+
+      private def self.prompt_whatsapp_config(config : Configuration, input : IO, output : IO)
+        output.puts "━" * 50
+        output.puts "WhatsApp Configuration"
+        output.puts ""
+        output.print "  Bridge URL [ws://localhost:3001]: "
+        output.flush
+        url = input.gets.try(&.strip) || ""
+        config.whatsapp_bridge_url = url.empty? ? "ws://localhost:3001" : url
+        output.puts "  ✓ Configured\n"
+      end
+
+      private def self.prompt_zulip_config(config : Configuration, input : IO, output : IO)
+        output.puts "━" * 50
+        output.puts "Zulip Configuration"
+        output.puts ""
+        output.print "  Zulip Site URL (e.g. https://zulip.example.com): "
+        output.flush
+        config.zulip_site = input.gets.try(&.strip) || ""
+        output.print "  Bot Email: "
+        output.flush
+        config.zulip_email = input.gets.try(&.strip) || ""
+        output.print "  API Key: "
+        output.flush
+        config.zulip_api_key = input.gets.try(&.strip) || ""
+        output.puts "  ✓ Configured\n"
       end
     end
   end
