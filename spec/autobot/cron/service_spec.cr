@@ -105,6 +105,26 @@ describe Autobot::Cron::Service do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  it "enforces owner on enable_job" do
+    tmp = TestHelper.tmp_dir
+    service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+    job = service.add_job(
+      name: "owned_toggle",
+      schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+      message: "toggle me",
+      owner: "telegram:user1"
+    )
+
+    service.enable_job(job.id, enabled: false, owner: "telegram:user2").should be_nil
+    service.list_jobs.first.enabled?.should be_true
+
+    service.enable_job(job.id, enabled: false, owner: "telegram:user1").should_not be_nil
+    service.list_jobs(include_disabled: true).find { |j| j.id == job.id }.try(&.enabled?).should be_false
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "lists only enabled jobs by default" do
     tmp = TestHelper.tmp_dir
     service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")

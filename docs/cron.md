@@ -112,6 +112,8 @@ The agent creates cron jobs via the `cron` tool when users make scheduling reque
 | `list` | List jobs for current owner | — |
 | `show` | Show full job details | `job_id` |
 | `update` | Update schedule or message in-place | `job_id` + at least one of: `message`, `every_seconds`, `cron_expr`, `at` |
+| `enable` | Resume a paused job | `job_id` |
+| `disable` | Pause a job without deleting it | `job_id` |
 | `remove` | Delete a job | `job_id` |
 
 ---

@@ -30,8 +30,8 @@ module Autobot
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
         "Each firing triggers a background agent turn — the `message` is the turn's prompt. " \
-        "Actions: add, list, remove, update, show. " \
-        "To remove or update a job, always use `list` first to get the job ID. " \
+        "Actions: add, list, show, update, enable, disable, remove. " \
+        "To remove, update, or toggle a job, always use `list` first to get the job ID. " \
         "Always confirm with the user before add, remove, or update."
       end
 
@@ -40,7 +40,7 @@ module Autobot
           properties: {
             "action" => PropertySchema.new(
               type: "string",
-              enum_values: ["add", "list", "remove", "update", "show"],
+              enum_values: ["add", "list", "show", "update", "enable", "disable", "remove"],
               description: "Action to perform"
             ),
             "name" => PropertySchema.new(
@@ -73,7 +73,7 @@ module Autobot
             ),
             "job_id" => PropertySchema.new(
               type: "string",
-              description: "Job ID (for show/remove/update). Use `list` action first to get the ID."
+              description: "Job ID (for show/update/enable/disable/remove). Use `list` action first to get the ID."
             ),
           },
           required: ["action"]
@@ -94,6 +94,10 @@ module Autobot
           remove_job(params)
         when "update"
           update_job(params)
+        when "enable"
+          toggle_job(params, enabled: true)
+        when "disable"
+          toggle_job(params, enabled: false)
         else
           ToolResult.error("Unknown action: #{action}")
         end
@@ -177,6 +181,21 @@ module Autobot
 
         if @cron.remove_job(job_id, owner: owner)
           ToolResult.success("Removed job #{job_id}")
+        else
+          ToolResult.error("Job #{job_id} not found or access denied")
+        end
+      end
+
+      private def toggle_job(params : Hash(String, JSON::Any), enabled : Bool) : ToolResult
+        job_id = params["job_id"]?.try(&.as_s)
+        action_name = enabled ? "enable" : "disable"
+        return ToolResult.error("job_id is required for #{action_name}") unless job_id
+        owner = owner_context
+        return ToolResult.error("no session context (channel/chat_id)") unless owner
+
+        if job = @cron.enable_job(job_id, enabled: enabled, owner: owner)
+          status = enabled ? "enabled" : "disabled"
+          ToolResult.success("Job '#{job.name}' (#{job.id}) is now #{status}")
         else
           ToolResult.error("Job #{job_id} not found or access denied")
         end

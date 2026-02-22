@@ -165,9 +165,11 @@ module Autobot
       end
 
       # Enable or disable a job.
-      def enable_job(job_id : String, enabled : Bool = true) : CronJob?
+      # If owner is provided, only modifies job if it matches the owner.
+      def enable_job(job_id : String, enabled : Bool = true, owner : String? = nil) : CronJob?
         store.jobs.each do |job|
           if job.id == job_id
+            return nil if owner && job.owner != owner
             job.enabled = enabled
             job.updated_at_ms = now_ms
             save_store

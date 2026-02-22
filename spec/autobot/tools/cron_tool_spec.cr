@@ -621,6 +621,111 @@ describe Autobot::Tools::CronTool do
     end
   end
 
+  describe "enable/disable actions" do
+    it "disables a job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Check stars"),
+        "every_seconds" => JSON::Any.new(600_i64),
+      })
+
+      job_id = service.list_jobs.first.id
+      result = tool.execute({
+        "action" => JSON::Any.new("disable"),
+        "job_id" => JSON::Any.new(job_id),
+      })
+
+      result.success?.should be_true
+      result.content.should contain("disabled")
+      service.list_jobs(include_disabled: true).first.enabled?.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "re-enables a disabled job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Check stars"),
+        "every_seconds" => JSON::Any.new(600_i64),
+      })
+
+      job_id = service.list_jobs.first.id
+      tool.execute({"action" => JSON::Any.new("disable"), "job_id" => JSON::Any.new(job_id)})
+
+      result = tool.execute({
+        "action" => JSON::Any.new("enable"),
+        "job_id" => JSON::Any.new(job_id),
+      })
+
+      result.success?.should be_true
+      result.content.should contain("enabled")
+      service.list_jobs.first.enabled?.should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails without job_id" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      result = tool.execute({"action" => JSON::Any.new("disable")})
+      result.success?.should be_false
+      result.content.should contain("job_id is required for disable")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails without context" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+
+      result = tool.execute({
+        "action" => JSON::Any.new("enable"),
+        "job_id" => JSON::Any.new("abc123"),
+      })
+      result.success?.should be_false
+      result.content.should contain("no session context")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "prevents disabling another owner's job" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user1")
+
+      job = service.add_job(
+        name: "other_job",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        message: "Not yours",
+        owner: "telegram:user2"
+      )
+
+      result = tool.execute({
+        "action" => JSON::Any.new("disable"),
+        "job_id" => JSON::Any.new(job.id),
+      })
+      result.success?.should be_false
+      result.content.should contain("not found or access denied")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
   describe "list action format" do
     it "includes schedule and job id in list output" do
       tmp = TestHelper.tmp_dir
