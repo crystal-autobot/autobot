@@ -1,6 +1,7 @@
 require "http/web_socket"
 require "json"
 require "./base"
+require "../constants"
 
 module Autobot::Channels
   # WhatsApp channel that connects to a Node.js bridge.
@@ -26,7 +27,7 @@ module Autobot::Channels
       @bridge_url : String = "ws://localhost:3001",
       @allow_from : Array(String) = [] of String,
     )
-      super("whatsapp", @bus, @allow_from)
+      super(Constants::CHANNEL_WHATSAPP, @bus, @allow_from)
     end
 
     def start : Nil

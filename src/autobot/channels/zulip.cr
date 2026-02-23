@@ -1,6 +1,7 @@
 require "crest"
 require "json"
 require "./base"
+require "../constants"
 
 module Autobot::Channels
   # Zulip channel using Real-time Events API (Long Polling).
@@ -27,7 +28,7 @@ module Autobot::Channels
       @api_key : String,
       allow_from : Array(String) = [] of String,
     )
-      super("zulip", bus, allow_from)
+      super(Constants::CHANNEL_ZULIP, bus, allow_from)
       @site = @site.rstrip('/')
     end
 
@@ -66,8 +67,8 @@ module Autobot::Channels
     private def access_denied_message(sender_id : String) : String
       if @allow_from.empty?
         "This bot has no authorized users yet.\n" \
-        "Add your user ID to <code>allow_from</code> in config.yml to get started.\n\n" \
-        "Your ID: <code>#{sender_id}</code>"
+        "Add your user ID to `allow_from` in config.yml to get started.\n\n" \
+        "Your ID: `#{sender_id}`"
       else
         "Access denied. You are not in the authorized users list."
       end
@@ -165,7 +166,7 @@ module Autobot::Channels
 
       unless allowed?(sender_email)
         Log.warn { "Access denied for sender #{sender_email} on zulip. Add to allow_from to grant access." }
-        send_message(Bus::OutboundMessage.new("zulip", sender_email, access_denied_message(sender_email)))
+        send_message(Bus::OutboundMessage.new(Constants::CHANNEL_ZULIP, sender_email, access_denied_message(sender_email)))
         return
       end
       Log.debug { "Zulip DM from #{sender_email}: #{content}" }
