@@ -4,6 +4,7 @@ require "http_proxy"
 require "json"
 require "uri"
 require "./base"
+require "../constants"
 require "../cron/formatter"
 require "../cron/service"
 
@@ -215,7 +216,7 @@ module Autobot::Channels
       @transcriber : Transcriber? = nil,
       @cron_service : Cron::Service? = nil,
     )
-      super("telegram", @bus, @allow_from)
+      super(Constants::CHANNEL_TELEGRAM, @bus, @allow_from)
     end
 
     def start : Nil
@@ -553,7 +554,7 @@ module Autobot::Channels
         return
       end
 
-      jobs = cron.list_jobs(owner: Cron.owner_key("telegram", chat_id))
+      jobs = cron.list_jobs(owner: Cron.owner_key(Constants::CHANNEL_TELEGRAM, chat_id))
 
       if jobs.empty?
         send_reply(chat_id, "No scheduled jobs.\n\nAsk me in chat to schedule something.")

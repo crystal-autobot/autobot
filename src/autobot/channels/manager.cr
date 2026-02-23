@@ -2,6 +2,8 @@ require "./base"
 require "./telegram"
 require "./slack"
 require "./whatsapp"
+require "./zulip"
+require "../constants"
 require "../config/schema"
 require "../bus/queue"
 require "../cron/service"
@@ -118,7 +120,7 @@ module Autobot::Channels
       return unless config && config.enabled?
 
       custom_cmds = config.custom_commands || Config::CustomCommandsConfig.from_yaml("{}")
-      @channels["telegram"] = TelegramChannel.new(
+      @channels[Constants::CHANNEL_TELEGRAM] = TelegramChannel.new(
         bus: @bus,
         token: config.token,
         allow_from: config.allow_from,
@@ -135,7 +137,7 @@ module Autobot::Channels
       return unless config && config.enabled?
 
       dm_cfg = config.dm || Config::SlackDMConfig.from_yaml("{}")
-      @channels["slack"] = SlackChannel.new(
+      @channels[Constants::CHANNEL_SLACK] = SlackChannel.new(
         bus: @bus,
         bot_token: config.bot_token,
         app_token: config.app_token,
@@ -150,7 +152,7 @@ module Autobot::Channels
     private def init_whatsapp(config)
       return unless config && config.enabled?
 
-      @channels["whatsapp"] = WhatsAppChannel.new(
+      @channels[Constants::CHANNEL_WHATSAPP] = WhatsAppChannel.new(
         bus: @bus,
         bridge_url: config.bridge_url,
         allow_from: config.allow_from,
@@ -161,7 +163,7 @@ module Autobot::Channels
     private def init_zulip(config)
       return unless config && config.enabled?
 
-      @channels["zulip"] = ZulipChannel.new(
+      @channels[Constants::CHANNEL_ZULIP] = ZulipChannel.new(
         bus: @bus,
         site: config.site,
         email: config.email,

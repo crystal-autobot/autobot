@@ -1,3 +1,5 @@
+require "../constants"
+
 module Autobot
   module CLI
     # Generates configuration files from setup data
@@ -25,11 +27,11 @@ module Autobot
 
       private def self.generate_channel_env(channel : String, config : InteractiveSetup::Configuration, lines : Array(String))
         case channel
-        when "telegram"
+        when Constants::CHANNEL_TELEGRAM
           generate_telegram_env(config, lines)
-        when "slack"
+        when Constants::CHANNEL_SLACK
           generate_slack_env(config, lines)
-        when "zulip"
+        when Constants::CHANNEL_ZULIP
           generate_zulip_env(config, lines)
         end
       end
@@ -139,24 +141,24 @@ module Autobot
         lines = [] of String
 
         case channel
-        when "telegram"
+        when Constants::CHANNEL_TELEGRAM
           lines << "  telegram:"
           lines << "    enabled: true"
           lines << "    token: \"${TELEGRAM_BOT_TOKEN}\""
           lines << "    allow_from: []  # Add Telegram user IDs to enable"
-        when "slack"
+        when Constants::CHANNEL_SLACK
           lines << "  slack:"
           lines << "    enabled: true"
           lines << "    bot_token: \"${SLACK_BOT_TOKEN}\""
           lines << "    app_token: \"${SLACK_APP_TOKEN}\""
           lines << "    mode: \"socket\""
           lines << "    group_policy: \"mention\""
-        when "whatsapp"
+        when Constants::CHANNEL_WHATSAPP
           lines << "  whatsapp:"
           lines << "    enabled: true"
           lines << "    bridge_url: \"#{config.whatsapp_bridge_url || "ws://localhost:3001"}\""
           lines << "    allow_from: []  # Add phone numbers to enable"
-        when "zulip"
+        when Constants::CHANNEL_ZULIP
           lines << "  zulip:"
           lines << "    enabled: true"
           lines << "    site: \"${ZULIP_SITE}\""

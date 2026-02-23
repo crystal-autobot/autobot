@@ -33,7 +33,7 @@ module Autobot::Channels
       @group_allow_from : Array(String) = [] of String,
       @dm_config : Config::SlackDMConfig = Config::SlackDMConfig.new,
     )
-      super("slack", @bus, allow_from)
+      super(Constants::CHANNEL_SLACK, @bus, allow_from)
     end
 
     def start : Nil

@@ -1,3 +1,5 @@
+require "../constants"
+
 module Autobot
   module CLI
     # Interactive configuration setup for new bot instances
@@ -15,10 +17,10 @@ module Autobot
 
       # Supported chat channels
       CHANNELS = {
-        "telegram" => "Telegram",
-        "slack"    => "Slack",
-        "whatsapp" => "WhatsApp",
-        "zulip"    => "Zulip",
+        Constants::CHANNEL_TELEGRAM => "Telegram",
+        Constants::CHANNEL_SLACK    => "Slack",
+        Constants::CHANNEL_WHATSAPP => "WhatsApp",
+        Constants::CHANNEL_ZULIP    => "Zulip",
       }
 
       # Configuration collected from user
@@ -215,13 +217,13 @@ module Autobot
       # Prompts for channel-specific configuration
       def self.prompt_channel_config(channel : String, config : Configuration, input : IO, output : IO)
         case channel
-        when "telegram"
+        when Constants::CHANNEL_TELEGRAM
           prompt_telegram_config(config, input, output)
-        when "slack"
+        when Constants::CHANNEL_SLACK
           prompt_slack_config(config, input, output)
-        when "whatsapp"
+        when Constants::CHANNEL_WHATSAPP
           prompt_whatsapp_config(config, input, output)
-        when "zulip"
+        when Constants::CHANNEL_ZULIP
           prompt_zulip_config(config, input, output)
         end
       end
