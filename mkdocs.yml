@@ -70,6 +70,7 @@ nav:
   - Channels:
       - Telegram: telegram.md
       - Slack: slack.md
+      - Zulip: zulip.md
   - Features:
       - Cron & Scheduling: cron.md
       - Media & Voice: media.md

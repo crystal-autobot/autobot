@@ -42,7 +42,7 @@ Autobot uses **kernel-enforced sandboxing** via Docker or bubblewrap — not app
 
 **Example:** When LLM tries `ls ../`, it fails at the OS level because parent directories aren't mounted. No regex patterns, no validation bypasses — just kernel namespaces.
 
-**→ [Security Architecture](docs/security.md)**
+**→ [Security architecture](https://crystal-autobot.github.io/autobot/security/)**
 
 ## 🚀 Quick Start
 
@@ -120,24 +120,18 @@ autobot gateway
 
 Autobot automatically detects and logs the sandbox method on startup — Docker on macOS/production, bubblewrap on Linux.
 
-**→ [Full Quick Start Guide](docs/quickstart.md)**
+**→ [Full quick start guide](https://crystal-autobot.github.io/autobot/quickstart/)**
 
 ## 📚 Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Quick Start](docs/quickstart.md) | Installation and first steps |
-| [Configuration](docs/configuration.md) | Complete config reference |
-| [AWS Bedrock](docs/bedrock.md) | Bedrock provider setup and configuration |
-| [Zulip](docs/zulip.md) | Zulip channel setup and configuration |
-| [Security](docs/security.md) | Security model and best practices |
-| [Deployment](docs/deployment.md) | Production deployment with proper user/permissions |
-| [Architecture](docs/architecture.md) | System design and components |
-| [Media](docs/media.md) | Image analysis and voice transcription |
-| [Web Search](docs/web-search.md) | Web search and URL fetching |
-| [MCP Servers](docs/mcp.md) | Connect external MCP tool servers |
-| [Plugins](docs/plugins.md) | Building and using plugins |
-| [Development](docs/development.md) | Contributing and local setup |
+**[Full documentation →](https://crystal-autobot.github.io/autobot/)**
+
+- **Getting started** — [Quick start](https://crystal-autobot.github.io/autobot/quickstart/) · [Configuration](https://crystal-autobot.github.io/autobot/configuration/)
+- **Providers** — [Anthropic](https://crystal-autobot.github.io/autobot/anthropic/) · [OpenAI](https://crystal-autobot.github.io/autobot/openai/) · [DeepSeek](https://crystal-autobot.github.io/autobot/deepseek/) · [Groq](https://crystal-autobot.github.io/autobot/groq/) · [Gemini](https://crystal-autobot.github.io/autobot/gemini/) · [OpenRouter](https://crystal-autobot.github.io/autobot/openrouter/) · [Bedrock](https://crystal-autobot.github.io/autobot/bedrock/) · [vLLM](https://crystal-autobot.github.io/autobot/vllm/)
+- **Channels** — [Telegram](https://crystal-autobot.github.io/autobot/telegram/) · [Slack](https://crystal-autobot.github.io/autobot/slack/) · [Zulip](https://crystal-autobot.github.io/autobot/zulip/)
+- **Features** — [Cron](https://crystal-autobot.github.io/autobot/cron/) · [Media & voice](https://crystal-autobot.github.io/autobot/media/) · [Web search](https://crystal-autobot.github.io/autobot/web-search/) · [MCP servers](https://crystal-autobot.github.io/autobot/mcp/) · [Memory](https://crystal-autobot.github.io/autobot/memory/) · [Plugins](https://crystal-autobot.github.io/autobot/plugins/)
+- **Security** — [Security guide](https://crystal-autobot.github.io/autobot/security/) · [Sandboxing](https://crystal-autobot.github.io/autobot/sandboxing/)
+- **Operations** — [Deployment](https://crystal-autobot.github.io/autobot/deployment/) · [Architecture](https://crystal-autobot.github.io/autobot/architecture/) · [Development](https://crystal-autobot.github.io/autobot/development/)
 
 ## 💡 Examples
 
@@ -262,4 +256,4 @@ make release-all    # Cross-compile for all platforms
 make help           # Show all targets
 ```
 
-**→ [Development Guide](docs/development.md)**
+**→ [Development guide](https://crystal-autobot.github.io/autobot/development/)**
