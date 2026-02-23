@@ -2,6 +2,7 @@ require "json"
 require "uuid"
 require "cron_parser"
 require "./types"
+require "../tools/sandbox"
 
 module Autobot
   module Cron
@@ -10,17 +11,28 @@ module Autobot
     # Jobs are persisted as JSON and executed via a fiber-based timer loop.
     class Service
       alias JobCallback = CronJob -> String?
+      alias ExecCallback = (CronJob, String) -> Nil
 
       RELOAD_CHECK_INTERVAL = 60.seconds
+      EXEC_TIMEOUT          = 30.seconds
 
       @store_path : Path
       @on_job : JobCallback?
+      @on_exec : ExecCallback?
+      @workspace : Path?
+      @sandbox_config : String
       @store : CronStore?
       @running : Bool = false
       @timer_generation : Int64 = 0
       @store_mtime : Time? = nil
 
-      def initialize(@store_path : Path, @on_job : JobCallback? = nil)
+      def initialize(
+        @store_path : Path,
+        @on_job : JobCallback? = nil,
+        @on_exec : ExecCallback? = nil,
+        @workspace : Path? = nil,
+        @sandbox_config : String = "none",
+      )
       end
 
       # Start the cron service timer loop.
@@ -64,12 +76,14 @@ module Autobot
       def add_job(
         name : String,
         schedule : CronSchedule,
-        message : String,
+        message : String = "",
         deliver : Bool = false,
         channel : String? = nil,
         to : String? = nil,
         delete_after_run : Bool = false,
         owner : String? = nil,
+        kind : PayloadKind = PayloadKind::AgentTurn,
+        command : String? = nil,
       ) : CronJob
         now = now_ms
 
@@ -79,11 +93,12 @@ module Autobot
           enabled: true,
           schedule: schedule,
           payload: CronPayload.new(
-            kind: PayloadKind::AgentTurn,
+            kind: kind,
             message: message,
             deliver: deliver,
             channel: channel,
-            to: to
+            to: to,
+            command: command,
           ),
           state: CronJobState.new,
           created_at_ms: now,
@@ -366,6 +381,14 @@ module Autobot
       end
 
       private def run_job_callback(job : CronJob, start_ms : Int64) : Nil
+        if job.payload.kind.exec?
+          run_exec_job(job, start_ms)
+        else
+          run_agent_job(job, start_ms)
+        end
+      end
+
+      private def run_agent_job(job : CronJob, start_ms : Int64) : Nil
         if callback = @on_job
           callback.call(job)
         end
@@ -374,6 +397,86 @@ module Autobot
       rescue ex
         job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
         Log.error { "Cron: job '#{job.name}' failed: #{ex.message}" }
+      end
+
+      private def run_exec_job(job : CronJob, start_ms : Int64) : Nil
+        output = exec_command(job)
+        job.state = job.state.copy(
+          last_run_at_ms: start_ms,
+          last_status: JobStatus::Ok,
+          last_error: nil,
+          last_output: output,
+        )
+        if !output.empty? && (callback = @on_exec)
+          callback.call(job, output)
+        end
+        Log.debug { "Cron: exec job '#{job.name}' completed (output: #{output.size} bytes)" }
+      rescue ex
+        job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
+        Log.error { "Cron: exec job '#{job.name}' failed: #{ex.message}" }
+      end
+
+      private def exec_command(job : CronJob) : String
+        command = job.payload.command
+        return "" if command.nil? || command.empty?
+
+        if sandbox_enabled?
+          exec_command_sandboxed(command, job)
+        else
+          exec_command_direct(command, job)
+        end
+      end
+
+      private def sandbox_enabled? : Bool
+        @sandbox_config != "none"
+      end
+
+      private def exec_command_sandboxed(command : String, job : CronJob) : String
+        workspace = @workspace
+        raise "Sandbox is enabled but no workspace configured for cron exec" unless workspace
+
+        full_command = build_sandboxed_command(command, job)
+        status, stdout, stderr = Tools::Sandbox.exec(
+          full_command, workspace,
+          timeout: EXEC_TIMEOUT.total_seconds.to_i,
+        )
+
+        unless status.success?
+          raise "command exited with #{status.exit_code}: #{stderr.strip}"
+        end
+
+        stdout.strip
+      end
+
+      private def build_sandboxed_command(command : String, job : CronJob) : String
+        if prev = job.state.last_output
+          escaped = Tools::Sandbox.shell_escape(prev)
+          "export PREV_OUTPUT=#{escaped}; #{command}"
+        else
+          command
+        end
+      end
+
+      private def exec_command_direct(command : String, job : CronJob) : String
+        env = {} of String => String
+        if prev = job.state.last_output
+          env["PREV_OUTPUT"] = prev
+        end
+
+        output = IO::Memory.new
+        error = IO::Memory.new
+        status = Process.run(
+          "sh", {"-c", command},
+          output: output,
+          error: error,
+          env: env,
+        )
+
+        unless status.success?
+          raise "command exited with #{status.exit_code}: #{error.to_s.strip}"
+        end
+
+        output.to_s.strip
       end
 
       private def schedule_next_run(job : CronJob) : Nil

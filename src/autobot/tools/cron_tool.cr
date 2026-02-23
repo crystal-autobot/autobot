@@ -30,6 +30,7 @@ module Autobot
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
         "Each firing triggers a background agent turn — the `message` is the turn's prompt. " \
+        "Use `exec_command` instead of `message` for LLM-free monitoring (runs a shell command directly, stdout = notification). " \
         "Actions: add, list, show, update, enable, disable, remove. " \
         "To remove, update, or toggle a job, always use `list` first to get the job ID. " \
         "Always confirm with the user before add, remove, or update."
@@ -71,6 +72,12 @@ module Autobot
               type: "string",
               description: "ISO datetime for one-time execution (e.g. '2026-02-12T10:30:00')"
             ),
+            "exec_command" => PropertySchema.new(
+              type: "string",
+              description: "Shell command to run directly (LLM-free). Stdout becomes the notification. " \
+                           "Empty stdout = no notification. Mutually exclusive with `message`. " \
+                           "Previous stdout is passed as PREV_OUTPUT env var for change detection."
+            ),
             "job_id" => PropertySchema.new(
               type: "string",
               description: "Job ID (for show/update/enable/disable/remove). Use `list` action first to get the ID."
@@ -105,7 +112,14 @@ module Autobot
 
       private def add_job(params : Hash(String, JSON::Any)) : ToolResult
         message = params["message"]?.try(&.as_s) || ""
-        return ToolResult.error("message is required for add") if message.empty?
+        exec_command = params["exec_command"]?.try(&.as_s) || ""
+
+        if !message.empty? && !exec_command.empty?
+          return ToolResult.error("message and exec_command are mutually exclusive")
+        end
+        if message.empty? && exec_command.empty?
+          return ToolResult.error("message or exec_command is required for add")
+        end
         owner = owner_context
         return ToolResult.error("no session context (channel/chat_id)") unless owner
 
@@ -113,6 +127,47 @@ module Autobot
         return ToolResult.error("either every_seconds, cron_expr, or at is required") unless result
 
         schedule, delete_after = result
+
+        if !exec_command.empty?
+          add_exec_job(params, exec_command, schedule, delete_after, owner)
+        else
+          add_agent_job(params, message, schedule, delete_after, owner)
+        end
+      rescue ex : ArgumentError
+        ToolResult.error(ex.message || "Invalid schedule parameters")
+      end
+
+      private def add_exec_job(
+        params : Hash(String, JSON::Any),
+        command : String,
+        schedule : Cron::CronSchedule,
+        delete_after : Bool,
+        owner : String,
+      ) : ToolResult
+        job_name = derive_exec_name(params, command)
+
+        job = @cron.add_job(
+          name: job_name,
+          schedule: schedule,
+          kind: Cron::PayloadKind::Exec,
+          command: command,
+          deliver: true,
+          channel: @channel,
+          to: @chat_id,
+          delete_after_run: delete_after,
+          owner: owner,
+        )
+
+        ToolResult.success("Created exec job '#{job.name}' (id: #{job.id})")
+      end
+
+      private def add_agent_job(
+        params : Hash(String, JSON::Any),
+        message : String,
+        schedule : Cron::CronSchedule,
+        delete_after : Bool,
+        owner : String,
+      ) : ToolResult
         job_name = derive_job_name(params, message)
 
         job = @cron.add_job(
@@ -123,12 +178,10 @@ module Autobot
           channel: @channel,
           to: @chat_id,
           delete_after_run: delete_after,
-          owner: owner
+          owner: owner,
         )
 
         ToolResult.success("Created job '#{job.name}' (id: #{job.id})")
-      rescue ex : ArgumentError
-        ToolResult.error(ex.message || "Invalid schedule parameters")
       end
 
       private def update_job(params : Hash(String, JSON::Any)) : ToolResult
@@ -216,13 +269,23 @@ module Autobot
         end
       end
 
+      private def derive_exec_name(params : Hash(String, JSON::Any), command : String) : String
+        name = params["name"]?.try(&.as_s)
+        if name && !name.empty?
+          name.size > JOB_NAME_MAX_LENGTH ? name[0, JOB_NAME_MAX_LENGTH] : name
+        else
+          label = "exec: #{command}"
+          label.size > JOB_NAME_MAX_LENGTH ? label[0, JOB_NAME_MAX_LENGTH] : label
+        end
+      end
+
       private def format_job_line(job : Cron::CronJob) : String
         next_run = @cron.compute_next_run_for(job)
         last_run = Cron::Formatter.format_relative_time(job.state.last_run_at_ms)
         last_status = job.state.last_status.try(&.to_s.downcase) || "n/a"
         next_run_str = next_run ? Cron::Formatter.format_relative_time(next_run) : "n/a"
 
-        "- #{job.id} | #{job.name}\n" \
+        "- #{job.id} | #{Cron::Formatter.format_type_tag(job)} #{job.name}\n" \
         "  Schedule: #{Cron::Formatter.format_schedule(job.schedule)} | Last: #{last_run} (#{last_status}) | Next: #{next_run_str}"
       end
 
@@ -231,15 +294,18 @@ module Autobot
         status = job.enabled? ? "enabled" : "disabled"
         last_run = Cron::Formatter.format_relative_time(job.state.last_run_at_ms)
         last_status = job.state.last_status.try(&.to_s.downcase) || "n/a"
+        detail = Cron::Formatter.format_job_detail(job)
+        detail_label = job.payload.kind.exec? ? "Command" : "Message"
 
         lines = [
           "ID: #{job.id}",
           "Name: #{job.name}",
+          "Type: #{Cron::Formatter.format_type_tag(job)}",
           "Status: #{status}",
           "Schedule: #{Cron::Formatter.format_schedule(job.schedule)}",
           "Next run: #{next_run ? Cron::Formatter.format_relative_time(next_run) : "n/a"}",
           "Last run: #{last_run} (#{last_status})",
-          "Message: #{job.payload.message}",
+          "#{detail_label}: #{detail}",
         ]
 
         ToolResult.success(lines.join("\n"))

@@ -115,6 +115,37 @@ module Autobot
         "in #{days}d"
       end
 
+      # Plain-text type tag for LLM tool output.
+      def self.format_type_tag(job : CronJob) : String
+        job.payload.kind.exec? ? "[exec]" : "[agent]"
+      end
+
+      # Job detail (command or message) based on job type.
+      def self.format_job_detail(job : CronJob) : String
+        if job.payload.kind.exec?
+          job.payload.command || ""
+        else
+          job.payload.message
+        end
+      end
+
+      # Markdown-formatted exec job output notification.
+      def self.format_exec_output(job : CronJob, output : String) : String
+        "⚡ **#{job.name}**\n\n```\n#{output}\n```"
+      end
+
+      # HTML-formatted job line for Telegram cron list.
+      def self.format_job_line_html(job : CronJob, index : Int32) : String
+        schedule = format_schedule_html(job.schedule)
+        last_run = format_last_run_html(job.state.last_run_at_ms)
+        type_icon = job.payload.kind.exec? ? "⚡" : "🤖"
+        detail = escape_html(format_job_detail(job).strip)
+
+        "<b>#{index}.</b> #{type_icon} #{escape_html(job.id)} — #{escape_html(job.name)}\n" \
+        "   #{schedule} | #{last_run}\n" \
+        "   <i>#{detail}</i>"
+      end
+
       def self.escape_html(s : String) : String
         s.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;").gsub("\"", "&quot;")
       end

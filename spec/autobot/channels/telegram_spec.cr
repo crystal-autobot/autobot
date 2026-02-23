@@ -100,7 +100,7 @@ describe Autobot::Channels::TelegramChannel do
       result.should contain("Stars check")
       result.should contain("⏱ Every 10 min")
       result.should contain("⏳ pending")
-      result.should contain("📝")
+      result.should contain("🤖")
       result.should contain("Check GitHub stars")
     ensure
       FileUtils.rm_rf(tmp) if tmp
