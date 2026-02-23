@@ -90,7 +90,7 @@ module Autobot
             bus.publish_outbound(Bus::OutboundMessage.new(
               channel: channel,
               chat_id: chat_id,
-              content: output,
+              content: Cron::Formatter.format_exec_output(job, output),
             ))
           end
         end

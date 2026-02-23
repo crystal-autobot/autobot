@@ -284,9 +284,8 @@ module Autobot
         last_run = Cron::Formatter.format_relative_time(job.state.last_run_at_ms)
         last_status = job.state.last_status.try(&.to_s.downcase) || "n/a"
         next_run_str = next_run ? Cron::Formatter.format_relative_time(next_run) : "n/a"
-        type_tag = job.payload.kind.exec? ? " [exec]" : ""
 
-        "- #{job.id} | #{job.name}#{type_tag}\n" \
+        "- #{job.id} | #{Cron::Formatter.format_type_tag(job)} #{job.name}\n" \
         "  Schedule: #{Cron::Formatter.format_schedule(job.schedule)} | Last: #{last_run} (#{last_status}) | Next: #{next_run_str}"
       end
 
@@ -295,22 +294,19 @@ module Autobot
         status = job.enabled? ? "enabled" : "disabled"
         last_run = Cron::Formatter.format_relative_time(job.state.last_run_at_ms)
         last_status = job.state.last_status.try(&.to_s.downcase) || "n/a"
+        detail = Cron::Formatter.format_job_detail(job)
+        detail_label = job.payload.kind.exec? ? "Command" : "Message"
 
         lines = [
           "ID: #{job.id}",
           "Name: #{job.name}",
-          "Type: #{job.payload.kind.exec? ? "exec" : "agent"}",
+          "Type: #{Cron::Formatter.format_type_tag(job)}",
           "Status: #{status}",
           "Schedule: #{Cron::Formatter.format_schedule(job.schedule)}",
           "Next run: #{next_run ? Cron::Formatter.format_relative_time(next_run) : "n/a"}",
           "Last run: #{last_run} (#{last_status})",
+          "#{detail_label}: #{detail}",
         ]
-
-        if job.payload.kind.exec?
-          lines << "Command: #{job.payload.command}"
-        else
-          lines << "Message: #{job.payload.message}"
-        end
 
         ToolResult.success(lines.join("\n"))
       end
