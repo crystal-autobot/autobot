@@ -124,14 +124,14 @@ Autobot automatically detects and logs the sandbox method on startup — Docker 
 
 ## 📚 Documentation
 
-**[Full documentation →](https://crystal-autobot.github.io/autobot/)**
-
 - **Getting started** — [Quick start](https://crystal-autobot.github.io/autobot/quickstart/) · [Configuration](https://crystal-autobot.github.io/autobot/configuration/)
 - **Providers** — [Anthropic](https://crystal-autobot.github.io/autobot/anthropic/) · [OpenAI](https://crystal-autobot.github.io/autobot/openai/) · [DeepSeek](https://crystal-autobot.github.io/autobot/deepseek/) · [Groq](https://crystal-autobot.github.io/autobot/groq/) · [Gemini](https://crystal-autobot.github.io/autobot/gemini/) · [OpenRouter](https://crystal-autobot.github.io/autobot/openrouter/) · [Bedrock](https://crystal-autobot.github.io/autobot/bedrock/) · [vLLM](https://crystal-autobot.github.io/autobot/vllm/)
 - **Channels** — [Telegram](https://crystal-autobot.github.io/autobot/telegram/) · [Slack](https://crystal-autobot.github.io/autobot/slack/) · [Zulip](https://crystal-autobot.github.io/autobot/zulip/)
 - **Features** — [Cron](https://crystal-autobot.github.io/autobot/cron/) · [Media & voice](https://crystal-autobot.github.io/autobot/media/) · [Web search](https://crystal-autobot.github.io/autobot/web-search/) · [MCP servers](https://crystal-autobot.github.io/autobot/mcp/) · [Memory](https://crystal-autobot.github.io/autobot/memory/) · [Plugins](https://crystal-autobot.github.io/autobot/plugins/)
 - **Security** — [Security guide](https://crystal-autobot.github.io/autobot/security/) · [Sandboxing](https://crystal-autobot.github.io/autobot/sandboxing/)
 - **Operations** — [Deployment](https://crystal-autobot.github.io/autobot/deployment/) · [Architecture](https://crystal-autobot.github.io/autobot/architecture/) · [Development](https://crystal-autobot.github.io/autobot/development/)
+
+**→ [Full documentation](https://crystal-autobot.github.io/autobot/)**
 
 ## 💡 Examples
 
