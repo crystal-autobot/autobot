@@ -13,6 +13,7 @@ module Autobot
     CHANNEL_TELEGRAM = "telegram"
     CHANNEL_SLACK    = "slack"
     CHANNEL_WHATSAPP = "whatsapp"
+    CHANNEL_ZULIP    = "zulip"
 
     # Sender ID prefixes
     CRON_SENDER_PREFIX = "cron:"

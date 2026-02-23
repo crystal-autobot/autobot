@@ -46,7 +46,7 @@ If neither Groq nor OpenAI is configured, voice messages fall back to `[voice me
 
 **Security Note:** `allow_from` is deny-by-default for security.
 
-Setup guides: **[Telegram](telegram.md)** | **[Slack](slack.md)**
+Setup guides: **[Telegram](telegram.md)** | **[Slack](slack.md)** | **[Zulip](zulip.md)**
 
 ```yaml
 channels:
@@ -73,6 +73,13 @@ channels:
     # allow_from: []      - DENY ALL
     # allow_from: ["*"]   - Allow anyone
     # allow_from: ["num"] - Allowlist phone numbers
+    allow_from: []
+
+  zulip:
+    enabled: false
+    site: "https://zulip.example.com"
+    email: "bot@zulip.example.com"
+    api_key: ""
     allow_from: []
 ```
 
@@ -203,6 +210,13 @@ channels:
     enabled: false
     bridge_url: "ws://localhost:3001"
     allow_from: ["1234567890"]
+
+  zulip:
+    enabled: false
+    site: "https://zulip.example.com"
+    email: "bot@zulip.example.com"
+    api_key: ""
+    allow_from: ["you@example.com"]
 
 # Tool settings
 tools:

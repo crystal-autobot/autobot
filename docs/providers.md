@@ -83,6 +83,6 @@ All providers support the same autobot features:
 - Plugins
 - Memory system
 - Cron scheduling
-- All chat channels (Telegram, Slack, WhatsApp, CLI)
+- All chat channels (Telegram, Slack, WhatsApp, Zulip, CLI)
 
 The only exception is voice transcription, which requires Groq or OpenAI (see above).

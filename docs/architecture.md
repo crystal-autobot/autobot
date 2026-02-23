@@ -12,6 +12,7 @@ graph LR
         TG[Telegram]
         SL[Slack]
         WA[WhatsApp]
+        ZP[Zulip]
     end
 
     BUS((Event Bus))
@@ -39,7 +40,7 @@ graph LR
     SAND[Sandbox\nDocker · Bubblewrap]
     CRON[Cron\nScheduler]
 
-    CLI & TG & SL & WA --> BUS
+    CLI & TG & SL & WA & ZP --> BUS
     CRON -.->|scheduled| BUS
     BUS --> LOOP
     LOOP --- CTX & MEM & SESS
@@ -58,6 +59,7 @@ graph LR
     style TG fill:#42a5f5,stroke:#1e88e5,color:#fff
     style SL fill:#42a5f5,stroke:#1e88e5,color:#fff
     style WA fill:#42a5f5,stroke:#1e88e5,color:#fff
+    style ZP fill:#42a5f5,stroke:#1e88e5,color:#fff
     style BASH fill:#ffa726,stroke:#fb8c00,color:#fff
     style FS fill:#ffa726,stroke:#fb8c00,color:#fff
     style WEB fill:#ffa726,stroke:#fb8c00,color:#fff
@@ -70,7 +72,7 @@ graph LR
 
 ## Request Lifecycle
 
-1. **Message ingress** — A channel adapter (CLI, Telegram, Slack, WhatsApp) receives user input and publishes it to the event bus.
+1. **Message ingress** — A channel adapter (CLI, Telegram, Slack, WhatsApp, Zulip) receives user input and publishes it to the event bus.
 2. **Context assembly** — The agent loop picks up the message and builds the full LLM context: system prompt, conversation history from the session store, relevant memories, and available skills.
 3. **LLM request** — The assembled context is sent to the configured LLM provider (Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, or vLLM).
 4. **Tool execution** — If the LLM response contains tool calls, each tool is executed through the tool registry. Shell commands run inside a kernel-enforced sandbox (Docker or bubblewrap). MCP tools are proxied to external servers.
@@ -89,6 +91,7 @@ Channel adapters handle protocol-specific communication (HTTP webhooks, WebSocke
 | Telegram | HTTP polling | Photos, voice, custom commands, allowlists |
 | Slack | WebSocket | Thread support, file uploads |
 | WhatsApp | HTTP webhooks | Media messages |
+| Zulip | HTTP Polling | Private direct messages |
 
 ### Agent Loop (`agent/`)
 
@@ -96,7 +99,7 @@ The core orchestration engine. When a message arrives, it builds context from bo
 
 ```mermaid
 graph LR
-    CHAT["📡 Channels\nTelegram · Slack · WhatsApp · CLI"]
+    CHAT["📡 Channels\nTelegram · Slack · WhatsApp · Zulip · CLI"]
 
     CHAT --> MSG["💬 Message"]
 

@@ -22,6 +22,7 @@ Channel (Telegram) -> Download & Base64 encode -> Context Builder -> LLM Provide
 | Telegram  | Supported | Auto-downloads photos via Bot API        |
 | Slack     | Planned   | Needs `url_private` download with auth   |
 | WhatsApp  | Planned   | Needs bridge-side changes to forward images |
+| Zulip     | Not Supported | Media handling not yet implemented |
 
 ## Supported Providers
 

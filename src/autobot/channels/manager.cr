@@ -108,49 +108,67 @@ module Autobot::Channels
     private def init_channels : Nil
       return unless channels_config = @config.channels
 
-      if telegram_config = channels_config.telegram
-        if telegram_config.enabled?
-          custom_cmds = telegram_config.custom_commands || Config::CustomCommandsConfig.from_yaml("{}")
-          @channels["telegram"] = TelegramChannel.new(
-            bus: @bus,
-            token: telegram_config.token,
-            allow_from: telegram_config.allow_from,
-            proxy: telegram_config.proxy?,
-            custom_commands: custom_cmds,
-            session_manager: @session_manager,
-            transcriber: @transcriber,
-            cron_service: @cron_service,
-          )
-          Log.info { "Telegram channel enabled" }
-        end
-      end
+      init_telegram(channels_config.telegram)
+      init_slack(channels_config.slack)
+      init_whatsapp(channels_config.whatsapp)
+      init_zulip(channels_config.zulip)
+    end
 
-      if slack_config = channels_config.slack
-        if slack_config.enabled?
-          dm_cfg = slack_config.dm || Config::SlackDMConfig.from_yaml("{}")
-          @channels["slack"] = SlackChannel.new(
-            bus: @bus,
-            bot_token: slack_config.bot_token,
-            app_token: slack_config.app_token,
-            allow_from: slack_config.allow_from,
-            group_policy: slack_config.group_policy,
-            group_allow_from: slack_config.group_allow_from,
-            dm_config: dm_cfg,
-          )
-          Log.info { "Slack channel enabled" }
-        end
-      end
+    private def init_telegram(config)
+      return unless config && config.enabled?
 
-      if whatsapp_config = channels_config.whatsapp
-        if whatsapp_config.enabled?
-          @channels["whatsapp"] = WhatsAppChannel.new(
-            bus: @bus,
-            bridge_url: whatsapp_config.bridge_url,
-            allow_from: whatsapp_config.allow_from,
-          )
-          Log.info { "WhatsApp channel enabled" }
-        end
-      end
+      custom_cmds = config.custom_commands || Config::CustomCommandsConfig.from_yaml("{}")
+      @channels["telegram"] = TelegramChannel.new(
+        bus: @bus,
+        token: config.token,
+        allow_from: config.allow_from,
+        proxy: config.proxy?,
+        custom_commands: custom_cmds,
+        session_manager: @session_manager,
+        transcriber: @transcriber,
+        cron_service: @cron_service,
+      )
+      Log.info { "Telegram channel enabled" }
+    end
+
+    private def init_slack(config)
+      return unless config && config.enabled?
+
+      dm_cfg = config.dm || Config::SlackDMConfig.from_yaml("{}")
+      @channels["slack"] = SlackChannel.new(
+        bus: @bus,
+        bot_token: config.bot_token,
+        app_token: config.app_token,
+        allow_from: config.allow_from,
+        group_policy: config.group_policy,
+        group_allow_from: config.group_allow_from,
+        dm_config: dm_cfg,
+      )
+      Log.info { "Slack channel enabled" }
+    end
+
+    private def init_whatsapp(config)
+      return unless config && config.enabled?
+
+      @channels["whatsapp"] = WhatsAppChannel.new(
+        bus: @bus,
+        bridge_url: config.bridge_url,
+        allow_from: config.allow_from,
+      )
+      Log.info { "WhatsApp channel enabled" }
+    end
+
+    private def init_zulip(config)
+      return unless config && config.enabled?
+
+      @channels["zulip"] = ZulipChannel.new(
+        bus: @bus,
+        site: config.site,
+        email: config.email,
+        api_key: config.api_key,
+        allow_from: config.allow_from,
+      )
+      Log.info { "Zulip channel enabled" }
     end
 
     # Dispatch outbound messages from the bus to the appropriate channel.
