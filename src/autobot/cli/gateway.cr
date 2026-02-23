@@ -22,7 +22,7 @@ module Autobot
         tool_registry, plugin_registry, mcp_clients = setup_tools(config)
         provider = create_provider(config)
 
-        elapsed_ms = (Time.instant - started_at).total_milliseconds.to_i
+        elapsed_ms = started_at.elapsed.total_milliseconds.to_i
         puts "✓ Gateway ready in #{elapsed_ms}ms\n"
 
         # Post-ready setup: cron, channels, agent loop
