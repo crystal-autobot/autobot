@@ -145,7 +145,7 @@ describe Autobot::Tools::CronTool do
       })
 
       result.success?.should be_false
-      result.content.should contain("message is required")
+      result.content.should contain("message or exec_command is required")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
@@ -779,5 +779,86 @@ describe Autobot::Tools::CronTool do
     result.content.should contain("Unknown action")
   ensure
     FileUtils.rm_rf(tmp) if tmp
+  end
+
+  describe "exec_command" do
+    it "adds an exec job with exec_command" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "exec_command"  => JSON::Any.new("echo hello"),
+        "every_seconds" => JSON::Any.new(300_i64),
+      })
+
+      result.success?.should be_true
+      result.content.should contain("Created exec job")
+
+      job = service.list_jobs.first
+      job.payload.kind.should eq(Autobot::Cron::PayloadKind::Exec)
+      job.payload.command.should eq("echo hello")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails when both message and exec_command are provided" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "message"       => JSON::Any.new("Do something"),
+        "exec_command"  => JSON::Any.new("echo hello"),
+        "every_seconds" => JSON::Any.new(60_i64),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("mutually exclusive")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails when neither message nor exec_command is provided" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("telegram", "user123")
+
+      result = tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "every_seconds" => JSON::Any.new(60_i64),
+      })
+
+      result.success?.should be_false
+      result.content.should contain("message or exec_command is required")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "sets delivery context on exec jobs" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      tool = Autobot::Tools::CronTool.new(service)
+      tool.set_context("slack", "C123")
+
+      tool.execute({
+        "action"        => JSON::Any.new("add"),
+        "exec_command"  => JSON::Any.new("echo test"),
+        "every_seconds" => JSON::Any.new(60_i64),
+      })
+
+      job = service.list_jobs.first
+      job.payload.channel.should eq("slack")
+      job.payload.to.should eq("C123")
+      job.payload.deliver?.should be_true
+      job.owner.should eq("slack:C123")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
   end
 end

@@ -3,8 +3,8 @@ require "../cron/formatter"
 module Autobot
   module CLI
     module CronCmd
-      TABLE_FORMAT     = "%-10s %-20s %-20s %-10s %-20s"
-      TABLE_WIDTH      = 82
+      TABLE_FORMAT     = "%-10s %-8s %-20s %-20s %-10s %-20s"
+      TABLE_WIDTH      = 92
       COLUMN_MAX_WIDTH = 20
       NIL_PLACEHOLDER  = "-"
 
@@ -17,15 +17,16 @@ module Autobot
           return
         end
 
-        puts TABLE_FORMAT % ["ID", "Name", "Schedule", "Status", "Next Run"]
+        puts TABLE_FORMAT % ["ID", "Type", "Name", "Schedule", "Status", "Next Run"]
         puts "-" * TABLE_WIDTH
 
         jobs.each do |job|
           sched = Cron::Formatter.format_schedule(job.schedule)
           next_run = format_time_ms(service.compute_next_run_for(job))
           status = job.enabled? ? "enabled" : "disabled"
+          type = Cron::Formatter.format_type_tag(job)
 
-          puts TABLE_FORMAT % [job.id, job.name[0, COLUMN_MAX_WIDTH], sched[0, COLUMN_MAX_WIDTH], status, next_run]
+          puts TABLE_FORMAT % [job.id, type, job.name[0, COLUMN_MAX_WIDTH], sched[0, COLUMN_MAX_WIDTH], status, next_run]
         end
       end
 
@@ -39,13 +40,17 @@ module Autobot
 
         status = job.enabled? ? "enabled" : "disabled"
 
+        detail_label = job.payload.kind.exec? ? "Command" : "Message"
+        detail = Cron::Formatter.format_job_detail(job)
+
         puts "ID:       #{job.id}"
         puts "Name:     #{job.name}"
+        puts "Type:     #{Cron::Formatter.format_type_tag(job)}"
         puts "Status:   #{status}"
         puts "Schedule: #{Cron::Formatter.format_schedule(job.schedule)}"
         puts "Next Run: #{format_time_ms(service.compute_next_run_for(job))}"
         puts "Last Run: #{format_time_ms(job.state.last_run_at_ms)}"
-        puts "Message:  #{job.payload.message}"
+        puts "#{detail_label}: #{detail}"
         puts "Deliver:  #{job.payload.deliver?}"
         puts "Channel:  #{job.payload.channel || NIL_PLACEHOLDER}"
         puts "To:       #{job.payload.to || NIL_PLACEHOLDER}"

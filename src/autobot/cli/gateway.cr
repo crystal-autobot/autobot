@@ -56,6 +56,9 @@ module Autobot
         tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config)
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
+        if img = config.tools.try(&.docker_image)
+          Tools::Sandbox.docker_image = img
+        end
         log_sandbox_info(sandbox_config)
 
         {tool_registry, plugin_registry, mcp_clients}
@@ -80,7 +83,26 @@ module Autobot
           nil
         end
 
-        cron_service = Cron::Service.new(cron_store_path, on_job: on_job)
+        on_exec = ->(job : Cron::CronJob, output : String) do
+          channel = job.payload.channel
+          chat_id = job.payload.to
+          if channel && chat_id && !chat_id.empty?
+            bus.publish_outbound(Bus::OutboundMessage.new(
+              channel: channel,
+              chat_id: chat_id,
+              content: Cron::Formatter.format_exec_output(job, output),
+            ))
+          end
+        end
+
+        sandbox_config = config.tools.try(&.sandbox) || "auto"
+        cron_service = Cron::Service.new(
+          cron_store_path,
+          on_job: on_job,
+          on_exec: on_exec,
+          workspace: config.workspace_path,
+          sandbox_config: sandbox_config,
+        )
         cron_service.start
 
         cron_jobs = cron_service.list_jobs.size

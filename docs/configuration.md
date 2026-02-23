@@ -88,6 +88,7 @@ channels:
 ```yaml
 tools:
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
+  docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
   exec:
     timeout: 60
   web:
@@ -219,6 +220,8 @@ channels:
 
 # Tool settings
 tools:
+  sandbox: auto  # auto | bubblewrap | docker | none
+  docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
   web:
     search:
       api_key: "BRAVE_API_KEY"

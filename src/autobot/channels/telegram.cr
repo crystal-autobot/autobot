@@ -572,13 +572,7 @@ module Autobot::Channels
     end
 
     private def format_cron_job_html(job : Cron::CronJob, index : Int32) : String
-      schedule = Cron::Formatter.format_schedule_html(job.schedule)
-      last_run = Cron::Formatter.format_last_run_html(job.state.last_run_at_ms)
-      message = Cron::Formatter.escape_html(job.payload.message.strip)
-
-      "<b>#{index}.</b> #{Cron::Formatter.escape_html(job.id)} — #{Cron::Formatter.escape_html(job.name)}\n" \
-      "   #{schedule} | #{last_run}\n" \
-      "   📝 <i>#{message}</i>"
+      Cron::Formatter.format_job_line_html(job, index)
     end
 
     private def send_help(chat_id : String) : Nil

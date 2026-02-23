@@ -92,6 +92,83 @@ The `cron` tool is available so jobs can self-remove when their task defines a s
 
 ---
 
+## Exec Payloads
+
+Many monitoring and automation tasks are deterministic — check a URL, compare a value, send an alert. These don't need an LLM reasoning about what to do every time. But setting them up still requires figuring out the right shell command, cron expression, and wiring.
+
+Exec payloads let you describe what you want in natural language — the agent writes the shell command once, and from that point on it runs directly on a schedule with zero LLM involvement. No tokens, no latency, no cost per execution.
+
+> **User:** "Check air quality in NYC every hour, notify me if AQI goes above 100"
+>
+> The agent creates an exec job with the right `curl | jq` pipeline. Every hour the command runs on its own — the LLM is never called again.
+
+### How exec differs from agent turns
+
+| | Agent turn | Exec payload |
+|---|---|---|
+| **Setup** | LLM writes the prompt | LLM writes the shell command |
+| **Each run** | Full LLM turn with tools | Shell command only |
+| **Token cost** | Per-invocation | Zero (after setup) |
+| **Output** | LLM-generated response | Raw stdout |
+| **Best for** | Tasks needing reasoning | Deterministic checks and scripts |
+
+### Parameters
+
+- **`exec_command`** — The shell command to run (mutually exclusive with `message`)
+- **`PREV_OUTPUT`** — Environment variable containing the previous run's stdout, enabling change detection
+
+### Execution flow
+
+```mermaid
+graph LR
+    TIMER[Timer fires] --> EXEC[Run command in sandbox]
+    EXEC --> CHECK{Output empty?}
+    CHECK -->|no| DELIVER[Deliver to channel]
+    CHECK -->|yes| SKIP[Skip silently]
+
+    style TIMER fill:#ab47bc,stroke:#8e24aa,color:#fff
+    style EXEC fill:#5c6bc0,stroke:#3949ab,color:#fff
+    style CHECK fill:#7c4dff,stroke:#651fff,color:#fff
+    style DELIVER fill:#ffa726,stroke:#fb8c00,color:#fff
+    style SKIP fill:#78909c,stroke:#546e7a,color:#fff
+```
+
+Exec commands run inside the sandbox (bubblewrap or Docker) by default. Set `sandbox: none` to run directly on the host.
+
+### Examples
+
+**Air quality check (only notify on change):**
+
+```bash
+autobot cron add \
+  --name "air-quality" \
+  --exec 'curl -s "https://api.example.com/aqi?city=NYC" | jq -r .aqi' \
+  --every 3600 \
+  --channel telegram --to "12345"
+```
+
+The `PREV_OUTPUT` variable lets you detect changes:
+
+```bash
+autobot cron add \
+  --name "uptime-monitor" \
+  --exec 'STATUS=$(curl -so /dev/null -w "%{http_code}" https://example.com); [ "$STATUS" != "$PREV_OUTPUT" ] && echo "$STATUS" || true' \
+  --every 300 \
+  --channel slack --to "C12345"
+```
+
+**Disk space alert:**
+
+```bash
+autobot cron add \
+  --name "disk-check" \
+  --exec 'USAGE=$(df -h / | awk "NR==2{print \$5}" | tr -d "%"); [ "$USAGE" -gt 90 ] && echo "Disk usage: ${USAGE}%" || true' \
+  --cron "0 */6 * * *" \
+  --channel telegram --to "12345"
+```
+
+---
+
 ## Configuration
 
 ### Enable Cron

@@ -836,4 +836,218 @@ describe Autobot::Cron::Service do
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
+
+  describe "exec jobs" do
+    it "adds an exec job with command" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "exec_test",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo hello"
+      )
+
+      job.payload.kind.should eq(Autobot::Cron::PayloadKind::Exec)
+      job.payload.command.should eq("echo hello")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "runs exec job and captures stdout" do
+      tmp = TestHelper.tmp_dir
+      exec_output = nil
+      exec_job_ref = nil
+
+      on_exec = ->(job : Autobot::Cron::CronJob, output : String) do
+        exec_job_ref = job
+        exec_output = output
+        nil
+      end
+
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_exec: on_exec)
+
+      job = service.add_job(
+        name: "exec_echo",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo 'hello world'"
+      )
+
+      service.run_job(job.id, force: true)
+
+      exec_output.should eq("hello world")
+      exec_job_ref.should_not be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "skips on_exec callback when output is empty" do
+      tmp = TestHelper.tmp_dir
+      callback_called = false
+
+      on_exec = ->(_job : Autobot::Cron::CronJob, _output : String) do
+        callback_called = true
+        nil
+      end
+
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_exec: on_exec)
+
+      job = service.add_job(
+        name: "exec_silent",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "true"
+      )
+
+      service.run_job(job.id, force: true)
+
+      callback_called.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "stores last_output in job state" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "exec_state",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo 'test output'"
+      )
+
+      service.run_job(job.id, force: true)
+
+      jobs = service.list_jobs
+      jobs.first.state.last_output.should eq("test output")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "passes PREV_OUTPUT env var to command" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "exec_prev",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo first"
+      )
+
+      # First run - sets last_output
+      service.run_job(job.id, force: true)
+      service.list_jobs.first.state.last_output.should eq("first")
+
+      # Update command to echo PREV_OUTPUT
+      job_id = service.list_jobs.first.id
+      service.list_jobs.first.payload.command = "echo \"prev:$PREV_OUTPUT\""
+
+      service.run_job(job_id, force: true)
+      service.list_jobs.first.state.last_output.should eq("prev:first")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "records error status when command fails" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "exec_fail",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "exit 1"
+      )
+
+      service.run_job(job.id, force: true)
+
+      jobs = service.list_jobs
+      jobs.first.state.last_status.should eq(Autobot::Cron::JobStatus::Error)
+      jobs.first.state.last_error.should_not be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "raises when sandbox enabled but workspace is missing" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(
+        store_path: tmp / "cron.json",
+        sandbox_config: "docker",
+        workspace: nil,
+      )
+
+      job = service.add_job(
+        name: "exec_no_ws",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo test"
+      )
+
+      service.run_job(job.id, force: true)
+
+      jobs = service.list_jobs
+      jobs.first.state.last_status.should eq(Autobot::Cron::JobStatus::Error)
+      jobs.first.state.last_error.to_s.should contain("no workspace configured")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "runs exec job directly when sandbox is disabled" do
+      tmp = TestHelper.tmp_dir
+      exec_output = nil
+
+      on_exec = ->(_job : Autobot::Cron::CronJob, output : String) do
+        exec_output = output
+        nil
+      end
+
+      service = Autobot::Cron::Service.new(
+        store_path: tmp / "cron.json",
+        on_exec: on_exec,
+        sandbox_config: "none",
+      )
+
+      job = service.add_job(
+        name: "exec_direct",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo 'direct execution'"
+      )
+
+      service.run_job(job.id, force: true)
+
+      exec_output.should eq("direct execution")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "does not call on_job for exec jobs" do
+      tmp = TestHelper.tmp_dir
+      on_job_called = false
+
+      on_job = ->(_job : Autobot::Cron::CronJob) : String? do
+        on_job_called = true
+        nil
+      end
+
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_job: on_job)
+
+      job = service.add_job(
+        name: "exec_no_agent",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo test"
+      )
+
+      service.run_job(job.id, force: true)
+
+      on_job_called.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
 end
