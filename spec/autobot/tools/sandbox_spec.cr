@@ -27,4 +27,17 @@ describe Autobot::Tools::Sandbox do
       end
     end
   end
+
+  describe ".docker_image" do
+    it "defaults to nil" do
+      Autobot::Tools::Sandbox.docker_image.should be_nil
+    end
+
+    it "can be set to a custom image" do
+      Autobot::Tools::Sandbox.docker_image = "python:3.14-alpine"
+      Autobot::Tools::Sandbox.docker_image.should eq("python:3.14-alpine")
+    ensure
+      Autobot::Tools::Sandbox.docker_image = nil
+    end
+  end
 end

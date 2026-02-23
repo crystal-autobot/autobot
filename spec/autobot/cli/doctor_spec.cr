@@ -183,6 +183,39 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_docker_image" do
+    it "skips when no docker_image configured" do
+      config = make_config(<<-YAML
+      tools:
+        sandbox: "auto"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_docker_image(config, 0)
+
+        errors.should eq(0)
+        io.to_s.should be_empty
+      end
+    end
+
+    it "warns when docker image is not found locally" do
+      config = make_config(<<-YAML
+      tools:
+        docker_image: "nonexistent-image:99.99"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_docker_image(config, 0)
+
+        errors.should eq(0)
+        io.to_s.should contain("! Docker image not found locally")
+        io.to_s.should contain("docker pull")
+      end
+    end
+  end
+
   describe ".check_telegram" do
     it "skips when telegram is disabled" do
       with_doctor_io do |io|

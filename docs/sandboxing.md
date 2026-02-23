@@ -117,6 +117,7 @@ Configure sandboxing in `config.yml`:
 ```yaml
 tools:
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
+  docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
 ```
 
 **Options:**
@@ -126,6 +127,7 @@ tools:
   - `bubblewrap` - Force bubblewrap (Linux only)
   - `docker` - Force Docker (all platforms)
   - `none` - Disable sandboxing (UNSAFE - tests only)
+- `docker_image` — Docker image to use for sandbox containers (default: `alpine:latest`). Set this when your commands need runtimes not available in Alpine (e.g. Python, Node.js). Only applies when sandbox is `docker` or `auto` resolves to Docker.
 
 ## Security Properties
 
