@@ -23,7 +23,7 @@ module Autobot
       GEMINI_API_BASE = "https://generativelanguage.googleapis.com"
 
       DEFAULT_OPENAI_MODEL = "gpt-image-1"
-      DEFAULT_GEMINI_MODEL = "gemini-2.0-flash-exp"
+      DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-image"
 
       VALID_SIZES = ["256x256", "512x512", "1024x1024", "1024x1536", "1536x1024", "auto"]
 
@@ -128,11 +128,10 @@ module Autobot
         base = @api_base || OPENAI_API_BASE
 
         body = {
-          "model"           => model,
-          "prompt"          => prompt,
-          "n"               => 1,
-          "size"            => size,
-          "response_format" => "b64_json",
+          "model"         => model,
+          "prompt"        => prompt,
+          "size"          => size,
+          "output_format" => "png",
         }.to_json
 
         uri = URI.parse(base)
@@ -171,8 +170,11 @@ module Autobot
         uri = URI.parse(GEMINI_API_BASE)
         client = build_client(uri)
 
-        path = "/v1beta/models/#{model}:generateContent?key=#{@api_key}"
-        headers = HTTP::Headers{"Content-Type" => "application/json"}
+        path = "/v1beta/models/#{model}:generateContent"
+        headers = HTTP::Headers{
+          "Content-Type"   => "application/json",
+          "x-goog-api-key" => @api_key,
+        }
 
         response = client.post(path, headers: headers, body: body)
         client.close

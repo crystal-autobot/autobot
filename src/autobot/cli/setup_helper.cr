@@ -121,8 +121,8 @@ module Autobot
       end
 
       # Resolve the provider for image generation.
-      # Uses `tools.image.provider` override if set, otherwise falls back to main provider
-      # (only openai and gemini support image generation).
+      # Uses `tools.image.provider` override if set, otherwise tries
+      # openai then gemini (the only providers that support image generation).
       private def self.resolve_image_provider(
         config : Config::Config,
         image_config : Config::ImageConfig?,
@@ -134,14 +134,7 @@ module Autobot
           return {nil, nil}
         end
 
-        # Fall back to main provider, but only if it supports image generation
-        provider_config, provider_name = config.match_provider
-        if provider_config && provider_name && image_capable_provider?(provider_name)
-          return {provider_config, provider_name}
-        end
-
-        # Try openai, then gemini as fallbacks
-        {"openai", "gemini"}.each do |name|
+        IMAGE_CAPABLE_PROVIDERS.each do |name|
           if provider = config.provider_by_name(name)
             return {provider, name}
           end
@@ -150,9 +143,7 @@ module Autobot
         {nil, nil}
       end
 
-      private def self.image_capable_provider?(name : String) : Bool
-        name == "openai" || name == "gemini"
-      end
+      IMAGE_CAPABLE_PROVIDERS = {"openai", "gemini"}
     end
   end
 end
