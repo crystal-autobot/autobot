@@ -95,6 +95,11 @@ tools:
     search:
       api_key: ""
       max_results: 5
+  image:
+    enabled: true              # default: true
+    # provider: openai         # optional override (openai or gemini)
+    # model: gpt-image-1       # optional, auto-detected from provider
+    # size: 1024x1024          # default: 1024x1024
 ```
 
 When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.
@@ -228,6 +233,11 @@ tools:
       max_results: 5
   exec:
     timeout: 60
+  image:
+    enabled: true
+    # provider: openai       # optional override (openai or gemini)
+    # model: gpt-image-1     # optional, auto-detected from provider
+    # size: 1024x1024
   restrict_to_workspace: true  # Default: true (recommended for security)
 
 # Cron scheduler

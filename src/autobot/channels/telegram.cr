@@ -245,8 +245,16 @@ module Autobot::Channels
       @typing_channels.clear
     end
 
+    MULTIPART_BOUNDARY  = "----AutobotMediaBoundary"
+    PHOTO_CAPTION_LIMIT = 1024
+
     def send_message(message : Bus::OutboundMessage) : Nil
       stop_typing(message.chat_id)
+
+      if photo = find_photo_attachment(message.media?)
+        send_photo(message.chat_id, photo, message.content)
+        return
+      end
 
       html = MarkdownToTelegramHTML.convert(message.content)
       html = MarkdownToTelegramHTML.strip_html(html) unless MarkdownToTelegramHTML.valid_html?(html)
@@ -270,6 +278,63 @@ module Autobot::Channels
           "text"    => MarkdownToTelegramHTML.strip_html(html),
         })
       end
+    end
+
+    private def find_photo_attachment(media : Array(Bus::MediaAttachment)?) : Bus::MediaAttachment?
+      return nil unless media
+      media.find { |attachment| attachment.type == "photo" && attachment.data }
+    end
+
+    private def send_photo(chat_id : String, attachment : Bus::MediaAttachment, caption : String) : Nil
+      data = attachment.data
+      unless data
+        Log.warn { "Photo attachment has no data, falling back to text" }
+        send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
+        return
+      end
+
+      photo_bytes = Base64.decode(data)
+      body = build_photo_multipart(chat_id, photo_bytes, caption)
+
+      url = "#{TELEGRAM_API_BASE}/bot#{@token}/sendPhoto"
+      headers = HTTP::Headers{
+        "Content-Type" => "multipart/form-data; boundary=#{MULTIPART_BOUNDARY}",
+      }
+
+      response = HTTP::Client.post(url, headers: headers, body: body)
+
+      unless response.status_code == 200
+        Log.error { "sendPhoto failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
+        send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
+      end
+    rescue ex
+      Log.error { "Error sending photo: #{ex.message}" }
+      send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
+    end
+
+    private def build_photo_multipart(chat_id : String, photo_bytes : Bytes, caption : String) : String
+      io = IO::Memory.new
+
+      # chat_id field
+      io << "--" << MULTIPART_BOUNDARY << "\r\n"
+      io << "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n"
+      io << chat_id << "\r\n"
+
+      # photo field (binary)
+      io << "--" << MULTIPART_BOUNDARY << "\r\n"
+      io << "Content-Disposition: form-data; name=\"photo\"; filename=\"image.png\"\r\n"
+      io << "Content-Type: image/png\r\n\r\n"
+      io.write(photo_bytes)
+      io << "\r\n"
+
+      # caption field (truncated to Telegram limit)
+      truncated_caption = caption.size > PHOTO_CAPTION_LIMIT ? caption[0, PHOTO_CAPTION_LIMIT] : caption
+      io << "--" << MULTIPART_BOUNDARY << "\r\n"
+      io << "Content-Disposition: form-data; name=\"caption\"\r\n\r\n"
+      io << truncated_caption << "\r\n"
+
+      io << "--" << MULTIPART_BOUNDARY << "--\r\n"
+      io.to_s
     end
 
     private def poll_updates : Nil

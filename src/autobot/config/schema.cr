@@ -239,10 +239,22 @@ module Autobot::Config
     end
   end
 
+  class ImageConfig
+    include YAML::Serializable
+    property? enabled : Bool = true
+    property provider : String? = nil
+    property model : String? = nil
+    property size : String = "1024x1024"
+
+    def initialize
+    end
+  end
+
   class ToolsConfig
     include YAML::Serializable
     property web : WebToolsConfig?
     property exec : ExecToolConfig?
+    property image : ImageConfig?
     property sandbox : String = "auto" # "auto", "bubblewrap", "docker", "none"
     property docker_image : String? = nil
 
@@ -342,6 +354,19 @@ module Autobot::Config
       bedrock = providers.try(&.bedrock)
       return nil unless bedrock && bedrock.configured?
       bedrock
+    end
+
+    # Look up a provider config by name (e.g. "openai", "gemini").
+    def provider_by_name(name : String) : ProviderConfig?
+      return nil unless p = providers
+      normalized = name.downcase
+      {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm] %}
+        if normalized == {{ provider_name }}
+          provider = p.{{ provider_name.id }}
+          return provider if provider && !provider.api_key.empty?
+        end
+      {% end %}
+      nil
     end
 
     def validate! : Nil

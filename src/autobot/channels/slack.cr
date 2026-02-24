@@ -62,6 +62,10 @@ module Autobot::Channels
     end
 
     def send_message(message : Bus::OutboundMessage) : Nil
+      if message.media?.try(&.any? { |attachment| attachment.type == "photo" && attachment.data })
+        Log.warn { "Image sending not yet supported for Slack" }
+      end
+
       thread_ts = message.metadata["thread_ts"]?
       channel_type = message.metadata["channel_type"]?
       use_thread = !thread_ts.nil? && channel_type != "im"

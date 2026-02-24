@@ -73,6 +73,8 @@ module Autobot
           ]
         )
 
+        register_image_tool(config, tool_registry)
+
         # MCP servers (started in background, tools register as they connect)
         mcp_clients = Mcp.setup(config, tool_registry)
 
@@ -88,6 +90,68 @@ module Autobot
         plugin_registry.start_all
 
         {tool_registry, plugin_registry, mcp_clients}
+      end
+
+      # Register the image generation tool if a suitable provider is available.
+      def self.register_image_tool(config : Config::Config, registry : Tools::Registry) : Nil
+        image_config = config.tools.try(&.image)
+        if image_config && !image_config.enabled?
+          ::Log.for("SetupHelper").info { "Image generation disabled" }
+          return
+        end
+
+        provider_config, provider_name = resolve_image_provider(config, image_config)
+        unless provider_config && provider_name
+          ::Log.for("SetupHelper").info { "Image generation unavailable (no suitable provider)" }
+          return
+        end
+
+        model = image_config.try(&.model)
+        size = image_config.try(&.size) || "1024x1024"
+
+        registry.register(Tools::ImageGenerationTool.new(
+          api_key: provider_config.api_key,
+          provider_name: provider_name,
+          model: model,
+          size: size,
+          api_base: provider_config.api_base?,
+        ))
+
+        ::Log.for("SetupHelper").info { "Image generation enabled (#{provider_name})" }
+      end
+
+      # Resolve the provider for image generation.
+      # Uses `tools.image.provider` override if set, otherwise falls back to main provider
+      # (only openai and gemini support image generation).
+      private def self.resolve_image_provider(
+        config : Config::Config,
+        image_config : Config::ImageConfig?,
+      ) : {Config::ProviderConfig?, String?}
+        if override_name = image_config.try(&.provider)
+          provider = config.provider_by_name(override_name)
+          return {provider, override_name} if provider
+          ::Log.for("SetupHelper").warn { "Image provider override '#{override_name}' not configured" }
+          return {nil, nil}
+        end
+
+        # Fall back to main provider, but only if it supports image generation
+        provider_config, provider_name = config.match_provider
+        if provider_config && provider_name && image_capable_provider?(provider_name)
+          return {provider_config, provider_name}
+        end
+
+        # Try openai, then gemini as fallbacks
+        {"openai", "gemini"}.each do |name|
+          if provider = config.provider_by_name(name)
+            return {provider, name}
+          end
+        end
+
+        {nil, nil}
+      end
+
+      private def self.image_capable_provider?(name : String) : Bool
+        name == "openai" || name == "gemini"
       end
     end
   end

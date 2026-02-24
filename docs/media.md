@@ -1,6 +1,8 @@
-# Media Support
+# Media support
 
 Autobot supports image analysis by downloading images from chat channels, encoding them as base64, and sending them to the LLM as multimodal content blocks.
+
+Autobot can also generate images from text prompts and send them back to users via the `generate_image` tool.
 
 Autobot also supports voice transcription — voice messages are automatically transcribed to text using Whisper API and included in the LLM context.
 
@@ -88,7 +90,57 @@ For Anthropic native, this is converted to:
 
 ---
 
-## Voice Transcription
+## Image generation
+
+The `generate_image` tool allows the LLM to create images from text prompts and send them directly to users.
+
+### How it works
+
+```
+User prompt -> LLM -> generate_image tool -> Provider API -> Channel -> User
+```
+
+1. The user asks the LLM to create an image
+2. The LLM calls `generate_image(prompt)` with a description
+3. The tool calls the provider's image generation API
+4. Base64 image data is wrapped in an `OutboundMessage` with `MediaAttachment`
+5. The channel sends the photo to the user (e.g. Telegram `sendPhoto`)
+
+### Supported providers
+
+| Provider | Default model | API |
+|----------|--------------|-----|
+| OpenAI | `gpt-image-1` | `/v1/images/generations` |
+| Gemini | `gemini-2.0-flash-exp` | `/v1beta/models/{model}:generateContent` |
+
+> **Note:** Anthropic does not support image generation. If your main provider is Anthropic, use the `tools.image.provider` override to route image generation to OpenAI or Gemini.
+
+### Configuration
+
+Image generation is auto-enabled when an OpenAI or Gemini provider is configured. No extra settings needed.
+
+To override the provider or model:
+
+```yaml
+tools:
+  image:
+    enabled: true
+    provider: openai         # optional, defaults to main provider
+    model: gpt-image-1       # optional, auto-detected from provider
+    size: 1024x1024          # optional, default: 1024x1024
+```
+
+### Supported channels (outbound)
+
+| Channel   | Status    | Notes                                    |
+|-----------|-----------|------------------------------------------|
+| Telegram  | Supported | Sends photos via `sendPhoto` multipart API |
+| Slack     | Text fallback | Logs warning, sends caption as text    |
+| Zulip     | Text fallback | Logs warning, sends caption as text    |
+
+---
+
+## Voice transcription
 
 Voice and audio messages received via Telegram are automatically transcribed to text using the Whisper API before being sent to the LLM.
 
