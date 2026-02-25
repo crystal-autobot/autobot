@@ -282,6 +282,54 @@ describe Autobot::Config::Config do
     end
   end
 
+  describe "#provider_by_name" do
+    it "returns nil when no providers configured" do
+      config = empty_config
+      config.provider_by_name("openai").should be_nil
+    end
+
+    it "finds provider by name" do
+      yaml = <<-YAML
+      providers:
+        openai:
+          api_key: "oai-key"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      provider = config.provider_by_name("openai")
+      provider.should_not be_nil
+      provider.try(&.api_key).should eq("oai-key")
+    end
+
+    it "is case-insensitive" do
+      yaml = <<-YAML
+      providers:
+        gemini:
+          api_key: "gem-key"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      config.provider_by_name("Gemini").should_not be_nil
+      config.provider_by_name("GEMINI").should_not be_nil
+    end
+
+    it "returns nil for provider with empty api_key" do
+      yaml = <<-YAML
+      providers:
+        openai:
+          api_key: ""
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      config.provider_by_name("openai").should be_nil
+    end
+
+    it "returns nil for unknown provider name" do
+      config = config_with_provider
+      config.provider_by_name("unknown").should be_nil
+    end
+  end
+
   describe "#validate!" do
     it "raises when no provider has API key" do
       config = empty_config
@@ -374,6 +422,50 @@ describe Autobot::Config::CustomCommandsConfig do
     config = Autobot::Config::CustomCommandsConfig.from_yaml("--- {}")
     config.macros.should be_empty
     config.scripts.should be_empty
+  end
+end
+
+describe Autobot::Config::ImageConfig do
+  it "has correct defaults" do
+    config = Autobot::Config::ImageConfig.from_yaml("--- {}")
+    config.enabled?.should be_true
+    config.provider.should be_nil
+    config.model.should be_nil
+    config.size.should eq("1024x1024")
+  end
+
+  it "parses all fields" do
+    yaml = <<-YAML
+    enabled: false
+    provider: openai
+    model: gpt-image-1
+    size: 512x512
+    YAML
+
+    config = Autobot::Config::ImageConfig.from_yaml(yaml)
+    config.enabled?.should be_false
+    config.provider.should eq("openai")
+    config.model.should eq("gpt-image-1")
+    config.size.should eq("512x512")
+  end
+end
+
+describe Autobot::Config::ToolsConfig do
+  it "parses image config" do
+    yaml = <<-YAML
+    image:
+      enabled: true
+      provider: gemini
+    YAML
+
+    config = Autobot::Config::ToolsConfig.from_yaml(yaml)
+    config.image.should_not be_nil
+    config.image.try(&.provider).should eq("gemini")
+  end
+
+  it "has nil image config by default" do
+    config = Autobot::Config::ToolsConfig.from_yaml("--- {}")
+    config.image.should be_nil
   end
 end
 

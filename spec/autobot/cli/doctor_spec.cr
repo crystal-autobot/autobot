@@ -416,6 +416,98 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_image_generation" do
+    it "skips when no providers configured" do
+      config = make_config("{}")
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_image_generation(config)
+
+        io.to_s.should contain("— Image generation (no openai/gemini provider)")
+      end
+    end
+
+    it "passes when openai is configured" do
+      config = make_config(<<-YAML
+      providers:
+        openai:
+          api_key: "sk-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_image_generation(config)
+
+        io.to_s.should contain("✓ Image generation available (openai)")
+      end
+    end
+
+    it "passes when gemini is configured" do
+      config = make_config(<<-YAML
+      providers:
+        gemini:
+          api_key: "gem-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_image_generation(config)
+
+        io.to_s.should contain("✓ Image generation available (gemini)")
+      end
+    end
+
+    it "prefers openai over gemini" do
+      config = make_config(<<-YAML
+      providers:
+        openai:
+          api_key: "sk-test-key"
+        gemini:
+          api_key: "gem-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_image_generation(config)
+
+        io.to_s.should contain("✓ Image generation available (openai)")
+      end
+    end
+
+    it "skips when explicitly disabled" do
+      config = make_config(<<-YAML
+      providers:
+        openai:
+          api_key: "sk-test-key"
+      tools:
+        image:
+          enabled: false
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_image_generation(config)
+
+        io.to_s.should contain("— Image generation (disabled)")
+      end
+    end
+
+    it "skips when provider has empty api_key" do
+      config = make_config(<<-YAML
+      providers:
+        openai:
+          api_key: ""
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_image_generation(config)
+
+        io.to_s.should contain("— Image generation (no openai/gemini provider)")
+      end
+    end
+  end
+
   describe ".check_web_search" do
     it "skips when no tools configured" do
       config = make_config("{}")

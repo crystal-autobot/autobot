@@ -6,6 +6,7 @@ require "../tools/registry"
 require "../tools/spawn"
 require "../tools/cron_tool"
 require "../tools/message"
+require "../tools/image_generation"
 require "../session/manager"
 require "../cron/service"
 require "../constants"
@@ -47,6 +48,7 @@ module Autobot::Agent
     @spawn_tool : Tools::SpawnTool?
     @cron_tool : Tools::CronTool?
     @message_tool : Tools::MessageTool?
+    @image_tool : Tools::ImageGenerationTool?
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -285,17 +287,20 @@ module Autobot::Agent
       @spawn_tool = @tools.get("spawn").as?(Tools::SpawnTool)
       @cron_tool = @tools.get("cron").as?(Tools::CronTool)
       @message_tool = @tools.get("message").as?(Tools::MessageTool)
+      @image_tool = @tools.get("generate_image").as?(Tools::ImageGenerationTool)
 
-      if message_tool = @message_tool
-        message_tool.send_callback = ->(msg : Bus::OutboundMessage) { @bus.publish_outbound(msg) }
-      end
+      send_cb = ->(msg : Bus::OutboundMessage) { @bus.publish_outbound(msg) }
+
+      @message_tool.try(&.send_callback = send_cb)
+      @image_tool.try(&.send_callback = send_cb)
     end
 
-    # Update spawn, cron, and message tool contexts for current session.
+    # Update tool contexts for current session.
     private def update_tool_contexts(channel : String, chat_id : String) : Nil
       @spawn_tool.try(&.set_context(channel, chat_id))
       @cron_tool.try(&.set_context(channel, chat_id))
       @message_tool.try(&.set_context(channel, chat_id))
+      @image_tool.try(&.set_context(channel, chat_id))
     end
 
     private def save_to_session(session : Session::Session, user_content : String, assistant_content : String, tools_used : Array(String)) : Nil

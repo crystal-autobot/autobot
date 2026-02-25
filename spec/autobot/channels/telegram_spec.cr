@@ -13,6 +13,14 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
   def test_format_cron_job_html(job : Autobot::Cron::CronJob, index : Int32) : String
     format_cron_job_html(job, index)
   end
+
+  def test_find_photo_attachment(media : Array(Autobot::Bus::MediaAttachment)?) : Autobot::Bus::MediaAttachment?
+    find_photo_attachment(media)
+  end
+
+  def test_build_photo_multipart(chat_id : String, photo_bytes : Bytes, caption : String) : String
+    build_photo_multipart(chat_id, photo_bytes, caption)
+  end
 end
 
 private def build_channel(
@@ -150,6 +158,68 @@ describe Autobot::Channels::TelegramChannel do
       result.should contain("&lt;tool&gt;")
     ensure
       FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "#find_photo_attachment" do
+    it "returns nil for nil media" do
+      channel = build_channel
+      channel.test_find_photo_attachment(nil).should be_nil
+    end
+
+    it "returns nil for empty media" do
+      channel = build_channel
+      channel.test_find_photo_attachment([] of Autobot::Bus::MediaAttachment).should be_nil
+    end
+
+    it "returns nil when no photo type" do
+      channel = build_channel
+      media = [Autobot::Bus::MediaAttachment.new(type: "document", data: "abc")]
+      channel.test_find_photo_attachment(media).should be_nil
+    end
+
+    it "returns nil when photo has no data" do
+      channel = build_channel
+      media = [Autobot::Bus::MediaAttachment.new(type: "photo", url: "file_id")]
+      channel.test_find_photo_attachment(media).should be_nil
+    end
+
+    it "returns photo attachment with data" do
+      channel = build_channel
+      attachment = Autobot::Bus::MediaAttachment.new(type: "photo", data: "base64data")
+      media = [attachment]
+      result = channel.test_find_photo_attachment(media)
+      result.should_not be_nil
+      found = result.as(Autobot::Bus::MediaAttachment)
+      found.type.should eq("photo")
+      found.data.should eq("base64data")
+    end
+  end
+
+  describe "#build_photo_multipart" do
+    it "builds multipart body with chat_id, photo, and caption" do
+      channel = build_channel
+      photo_bytes = "hello".to_slice
+      body = channel.test_build_photo_multipart("123", photo_bytes, "A caption")
+
+      body.should contain("name=\"chat_id\"")
+      body.should contain("123")
+      body.should contain("name=\"photo\"")
+      body.should contain("filename=\"image.png\"")
+      body.should contain("name=\"caption\"")
+      body.should contain("A caption")
+    end
+
+    it "truncates caption longer than limit" do
+      channel = build_channel
+      photo_bytes = "x".to_slice
+      long_caption = "a" * 2000
+      body = channel.test_build_photo_multipart("123", photo_bytes, long_caption)
+
+      # Caption should be truncated to PHOTO_CAPTION_LIMIT (1024)
+      caption_section = body.split("name=\"caption\"").last
+      # The caption content (between headers and boundary) should be truncated
+      caption_section.size.should be < 2000
     end
   end
 end

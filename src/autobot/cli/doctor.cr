@@ -83,6 +83,9 @@ module Autobot
         # Voice transcription
         check_voice_transcription(config)
 
+        # Image generation
+        check_image_generation(config)
+
         # Web search
         check_web_search(config)
 
@@ -306,6 +309,23 @@ module Autobot
         end
 
         report(Status::Skip, "Voice transcription (no openai/groq provider)")
+      end
+
+      def self.check_image_generation(config : Config::Config) : Nil
+        image_config = config.tools.try(&.image)
+        if image_config && !image_config.enabled?
+          report(Status::Skip, "Image generation (disabled)")
+          return
+        end
+
+        SetupHelper::IMAGE_CAPABLE_PROVIDERS.each do |name|
+          if config.provider_by_name(name)
+            report(Status::Pass, "Image generation available (#{name})")
+            return
+          end
+        end
+
+        report(Status::Skip, "Image generation (no openai/gemini provider)")
       end
 
       def self.check_web_search(config : Config::Config) : Nil

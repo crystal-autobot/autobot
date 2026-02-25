@@ -1,30 +1,34 @@
-# Media Support
+# Media support
 
-Autobot supports image analysis by downloading images from chat channels, encoding them as base64, and sending them to the LLM as multimodal content blocks.
+Autobot handles media in three directions:
 
-Autobot also supports voice transcription — voice messages are automatically transcribed to text using Whisper API and included in the LLM context.
+- **Vision (inbound)** — photos sent by users are downloaded, base64-encoded, and forwarded to the LLM as multimodal content blocks
+- **Image generation (outbound)** — the LLM can create images via the `generate_image` tool and send them back to users
+- **Voice transcription (inbound)** — voice messages are transcribed to text via the Whisper API before reaching the LLM
 
-## How It Works
+## Vision
+
+### How it works
 
 ```
-Channel (Telegram) -> Download & Base64 encode -> Context Builder -> LLM Provider
+Channel (Telegram) -> Download & base64 encode -> Context builder -> LLM provider
 ```
 
 1. **Channel** receives a photo and downloads the file bytes via the platform API
 2. **MediaAttachment** stores the base64-encoded data in a transient `data` field (excluded from JSON serialization to avoid bloating session files)
-3. **Context Builder** detects attachments with `data` and builds an array of content blocks (text + image) in OpenAI's `image_url` format
+3. **Context builder** detects attachments with `data` and builds an array of content blocks (text + image) in OpenAI's `image_url` format
 4. **Provider** sends the content blocks directly for OpenAI-compatible APIs, or converts them to Anthropic's `image/source/base64` format for the native Anthropic path
 
-## Supported Channels
+### Supported channels
 
 | Channel   | Status    | Notes                                    |
 |-----------|-----------|------------------------------------------|
 | Telegram  | Supported | Auto-downloads photos via Bot API        |
 | Slack     | Planned   | Needs `url_private` download with auth   |
 | WhatsApp  | Planned   | Needs bridge-side changes to forward images |
-| Zulip     | Not Supported | Media handling not yet implemented |
+| Zulip     | Not supported | Media handling not yet implemented |
 
-## Supported Providers
+### Supported providers
 
 All providers work with vision — the internal format uses OpenAI-compatible `image_url` content blocks:
 
@@ -33,7 +37,7 @@ All providers work with vision — the internal format uses OpenAI-compatible `i
 
 > **Note:** The LLM model itself must support vision. Non-vision models will ignore or fail to interpret image content.
 
-## Configuration
+### Configuration
 
 No additional configuration is needed. Vision works automatically when:
 
@@ -50,15 +54,15 @@ channels:
     proxy: "http://proxy.example.com:8080"  # Optional
 ```
 
-## Limits
+### Limits
 
 - **Max image size:** 20 MB (configurable via `MAX_IMAGE_SIZE` constant)
 - **Telegram Bot API limit:** 20 MB for file downloads
 - Images are **not persisted** in session history — only the current turn's images are sent to the LLM to avoid token cost bloat
 
-## Architecture Details
+### Architecture details
 
-### MediaAttachment.data
+#### MediaAttachment.data
 
 The `data` field on `MediaAttachment` uses `@[JSON::Field(ignore: true)]` to keep base64 image data out of JSON serialization. This means:
 
@@ -66,7 +70,7 @@ The `data` field on `MediaAttachment` uses `@[JSON::Field(ignore: true)]` to kee
 - Past images are not re-sent on subsequent turns
 - The field is only populated for the current inbound message
 
-### Content Block Format
+#### Content block format
 
 The context builder produces OpenAI-format content blocks:
 
@@ -88,14 +92,78 @@ For Anthropic native, this is converted to:
 
 ---
 
-## Voice Transcription
+## Image generation
+
+The `generate_image` tool allows the LLM to create images from text prompts and send them directly to users.
+
+### How it works
+
+```
+User prompt -> LLM -> generate_image tool -> Provider API -> Channel -> User
+```
+
+1. The user asks the LLM to create an image
+2. The LLM calls `generate_image(prompt)` with a description
+3. The tool calls the provider's image generation API
+4. Base64 image data is wrapped in an `OutboundMessage` with `MediaAttachment`
+5. The channel sends the photo to the user (e.g. Telegram `sendPhoto`)
+
+### Supported providers
+
+| Provider | Default model | API |
+|----------|--------------|-----|
+| OpenAI | `gpt-image-1` | `/v1/images/generations` |
+| Gemini | `gemini-2.5-flash-image` | `/v1beta/models/{model}:generateContent` |
+
+> **Note:** Anthropic does not support image generation. When no explicit override is set, autobot automatically picks the first available image-capable provider (tries OpenAI, then Gemini). Use `tools.image.provider` to force a specific one.
+
+### Configuration
+
+Image generation is auto-enabled when an OpenAI or Gemini provider is configured. No extra settings needed.
+
+To override the provider or model:
+
+```yaml
+tools:
+  image:
+    enabled: true
+    provider: openai         # optional, auto-detected from configured providers
+    model: gpt-image-1       # optional, auto-detected from provider
+    size: 1024x1024          # optional, default: 1024x1024
+```
+
+### Supported channels (outbound)
+
+| Channel   | Status    | Notes                                    |
+|-----------|-----------|------------------------------------------|
+| Telegram  | Supported | Sends photos via `sendPhoto` multipart API |
+| Slack     | Text fallback | Logs warning, sends caption as text    |
+| Zulip     | Text fallback | Logs warning, sends caption as text    |
+
+### Verification
+
+Run `autobot doctor` to check image generation status:
+
+```
+✓ Image generation available (openai)
+```
+
+Or if no provider is configured:
+
+```
+— Image generation (no openai/gemini provider)
+```
+
+---
+
+## Voice transcription
 
 Voice and audio messages received via Telegram are automatically transcribed to text using the Whisper API before being sent to the LLM.
 
-### How It Works
+### How it works
 
 ```
-Telegram voice -> Download OGG -> Transcriber (Whisper API) -> text in message content -> LLM
+Telegram voice -> Download OGG -> Transcriber (Whisper API) -> Text in message content -> LLM
 ```
 
 1. **Channel** receives a voice/audio message and downloads the file bytes
@@ -123,9 +191,9 @@ providers:
 
 Groq is preferred when both are configured (faster, has free tier). If neither is configured, voice messages fall back to `[voice message]` text with no errors.
 
-### Supported Providers
+### Supported providers
 
-| Provider | Model | API Endpoint |
+| Provider | Model | API endpoint |
 |----------|-------|-------------|
 | Groq | `whisper-large-v3-turbo` | `api.groq.com/openai/v1/audio/transcriptions` |
 | OpenAI | `whisper-1` | `api.openai.com/v1/audio/transcriptions` |
