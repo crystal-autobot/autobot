@@ -1,0 +1,20 @@
+# Autobot
+
+> Ultra-efficient personal AI assistant powered by Crystal. 2MB binary, ~5MB RAM, <20ms startup, zero runtime dependencies.
+
+Autobot is a multi-provider AI assistant that runs as a Telegram/Slack/WhatsApp bot or CLI agent. Built in Crystal with kernel-enforced sandboxing (Docker/bubblewrap), it supports multiple LLM providers, vision, voice transcription, memory, cron scheduling, MCP servers, and plugins.
+
+## Docs
+
+- [Quick Start](quickstart.md): Installation, creating a bot, and first run
+- [Configuration](configuration.md): Complete config reference — providers, agents, channels, tools, plugins
+- [Media & Voice](media.md): Image analysis and voice message transcription via Whisper
+- [Web Search](web-search.md): Web search and URL fetching capabilities
+- [MCP Servers](mcp.md): Connecting external MCP tool servers
+- [Memory](memory.md): JSONL sessions, consolidation, and persistent long-term memory
+- [Plugins](plugins.md): Building and using plugins — bash auto-discovery, markdown skills
+- [Security Guide](security.md): Security model, threat boundaries, and best practices
+- [Sandboxing](sandboxing.md): Docker and bubblewrap kernel-level isolation details
+- [Deployment](deployment.md): Production deployment with proper user/permissions setup
+- [Architecture](architecture.md): System design, components, and data flow
+- [Development](development.md): Contributing, local setup, building from source

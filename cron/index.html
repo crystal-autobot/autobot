@@ -1,0 +1,2703 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Ultra-efficient personal AI assistant powered by Crystal">
+      
+      
+      
+        <link rel="canonical" href="https://crystal-autobot.github.io/autobot/cron/">
+      
+      
+        <link rel="prev" href="../zulip/">
+      
+      
+        <link rel="next" href="../media/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon-32.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+    
+    
+      
+        <title>Cron & Scheduling - Autobot</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#cron-scheduled-tasks" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Autobot" class="md-header__button md-logo" aria-label="Autobot" data-md-component="logo">
+      
+  <img src="../assets/icon-circuit-hex.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Autobot
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Cron & Scheduling
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/crystal-autobot/autobot" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    crystal-autobot/autobot
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Autobot" class="md-nav__button md-logo" aria-label="Autobot" data-md-component="logo">
+      
+  <img src="../assets/icon-circuit-hex.svg" alt="logo">
+
+    </a>
+    Autobot
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/crystal-autobot/autobot" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    crystal-autobot/autobot
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../anthropic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openai/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deepseek/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DeepSeek
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../groq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Groq
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gemini/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Gemini
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openrouter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenRouter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bedrock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AWS Bedrock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vllm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    vLLM / Local
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Channels
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Channels
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../slack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zulip/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zulip
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cron & Scheduling
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cron & Scheduling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#schedule-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schedule Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Schedule Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed-interval-every_seconds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed Interval (every_seconds)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cron-expression-cron_expr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cron Expression (cron_expr)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-time-at" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-Time (at)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How It Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#job-execution-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job Execution Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background-turn-restrictions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background Turn Restrictions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exec-payloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exec Payloads
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Exec Payloads">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-exec-differs-from-agent-turns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How exec differs from agent turns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#execution-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enable-cron" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enable Cron
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-creates-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Creates Jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#telegram-cron-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telegram /cron Command
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-cron-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in Cron Skill
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List Jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#show-job-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Show Job Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-jobs-manually" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add Jobs Manually
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update a Job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remove-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remove a Job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clear-all-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clear All Jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enabledisable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enable/Disable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#force-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Force Run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-owner-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Owner Isolation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-time-reminder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-Time Reminder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daily-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daily Report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#periodic-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Periodic Check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-existing-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update Existing Job
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#job-doesnt-fire" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job doesn't fire
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Media & Voice
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../web-search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Servers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sandboxing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandboxing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#schedule-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schedule Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Schedule Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed-interval-every_seconds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed Interval (every_seconds)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cron-expression-cron_expr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cron Expression (cron_expr)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-time-at" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-Time (at)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How It Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#job-execution-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job Execution Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background-turn-restrictions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background Turn Restrictions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exec-payloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exec Payloads
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Exec Payloads">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-exec-differs-from-agent-turns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How exec differs from agent turns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#execution-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enable-cron" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enable Cron
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-creates-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Creates Jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#telegram-cron-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telegram /cron Command
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-cron-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in Cron Skill
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List Jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#show-job-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Show Job Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-jobs-manually" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add Jobs Manually
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update a Job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remove-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remove a Job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clear-all-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clear All Jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enabledisable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enable/Disable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#force-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Force Run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-owner-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Owner Isolation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-time-reminder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-Time Reminder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daily-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daily Report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#periodic-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Periodic Check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-existing-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update Existing Job
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#job-doesnt-fire" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job doesn't fire
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="cron-scheduled-tasks">Cron &amp; Scheduled Tasks<a class="headerlink" href="#cron-scheduled-tasks" title="Permanent link">&para;</a></h1>
+<p>Autobot includes a built-in scheduler for recurring checks, one-time reminders, and deferred tasks. Jobs fire as full agent turns with access to all tools.</p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>The cron system solves three common needs:</p>
+<ul>
+<li><strong>Reminders</strong> — "Remind me to drink water in 30 minutes" (one-time deferred task)</li>
+<li><strong>Recurring reports</strong> — "Send me a weather summary every morning at 9am" (cron expression)</li>
+<li><strong>Periodic tasks</strong> — "Check my email every 5 minutes" (fixed interval)</li>
+</ul>
+<p>When a job fires, it triggers a full agent turn — the agent can use MCP tools, web search, memory, and any other registered tools to complete the task. The response is automatically delivered to the user.</p>
+<hr />
+<h2 id="schedule-types">Schedule Types<a class="headerlink" href="#schedule-types" title="Permanent link">&para;</a></h2>
+<h3 id="fixed-interval-every_seconds">Fixed Interval (<code>every_seconds</code>)<a class="headerlink" href="#fixed-interval-every_seconds" title="Permanent link">&para;</a></h3>
+<p>Runs repeatedly at a fixed interval.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&quot;Check my email every 5 minutes&quot;
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>→ every_seconds: 300
+</code></pre></div>
+<h3 id="cron-expression-cron_expr">Cron Expression (<code>cron_expr</code>)<a class="headerlink" href="#cron-expression-cron_expr" title="Permanent link">&para;</a></h3>
+<p>Standard 5-field cron syntax: <code>MIN(0-59) HOUR(0-23) DOM(1-31) MON(1-12) DOW(0-6)</code></p>
+<p>Supports: <code>*</code> (any), ranges (<code>9-17</code>), steps (<code>*/5</code>), lists (<code>1,15,30</code>), combos (<code>1-30/10</code>), named months (<code>jan</code>-<code>dec</code>), named days (<code>mon</code>-<code>sun</code>), and shortcuts (<code>@hourly</code>, <code>@daily</code>, <code>@weekly</code>, <code>@monthly</code>, <code>@yearly</code>).</p>
+<p>All values must be integers. Minimum granularity is 1 minute — for sub-minute intervals, use <code>every_seconds</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>&quot;Send me a morning briefing at 9am&quot;
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>→ cron_expr: &quot;0 9 * * *&quot;
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>&quot;Every 5 minutes during work hours on weekdays&quot;
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>→ cron_expr: &quot;*/5 9-17 * * 1-5&quot;
+</code></pre></div>
+<h3 id="one-time-at">One-Time (<code>at</code>)<a class="headerlink" href="#one-time-at" title="Permanent link">&para;</a></h3>
+<p>Runs once at a specific time, then auto-deletes.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>&quot;Remind me at 3pm to call the dentist&quot;
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>→ at: &quot;2026-02-20T15:00:00Z&quot;
+</code></pre></div>
+<hr />
+<h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<h3 id="job-execution-flow">Job Execution Flow<a class="headerlink" href="#job-execution-flow" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>graph LR
+    TIMER[Timer fires] --&gt; CHECK{Job due?}
+    CHECK --&gt;|yes| CALLBACK[on_job callback]
+    CALLBACK --&gt; BUS[Event Bus]
+    BUS --&gt; LOOP[Agent Loop]
+    LOOP --&gt; LLM[LLM + Tools]
+    LLM --&gt; USER[Response auto-delivered]
+
+    style TIMER fill:#ab47bc,stroke:#8e24aa,color:#fff
+    style BUS fill:#7c4dff,stroke:#651fff,color:#fff
+    style LOOP fill:#5c6bc0,stroke:#3949ab,color:#fff
+    style LLM fill:#26a69a,stroke:#00897b,color:#fff
+    style USER fill:#ffa726,stroke:#fb8c00,color:#fff</code></pre>
+<ol>
+<li><strong>Timer fires</strong> — The cron service detects a job is due</li>
+<li><strong>Publish to bus</strong> — An <code>InboundMessage</code> is published to the event bus with <code>channel: "system"</code> and <code>sender_id: "cron:{job_id}"</code></li>
+<li><strong>Agent turn</strong> — The agent loop picks up the message and executes the job's prompt</li>
+<li><strong>Tool execution</strong> — The agent uses any tools needed (MCP, web search, etc.) to fulfill the task</li>
+<li><strong>Explicit delivery</strong> — The agent uses the <code>message</code> tool to send results to the user (no auto-delivery)</li>
+</ol>
+<h3 id="background-turn-restrictions">Background Turn Restrictions<a class="headerlink" href="#background-turn-restrictions" title="Permanent link">&para;</a></h3>
+<p>Cron turns use a minimal system prompt and exclude certain tools to prevent unintended behavior:</p>
+<ul>
+<li><strong><code>spawn</code></strong> — excluded to prevent background task proliferation</li>
+</ul>
+<p>Cron turns never auto-deliver the final response. The agent must use the <code>message</code> tool explicitly to notify the user. This enables <strong>conditional delivery</strong> — the agent can stay silent when there is nothing to report (e.g., "monitor X, only notify if Y changes").</p>
+<p>The <code>cron</code> tool is available so jobs can self-remove when their task defines a stop condition (e.g., "monitor X until condition Y, then stop").</p>
+<hr />
+<h2 id="exec-payloads">Exec Payloads<a class="headerlink" href="#exec-payloads" title="Permanent link">&para;</a></h2>
+<p>Many monitoring and automation tasks are deterministic — check a URL, compare a value, send an alert. These don't need an LLM reasoning about what to do every time. But setting them up still requires figuring out the right shell command, cron expression, and wiring.</p>
+<p>Exec payloads let you describe what you want in natural language — the agent writes the shell command once, and from that point on it runs directly on a schedule with zero LLM involvement. No tokens, no latency, no cost per execution.</p>
+<blockquote>
+<p><strong>User:</strong> "Check air quality in NYC every hour, notify me if AQI goes above 100"</p>
+<p>The agent creates an exec job with the right <code>curl | jq</code> pipeline. Every hour the command runs on its own — the LLM is never called again.</p>
+</blockquote>
+<h3 id="how-exec-differs-from-agent-turns">How exec differs from agent turns<a class="headerlink" href="#how-exec-differs-from-agent-turns" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Agent turn</th>
+<th>Exec payload</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Setup</strong></td>
+<td>LLM writes the prompt</td>
+<td>LLM writes the shell command</td>
+</tr>
+<tr>
+<td><strong>Each run</strong></td>
+<td>Full LLM turn with tools</td>
+<td>Shell command only</td>
+</tr>
+<tr>
+<td><strong>Token cost</strong></td>
+<td>Per-invocation</td>
+<td>Zero (after setup)</td>
+</tr>
+<tr>
+<td><strong>Output</strong></td>
+<td>LLM-generated response</td>
+<td>Raw stdout</td>
+</tr>
+<tr>
+<td><strong>Best for</strong></td>
+<td>Tasks needing reasoning</td>
+<td>Deterministic checks and scripts</td>
+</tr>
+</tbody>
+</table>
+<h3 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>exec_command</code></strong> — The shell command to run (mutually exclusive with <code>message</code>)</li>
+<li><strong><code>PREV_OUTPUT</code></strong> — Environment variable containing the previous run's stdout, enabling change detection</li>
+</ul>
+<h3 id="execution-flow">Execution flow<a class="headerlink" href="#execution-flow" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>graph LR
+    TIMER[Timer fires] --&gt; EXEC[Run command in sandbox]
+    EXEC --&gt; CHECK{Output empty?}
+    CHECK --&gt;|no| DELIVER[Deliver to channel]
+    CHECK --&gt;|yes| SKIP[Skip silently]
+
+    style TIMER fill:#ab47bc,stroke:#8e24aa,color:#fff
+    style EXEC fill:#5c6bc0,stroke:#3949ab,color:#fff
+    style CHECK fill:#7c4dff,stroke:#651fff,color:#fff
+    style DELIVER fill:#ffa726,stroke:#fb8c00,color:#fff
+    style SKIP fill:#78909c,stroke:#546e7a,color:#fff</code></pre>
+<p>Exec commands run inside the sandbox (bubblewrap or Docker) by default. Set <code>sandbox: none</code> to run directly on the host.</p>
+<h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
+<p><strong>Air quality check (only notify on change):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">&quot;air-quality&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--exec<span class="w"> </span><span class="s1">&#39;curl -s &quot;https://api.example.com/aqi?city=NYC&quot; | jq -r .aqi&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--every<span class="w"> </span><span class="m">3600</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--channel<span class="w"> </span>telegram<span class="w"> </span>--to<span class="w"> </span><span class="s2">&quot;12345&quot;</span>
+</code></pre></div>
+<p>The <code>PREV_OUTPUT</code> variable lets you detect changes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">&quot;uptime-monitor&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--exec<span class="w"> </span><span class="s1">&#39;STATUS=$(curl -so /dev/null -w &quot;%{http_code}&quot; https://example.com); [ &quot;$STATUS&quot; != &quot;$PREV_OUTPUT&quot; ] &amp;&amp; echo &quot;$STATUS&quot; || true&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--every<span class="w"> </span><span class="m">300</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--channel<span class="w"> </span>slack<span class="w"> </span>--to<span class="w"> </span><span class="s2">&quot;C12345&quot;</span>
+</code></pre></div>
+<p><strong>Disk space alert:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">&quot;disk-check&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--exec<span class="w"> </span><span class="s1">&#39;USAGE=$(df -h / | awk &quot;NR==2{print \$5}&quot; | tr -d &quot;%&quot;); [ &quot;$USAGE&quot; -gt 90 ] &amp;&amp; echo &quot;Disk usage: ${USAGE}%&quot; || true&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--cron<span class="w"> </span><span class="s2">&quot;0 */6 * * *&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--channel<span class="w"> </span>telegram<span class="w"> </span>--to<span class="w"> </span><span class="s2">&quot;12345&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<h3 id="enable-cron">Enable Cron<a class="headerlink" href="#enable-cron" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">cron</span><span class="p">:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">store_path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;./cron.json&quot;</span><span class="w">  </span><span class="c1"># Optional, defaults to workspace</span>
+</code></pre></div>
+<h3 id="agent-creates-jobs">Agent Creates Jobs<a class="headerlink" href="#agent-creates-jobs" title="Permanent link">&para;</a></h3>
+<p>The agent creates cron jobs via the <code>cron</code> tool when users make scheduling requests. The tool supports three actions:</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Description</th>
+<th>Required Parameters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>add</code></td>
+<td>Create a new job</td>
+<td><code>message</code> + one of: <code>every_seconds</code>, <code>cron_expr</code>, <code>at</code></td>
+</tr>
+<tr>
+<td><code>list</code></td>
+<td>List jobs for current owner</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>show</code></td>
+<td>Show full job details</td>
+<td><code>job_id</code></td>
+</tr>
+<tr>
+<td><code>update</code></td>
+<td>Update schedule or message in-place</td>
+<td><code>job_id</code> + at least one of: <code>message</code>, <code>every_seconds</code>, <code>cron_expr</code>, <code>at</code></td>
+</tr>
+<tr>
+<td><code>enable</code></td>
+<td>Resume a paused job</td>
+<td><code>job_id</code></td>
+</tr>
+<tr>
+<td><code>disable</code></td>
+<td>Pause a job without deleting it</td>
+<td><code>job_id</code></td>
+</tr>
+<tr>
+<td><code>remove</code></td>
+<td>Delete a job</td>
+<td><code>job_id</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="telegram-cron-command">Telegram <code>/cron</code> Command<a class="headerlink" href="#telegram-cron-command" title="Permanent link">&para;</a></h2>
+<p>Send <code>/cron</code> in Telegram to instantly see all your scheduled jobs — no LLM round-trip needed.</p>
+<p><strong>Example output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Scheduled jobs (2)
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>1. abc123 — Check GitHub stars
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>   ⏱ Every 10 min | ✅ 2 min ago
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>2. def456 — Morning briefing
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>   🕐 0 9 * * 1-5 (UTC) | ⏳ pending
+</code></pre></div>
+<p>Empty state shows: "No scheduled jobs. Ask me in chat to schedule something."</p>
+<hr />
+<h2 id="built-in-cron-skill">Built-in Cron Skill<a class="headerlink" href="#built-in-cron-skill" title="Permanent link">&para;</a></h2>
+<p>A built-in skill (<code>src/skills/cron/SKILL.md</code>) is automatically loaded when the cron tool is registered. It teaches the agent:</p>
+<ul>
+<li><strong>Message quality</strong> — write self-contained prompts with specific tool names and URLs</li>
+<li><strong>Timezone handling</strong> — ask the user, convert to UTC, confirm both times</li>
+<li><strong>Update-first rule</strong> — list existing jobs before creating, update instead of duplicate</li>
+<li><strong>Schedule type selection</strong> — when to use <code>every_seconds</code> vs <code>cron_expr</code> vs <code>at</code></li>
+</ul>
+<p>The skill declares <code>tool: cron</code> in its frontmatter, so it's included automatically whenever the cron tool is available — both in interactive and background turns.</p>
+<hr />
+<h2 id="cli-management">CLI Management<a class="headerlink" href="#cli-management" title="Permanent link">&para;</a></h2>
+<h3 id="list-jobs">List Jobs<a class="headerlink" href="#list-jobs" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span>list<span class="w">        </span><span class="c1"># Show enabled jobs</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>autobot<span class="w"> </span>cron<span class="w"> </span>list<span class="w"> </span>--all<span class="w">  </span><span class="c1"># Include disabled jobs</span>
+</code></pre></div>
+<h3 id="show-job-details">Show Job Details<a class="headerlink" href="#show-job-details" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span>show<span class="w"> </span>&lt;job_id&gt;
+</code></pre></div>
+<h3 id="add-jobs-manually">Add Jobs Manually<a class="headerlink" href="#add-jobs-manually" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Recurring interval</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>autobot<span class="w"> </span>cron<span class="w"> </span>add<span class="w"> </span>--name<span class="w"> </span><span class="s2">&quot;standup&quot;</span><span class="w"> </span>--message<span class="w"> </span><span class="s2">&quot;Time for standup!&quot;</span><span class="w"> </span>--every<span class="w"> </span><span class="m">3600</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Cron expression</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>autobot<span class="w"> </span>cron<span class="w"> </span>add<span class="w"> </span>--name<span class="w"> </span><span class="s2">&quot;morning&quot;</span><span class="w"> </span>--message<span class="w"> </span><span class="s2">&quot;Good morning!&quot;</span><span class="w"> </span>--cron<span class="w"> </span><span class="s2">&quot;0 9 * * *&quot;</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># One-time</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>autobot<span class="w"> </span>cron<span class="w"> </span>add<span class="w"> </span>--name<span class="w"> </span><span class="s2">&quot;reminder&quot;</span><span class="w"> </span>--message<span class="w"> </span><span class="s2">&quot;Call dentist&quot;</span><span class="w"> </span>--at<span class="w"> </span><span class="s2">&quot;2026-02-20T15:00:00Z&quot;</span>
+</code></pre></div>
+<h3 id="update-a-job">Update a Job<a class="headerlink" href="#update-a-job" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Change schedule</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>autobot<span class="w"> </span>cron<span class="w"> </span>update<span class="w"> </span>&lt;job_id&gt;<span class="w"> </span>--cron<span class="w"> </span><span class="s2">&quot;0 8 * * *&quot;</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Change message</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>autobot<span class="w"> </span>cron<span class="w"> </span>update<span class="w"> </span>&lt;job_id&gt;<span class="w"> </span>--message<span class="w"> </span><span class="s2">&quot;New task instructions&quot;</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Change both</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>autobot<span class="w"> </span>cron<span class="w"> </span>update<span class="w"> </span>&lt;job_id&gt;<span class="w"> </span>--every<span class="w"> </span><span class="m">600</span><span class="w"> </span>--message<span class="w"> </span><span class="s2">&quot;Updated check&quot;</span>
+</code></pre></div>
+<h3 id="remove-a-job">Remove a Job<a class="headerlink" href="#remove-a-job" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span>remove<span class="w"> </span>&lt;job_id&gt;
+</code></pre></div>
+<h3 id="clear-all-jobs">Clear All Jobs<a class="headerlink" href="#clear-all-jobs" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span>clear
+</code></pre></div>
+<h3 id="enabledisable">Enable/Disable<a class="headerlink" href="#enabledisable" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>&lt;job_id&gt;
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>autobot<span class="w"> </span>cron<span class="w"> </span>disable<span class="w"> </span>&lt;job_id&gt;
+</code></pre></div>
+<h3 id="force-run">Force Run<a class="headerlink" href="#force-run" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>autobot<span class="w"> </span>cron<span class="w"> </span>run<span class="w"> </span>&lt;job_id&gt;<span class="w">          </span><span class="c1"># Run if enabled</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>autobot<span class="w"> </span>cron<span class="w"> </span>run<span class="w"> </span>&lt;job_id&gt;<span class="w"> </span>--force<span class="w">  </span><span class="c1"># Run even if disabled</span>
+</code></pre></div>
+<hr />
+<h2 id="per-owner-isolation">Per-Owner Isolation<a class="headerlink" href="#per-owner-isolation" title="Permanent link">&para;</a></h2>
+<p>Jobs created via the <code>cron</code> tool are automatically scoped to the originating channel and chat. A Telegram user's jobs are isolated from a Slack user's jobs.</p>
+<ul>
+<li><strong>Owner format:</strong> <code>channel:chat_id</code> (e.g., <code>telegram:634643933</code>)</li>
+<li><strong>List</strong> only shows the current owner's jobs</li>
+<li><strong>Update</strong> only works on the current owner's jobs</li>
+<li><strong>Remove</strong> only works on the current owner's jobs</li>
+<li>Jobs created via CLI have no owner restriction</li>
+</ul>
+<hr />
+<h2 id="examples_1">Examples<a class="headerlink" href="#examples_1" title="Permanent link">&para;</a></h2>
+<h3 id="one-time-reminder">One-Time Reminder<a class="headerlink" href="#one-time-reminder" title="Permanent link">&para;</a></h3>
+<p>User says: <em>"Remind me in 30 minutes to take a break"</em></p>
+<p>The agent creates:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>cron add:
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>  message: &quot;Send the user a reminder to take a break.&quot;
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>  at: &quot;2026-02-20T10:30:00Z&quot;
+</code></pre></div></p>
+<p>Job fires once, delivers the reminder, then auto-deletes.</p>
+<h3 id="daily-report">Daily Report<a class="headerlink" href="#daily-report" title="Permanent link">&para;</a></h3>
+<p>User says: <em>"Send me a weather summary every morning at 9am"</em></p>
+<p>The agent creates:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>cron add:
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>  message: &quot;Use web_search to find current weather for user&#39;s location.
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>            Send a brief summary.&quot;
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>  cron_expr: &quot;0 9 * * *&quot;
+</code></pre></div></p>
+<h3 id="periodic-check">Periodic Check<a class="headerlink" href="#periodic-check" title="Permanent link">&para;</a></h3>
+<p>User says: <em>"Check my email every 5 minutes"</em></p>
+<p>The agent creates:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>cron add:
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>  message: &quot;Check email and notify the user of new messages.&quot;
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>  every_seconds: 300
+</code></pre></div></p>
+<h3 id="update-existing-job">Update Existing Job<a class="headerlink" href="#update-existing-job" title="Permanent link">&para;</a></h3>
+<p>User says: <em>"Change my morning report to 8am instead"</em></p>
+<p>The agent updates:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>cron update:
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>  job_id: &quot;a1b2c3d4&quot;
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>  cron_expr: &quot;0 8 * * *&quot;
+</code></pre></div></p>
+<p>Job identity (<code>id</code>, <code>created_at_ms</code>, <code>state</code>) is preserved — only the schedule changes.</p>
+<hr />
+<h2 id="file-structure">File Structure<a class="headerlink" href="#file-structure" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>workspace/
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>└── cron.json    # Job definitions (auto-created)
+</code></pre></div>
+<p><strong>Permissions:</strong></p>
+<ul>
+<li><code>cron.json</code>: <code>0600</code> (user read/write only)</li>
+<li>Parent directory: <code>0700</code> (user-only access)</li>
+</ul>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="job-doesnt-fire">Job doesn't fire<a class="headerlink" href="#job-doesnt-fire" title="Permanent link">&para;</a></h3>
+<p><strong>Check:</strong></p>
+<ol>
+<li>Is cron enabled in config? (<code>cron.enabled: true</code>)</li>
+<li>Is the job enabled? (<code>autobot cron show &lt;job_id&gt;</code>)</li>
+<li>Is the gateway running? (Jobs only fire while the gateway process is active)</li>
+<li>Check logs for <code>Cron: executing job</code> entries</li>
+</ol>
+<hr />
+<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../architecture/">Architecture</a> — System design and message flow</li>
+<li><a href="../configuration/">Configuration</a> — Full config reference</li>
+<li><a href="../security/">Security</a> — File permissions and job isolation</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
