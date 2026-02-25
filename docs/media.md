@@ -140,6 +140,20 @@ tools:
 | Slack     | Text fallback | Logs warning, sends caption as text    |
 | Zulip     | Text fallback | Logs warning, sends caption as text    |
 
+### Verification
+
+Run `autobot doctor` to check image generation status:
+
+```
+✓ Image generation available (openai)
+```
+
+Or if no provider is configured:
+
+```
+— Image generation (no openai/gemini provider)
+```
+
 ---
 
 ## Voice transcription
