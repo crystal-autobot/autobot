@@ -81,7 +81,7 @@ module Autobot
         end
       end
 
-      # Execute command in sandbox
+      # Execute a shell command in sandbox (for arbitrary commands with pipes/redirects).
       # Returns: {Process::Status, stdout, stderr}
       def self.exec(
         command : String,
@@ -89,27 +89,48 @@ module Autobot
         timeout : Int32,
         max_output_size : Int32 = 10_000,
       ) : {Process::Status, String, String}
-        sandbox_type = detect
+        Log.debug { "Executing shell command in sandbox: #{command}" }
+        run_in_sandbox(["sh", "-c", command], workspace, timeout, max_output_size)
+      end
 
-        case sandbox_type
+      # Execute a program with explicit args in sandbox (no shell interpretation).
+      # Safer than exec for structured operations like file reads.
+      def self.exec_program(
+        program : String,
+        args : Array(String),
+        workspace : Path,
+        timeout : Int32,
+        max_output_size : Int32 = 10_000,
+      ) : {Process::Status, String, String}
+        Log.debug { "Executing program in sandbox: #{program} #{args.join(" ")}" }
+        run_in_sandbox([program] + args, workspace, timeout, max_output_size)
+      end
+
+      private def self.run_in_sandbox(
+        cmd_args : Array(String),
+        workspace : Path,
+        timeout : Int32,
+        max_output_size : Int32,
+      ) : {Process::Status, String, String}
+        case detect
         when Type::Bubblewrap
-          exec_bubblewrap(command, workspace, timeout, max_output_size)
+          run_in_bubblewrap(cmd_args, workspace, timeout, max_output_size)
         when Type::Docker
-          exec_docker(command, workspace, timeout, max_output_size)
+          run_in_docker(cmd_args, workspace, timeout, max_output_size)
         else
           raise SandboxNotFoundError.new
         end
       end
 
-      private def self.exec_bubblewrap(
-        command : String,
+      private def self.run_in_bubblewrap(
+        cmd_args : Array(String),
         workspace : Path,
         timeout : Int32,
         max_output_size : Int32,
       ) : {Process::Status, String, String}
         workspace_real = File.realpath(workspace.to_s)
 
-        bwrap_args = [
+        args = [
           "--ro-bind", "/usr", "/usr",
           "--ro-bind", "/lib", "/lib",
           "--ro-bind", "/bin", "/bin",
@@ -122,16 +143,16 @@ module Autobot
           "--die-with-parent",
           "--chdir", workspace_real,
         ]
-        bwrap_args.push("--ro-bind", "/lib64", "/lib64") if Dir.exists?("/lib64")
-        bwrap_args.push("--tmpfs", "/tmp")
-        bwrap_args.push("--", "sh", "-c", command)
+        args.push("--ro-bind", "/lib64", "/lib64") if Dir.exists?("/lib64")
+        args.push("--tmpfs", "/tmp")
+        args.push("--")
+        args.concat(cmd_args)
 
-        Log.debug { "Executing in bubblewrap: #{command}" }
-        run_sandboxed_command("bwrap", bwrap_args, timeout, max_output_size)
+        run_sandboxed_command("bwrap", args, timeout, max_output_size)
       end
 
-      private def self.exec_docker(
-        command : String,
+      private def self.run_in_docker(
+        cmd_args : Array(String),
         workspace : Path,
         timeout : Int32,
         max_output_size : Int32,
@@ -141,7 +162,7 @@ module Autobot
 
         ensure_docker_image(image)
 
-        docker_args = [
+        args = [
           "run",
           "--rm",
           "-v", "#{workspace_real}:#{workspace_real}:rw",
@@ -150,11 +171,10 @@ module Autobot
           "--memory", DOCKER_MEMORY_LIMIT,
           "--cpus", DOCKER_CPU_LIMIT,
           image,
-          "sh", "-c", command,
         ]
+        args.concat(cmd_args)
 
-        Log.debug { "Executing in Docker: #{command}" }
-        run_sandboxed_command("docker", docker_args, timeout, max_output_size)
+        run_sandboxed_command("docker", args, timeout, max_output_size)
       end
 
       # Pulls the Docker image if not available locally.
@@ -264,8 +284,7 @@ module Autobot
       end
 
       def self.read_file(path : String, workspace : Path, max_size : Int32 = DEFAULT_MAX_FILE_SIZE) : {Bool, String}
-        command = "cat #{shell_escape(path)} 2>&1"
-        status, stdout, stderr = exec(command, workspace, timeout: READ_FILE_TIMEOUT, max_output_size: max_size)
+        status, stdout, stderr = exec_program("cat", [path], workspace, READ_FILE_TIMEOUT, max_size)
 
         {status.success?, status.success? ? stdout : stderr}
       end
@@ -273,22 +292,25 @@ module Autobot
       def self.write_file(path : String, content : String, workspace : Path) : {Bool, String}
         dir = File.dirname(path)
         if dir != "." && dir != "/"
-          mkdir_status, _, mkdir_err = exec("mkdir -p #{shell_escape(dir)}", workspace, timeout: MKDIR_TIMEOUT)
+          mkdir_status, _, mkdir_err = exec_program("mkdir", ["-p", dir], workspace, MKDIR_TIMEOUT)
           return {false, mkdir_err} unless mkdir_status.success?
         end
 
-        # Base64 encoding prevents shell escaping issues with special characters
+        # Base64 encoding prevents shell escaping issues with special characters.
+        # The pipe and redirect require sh -c.
         encoded = Base64.strict_encode(content)
-        command = "printf '%s' '#{encoded}' | base64 -d > #{shell_escape(path)} 2>&1"
-        status, _, stderr = exec(command, workspace, timeout: WRITE_FILE_TIMEOUT, max_output_size: MAX_WRITE_OUTPUT)
+        command = "base64 -d > #{shell_escape(path)}"
+        status, _, stderr = exec(
+          "printf '%s' '#{encoded}' | #{command}",
+          workspace, timeout: WRITE_FILE_TIMEOUT, max_output_size: MAX_WRITE_OUTPUT
+        )
 
         message = status.success? ? "Wrote #{content.bytesize} bytes" : stderr
         {status.success?, message}
       end
 
       def self.list_dir(path : String, workspace : Path) : {Bool, String}
-        command = "ls -1a #{shell_escape(path)} 2>&1"
-        status, stdout, stderr = exec(command, workspace, timeout: LIST_DIR_TIMEOUT, max_output_size: MAX_LIST_OUTPUT)
+        status, stdout, stderr = exec_program("ls", ["-1a", path], workspace, LIST_DIR_TIMEOUT, MAX_LIST_OUTPUT)
 
         {status.success?, status.success? ? stdout : stderr}
       end
