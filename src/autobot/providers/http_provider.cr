@@ -88,11 +88,16 @@ module Autobot
         token_param = max_tokens_param_name(model, spec)
 
         body = {
-          "model"       => JSON::Any.new(resolve_model_name(model, spec)),
-          "messages"    => JSON::Any.new(messages.map { |message| JSON::Any.new(message.transform_values { |value| value }) }),
-          token_param   => JSON::Any.new(max_tokens.to_i64),
-          "temperature" => JSON::Any.new(temperature),
+          "model"     => JSON::Any.new(resolve_model_name(model, spec)),
+          "messages"  => JSON::Any.new(messages.map { |message| JSON::Any.new(message.transform_values { |value| value }) }),
+          token_param => JSON::Any.new(max_tokens.to_i64),
         } of String => JSON::Any
+
+        # Newer OpenAI models (o-series, GPT-5+) reject the temperature parameter.
+        # Only include it for models that support it.
+        unless token_param == "max_completion_tokens"
+          body["temperature"] = JSON::Any.new(temperature)
+        end
 
         apply_model_overrides(model, spec, body)
 

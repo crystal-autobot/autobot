@@ -182,7 +182,8 @@ describe Autobot::Cron::ScheduleBuilder do
   end
 
   it "builds a one-time schedule with delete_after_run" do
-    result = Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: nil, at: "2026-03-01T10:00:00Z")
+    now = Time.utc(2025, 1, 1)
+    result = Autobot::Cron::ScheduleBuilder.build(every_seconds: nil, cron_expr: nil, at: "2025-06-01T10:00:00Z", now: now)
     if r = result
       schedule, delete_after = r
       schedule.kind.should eq(Autobot::Cron::ScheduleKind::At)

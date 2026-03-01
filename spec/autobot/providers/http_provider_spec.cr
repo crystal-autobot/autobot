@@ -331,7 +331,7 @@ describe Autobot::Providers::HttpProvider do
       provider.test_max_tokens_param_name("deepseek-chat").should eq("max_tokens")
     end
 
-    it "sends max_completion_tokens in request body for gpt-5-mini" do
+    it "sends max_completion_tokens without temperature for gpt-5-mini" do
       provider = TestableHttpProvider.new(api_key: api_key, model: "gpt-5-mini")
       provider.chat(messages)
       body = provider.last_api_body
@@ -339,10 +339,11 @@ describe Autobot::Providers::HttpProvider do
       if b = body
         b["max_completion_tokens"]?.should_not be_nil
         b["max_tokens"]?.should be_nil
+        b["temperature"]?.should be_nil
       end
     end
 
-    it "sends max_tokens in request body for gpt-4o" do
+    it "sends max_tokens with temperature for gpt-4o" do
       provider = TestableHttpProvider.new(api_key: api_key, model: "gpt-4o")
       provider.chat(messages)
       body = provider.last_api_body
@@ -350,10 +351,11 @@ describe Autobot::Providers::HttpProvider do
       if b = body
         b["max_tokens"]?.should_not be_nil
         b["max_completion_tokens"]?.should be_nil
+        b["temperature"]?.should_not be_nil
       end
     end
 
-    it "sends max_completion_tokens through gateway for gpt-5-mini" do
+    it "sends max_completion_tokens without temperature through gateway" do
       provider = TestableHttpProvider.new(
         api_key: "sk-or-test123",
         model: "openai/gpt-5-mini",
@@ -364,6 +366,7 @@ describe Autobot::Providers::HttpProvider do
       if b = body
         b["max_completion_tokens"]?.should_not be_nil
         b["max_tokens"]?.should be_nil
+        b["temperature"]?.should be_nil
       end
     end
   end
