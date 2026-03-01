@@ -85,10 +85,12 @@ module Autobot
       end
 
       private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
+        token_param = max_tokens_param_name(model, spec)
+
         body = {
           "model"       => JSON::Any.new(resolve_model_name(model, spec)),
           "messages"    => JSON::Any.new(messages.map { |message| JSON::Any.new(message.transform_values { |value| value }) }),
-          "max_tokens"  => JSON::Any.new(max_tokens.to_i64),
+          token_param   => JSON::Any.new(max_tokens.to_i64),
           "temperature" => JSON::Any.new(temperature),
         } of String => JSON::Any
 
@@ -455,6 +457,20 @@ module Autobot
         end
 
         model
+      end
+
+      # Determines the correct token limit parameter name for the model.
+      # Newer OpenAI models (GPT-5+, o-series) require `max_completion_tokens`,
+      # while legacy models (GPT-4, GPT-3.5) still use `max_tokens`.
+      # When behind a gateway, looks up the model spec directly so this works
+      # correctly through OpenRouter, AiHubMix, etc.
+      private def max_tokens_param_name(model : String, spec : ProviderSpec?) : String
+        effective = @gateway ? Providers.find_by_model(model) : spec
+        return "max_tokens" unless effective.try(&.use_max_completion_tokens?)
+
+        lower = model.downcase
+        legacy = effective.try(&.max_tokens_legacy_patterns.any? { |pattern| lower.starts_with?(pattern) })
+        legacy ? "max_tokens" : "max_completion_tokens"
       end
 
       private def apply_model_overrides(model : String, spec : ProviderSpec?, body)
