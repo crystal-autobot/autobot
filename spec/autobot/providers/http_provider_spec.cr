@@ -3,6 +3,7 @@ require "../../spec_helper"
 # Testable subclass that exposes private helpers and captures the model sent to API builders.
 class TestableHttpProvider < Autobot::Providers::HttpProvider
   getter last_api_model : String?
+  getter last_api_body : JSON::Any?
 
   def test_strip_provider_prefix(model : String) : String
     strip_provider_prefix(model)
@@ -28,9 +29,15 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
     parse_anthropic_response(body)
   end
 
+  def test_max_tokens_param_name(model : String) : String
+    spec = Autobot::Providers.find_by_model(model)
+    max_tokens_param_name(model, spec)
+  end
+
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
+    @last_api_body = parsed
     # Return a minimal valid response based on the URL
     if url.includes?("/messages")
       HTTP::Client::Response.new(200, body: %({"type":"message","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}}))
@@ -292,6 +299,75 @@ describe Autobot::Providers::HttpProvider do
       response.usage.cache_creation_tokens.should eq(0)
       response.usage.cache_read_tokens.should eq(0)
       response.usage.cached?.should be_false
+    end
+  end
+
+  describe "max_completion_tokens support" do
+    messages = [{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}]
+
+    it "uses max_completion_tokens for o-series and gpt-5+ models" do
+      provider = TestableHttpProvider.new(api_key: api_key)
+      %w[o1-preview o3-mini o4-mini gpt-5-mini gpt-5.2].each do |model|
+        provider.test_max_tokens_param_name(model).should eq("max_completion_tokens")
+      end
+    end
+
+    it "uses max_tokens for legacy gpt-4 and gpt-3 models" do
+      provider = TestableHttpProvider.new(api_key: api_key)
+      %w[gpt-4o gpt-4.1 gpt-3.5-turbo].each do |model|
+        provider.test_max_tokens_param_name(model).should eq("max_tokens")
+      end
+    end
+
+    it "defaults to max_completion_tokens for future OpenAI gpt models" do
+      provider = TestableHttpProvider.new(api_key: api_key)
+      %w[gpt-6-mini gpt-7].each do |model|
+        provider.test_max_tokens_param_name(model).should eq("max_completion_tokens")
+      end
+    end
+
+    it "uses max_tokens for non-OpenAI providers" do
+      provider = TestableHttpProvider.new(api_key: api_key)
+      provider.test_max_tokens_param_name("deepseek-chat").should eq("max_tokens")
+    end
+
+    it "sends max_completion_tokens without temperature for gpt-5-mini" do
+      provider = TestableHttpProvider.new(api_key: api_key, model: "gpt-5-mini")
+      provider.chat(messages)
+      body = provider.last_api_body
+      body.should_not be_nil
+      if b = body
+        b["max_completion_tokens"]?.should_not be_nil
+        b["max_tokens"]?.should be_nil
+        b["temperature"]?.should be_nil
+      end
+    end
+
+    it "sends max_tokens with temperature for gpt-4o" do
+      provider = TestableHttpProvider.new(api_key: api_key, model: "gpt-4o")
+      provider.chat(messages)
+      body = provider.last_api_body
+      body.should_not be_nil
+      if b = body
+        b["max_tokens"]?.should_not be_nil
+        b["max_completion_tokens"]?.should be_nil
+        b["temperature"]?.should_not be_nil
+      end
+    end
+
+    it "sends max_completion_tokens without temperature through gateway" do
+      provider = TestableHttpProvider.new(
+        api_key: "sk-or-test123",
+        model: "openai/gpt-5-mini",
+      )
+      provider.chat(messages)
+      body = provider.last_api_body
+      body.should_not be_nil
+      if b = body
+        b["max_completion_tokens"]?.should_not be_nil
+        b["max_tokens"]?.should be_nil
+        b["temperature"]?.should be_nil
+      end
     end
   end
 

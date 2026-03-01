@@ -48,7 +48,7 @@ module Autobot
       # Build a schedule from raw parameters.
       # Returns {schedule, delete_after_run} or nil if no schedule params given.
       # Raises on validation errors (invalid interval, bad time format).
-      def self.build(every_seconds : Int64?, cron_expr : String?, at : String?) : {CronSchedule, Bool}?
+      def self.build(every_seconds : Int64?, cron_expr : String?, at : String?, now : Time = Time.utc) : {CronSchedule, Bool}?
         if every_seconds
           if every_seconds < MIN_INTERVAL_SECONDS
             raise ArgumentError.new("every_seconds must be at least #{MIN_INTERVAL_SECONDS}")
@@ -59,7 +59,7 @@ module Autobot
           {CronSchedule.new(kind: ScheduleKind::Cron, expr: cron_expr), false}
         elsif at
           at_ms = Time.parse_iso8601(at).to_unix_ms
-          if at_ms <= Time.utc.to_unix_ms
+          if at_ms <= now.to_unix_ms
             raise ArgumentError.new("at must be in the future")
           end
           {CronSchedule.new(kind: ScheduleKind::At, at_ms: at_ms), true}

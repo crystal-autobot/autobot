@@ -24,6 +24,11 @@ module Autobot
       # Per-model parameter overrides, e.g. {"kimi-k2.5" => {"temperature" => 1.0}}
       getter model_overrides : Hash(String, Hash(String, JSON::Any))
 
+      # Legacy model patterns that still use `max_tokens` instead of `max_completion_tokens`.
+      # New OpenAI models (GPT-5+, o-series) all use `max_completion_tokens`.
+      getter? use_max_completion_tokens : Bool
+      getter max_tokens_legacy_patterns : Array(String)
+
       def initialize(
         @name,
         @keywords,
@@ -38,6 +43,8 @@ module Autobot
         @detect_by_base_keyword = "",
         @strip_model_prefix = false,
         @model_overrides = {} of String => Hash(String, JSON::Any),
+        @use_max_completion_tokens = false,
+        @max_tokens_legacy_patterns = [] of String,
       )
         @display_name = @name.capitalize if @display_name.empty?
       end
@@ -85,6 +92,8 @@ module Autobot
         keywords: ["openai", "gpt", "o1", "o3", "o4"],
         display_name: "OpenAI",
         api_url: "https://api.openai.com/v1/chat/completions",
+        use_max_completion_tokens: true,
+        max_tokens_legacy_patterns: ["gpt-4", "gpt-3"],
       ),
 
       ProviderSpec.new(
