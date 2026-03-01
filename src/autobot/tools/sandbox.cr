@@ -289,6 +289,19 @@ module Autobot
         {status.success?, status.success? ? stdout : stderr}
       end
 
+      # Read a file and return its contents as base64-encoded string.
+      # Safe for binary files (images, GIFs, documents).
+      def self.read_file_base64(path : String, workspace : Path, max_size : Int32 = DEFAULT_MAX_FILE_SIZE) : {Bool, String}
+        b64_max = (max_size * 4 / 3).to_i + 100
+        status, stdout, stderr = exec_program("base64", [path], workspace, READ_FILE_TIMEOUT, b64_max)
+
+        if status.success?
+          {true, stdout.gsub(/\s/, "")}
+        else
+          {false, stderr}
+        end
+      end
+
       def self.write_file(path : String, content : String, workspace : Path) : {Bool, String}
         dir = File.dirname(path)
         if dir != "." && dir != "/"

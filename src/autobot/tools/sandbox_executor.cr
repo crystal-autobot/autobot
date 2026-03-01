@@ -1,3 +1,4 @@
+require "base64"
 require "./result"
 require "./sandbox"
 
@@ -21,6 +22,19 @@ module Autobot
           read_file_via_sandbox_exec(path, workspace)
         else
           read_file_direct(path)
+        end
+      rescue ex
+        ToolResult.error("Cannot read file: #{ex.message}")
+      end
+
+      # Read a file and return base64-encoded contents.
+      # Safe for binary files (images, GIFs, documents).
+      def read_file_base64(path : String) : ToolResult
+        if workspace = @workspace
+          success, output = Sandbox.read_file_base64(path, workspace)
+          success ? ToolResult.success(output) : ToolResult.error(output)
+        else
+          read_file_base64_direct(path)
         end
       rescue ex
         ToolResult.error("Cannot read file: #{ex.message}")
@@ -92,7 +106,26 @@ module Autobot
         ToolResult.success(data)
       end
 
-      # Direct execution (tests only)
+      # Direct execution (tests and non-sandbox mode)
+      private def read_file_base64_direct(path : String) : ToolResult
+        file_path = Tools.resolve_path(path)
+
+        unless File.exists?(file_path.to_s)
+          return ToolResult.error("File not found: #{path}")
+        end
+        unless File.file?(file_path.to_s)
+          return ToolResult.error("Path is not a file: #{path}")
+        end
+
+        size = File.size(file_path.to_s)
+        if size > MAX_FILE_SIZE
+          return ToolResult.error("File too large (max #{MAX_FILE_SIZE} bytes)")
+        end
+
+        bytes = File.read(file_path.to_s).to_slice
+        ToolResult.success(Base64.strict_encode(bytes))
+      end
+
       private def read_file_direct(path : String) : ToolResult
         file_path = Tools.resolve_path(path)
 

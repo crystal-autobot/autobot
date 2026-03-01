@@ -18,8 +18,20 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     find_photo_attachment(media)
   end
 
+  def test_find_sendable_attachment(media : Array(Autobot::Bus::MediaAttachment)?) : Autobot::Bus::MediaAttachment?
+    find_sendable_attachment(media)
+  end
+
   def test_build_photo_multipart(chat_id : String, photo_bytes : Bytes, caption : String) : String
     build_photo_multipart(chat_id, photo_bytes, caption)
+  end
+
+  def test_build_media_multipart(chat_id : String, file_bytes : Bytes, caption : String, field_name : String, filename : String, content_type : String) : String
+    build_media_multipart(chat_id, file_bytes, caption, field_name: field_name, filename: filename, content_type: content_type)
+  end
+
+  def test_media_filename(attachment : Autobot::Bus::MediaAttachment, default : String) : String
+    media_filename(attachment, default)
   end
 end
 
@@ -158,6 +170,75 @@ describe Autobot::Channels::TelegramChannel do
       result.should contain("&lt;tool&gt;")
     ensure
       FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "#find_sendable_attachment" do
+    it "returns nil for nil media" do
+      channel = build_channel
+      channel.test_find_sendable_attachment(nil).should be_nil
+    end
+
+    it "returns nil for empty media" do
+      channel = build_channel
+      channel.test_find_sendable_attachment([] of Autobot::Bus::MediaAttachment).should be_nil
+    end
+
+    it "returns nil when no attachment has data" do
+      channel = build_channel
+      media = [Autobot::Bus::MediaAttachment.new(type: "document", url: "file_id")]
+      channel.test_find_sendable_attachment(media).should be_nil
+    end
+
+    it "returns first attachment with data regardless of type" do
+      channel = build_channel
+      media = [
+        Autobot::Bus::MediaAttachment.new(type: "document", url: "file_id"),
+        Autobot::Bus::MediaAttachment.new(type: "animation", data: "gifdata"),
+      ]
+      result = channel.test_find_sendable_attachment(media)
+      result.should_not be_nil
+      result.as(Autobot::Bus::MediaAttachment).type.should eq("animation")
+    end
+  end
+
+  describe "#media_filename" do
+    it "returns basename from file_path" do
+      channel = build_channel
+      attachment = Autobot::Bus::MediaAttachment.new(type: "animation", file_path: "output/my_animation.gif", data: "x")
+      channel.test_media_filename(attachment, "default.gif").should eq("my_animation.gif")
+    end
+
+    it "returns default when no file_path" do
+      channel = build_channel
+      attachment = Autobot::Bus::MediaAttachment.new(type: "photo", data: "x")
+      channel.test_media_filename(attachment, "image.png").should eq("image.png")
+    end
+  end
+
+  describe "#build_media_multipart" do
+    it "builds multipart body for animation" do
+      channel = build_channel
+      body = channel.test_build_media_multipart("123", "gif".to_slice, "A GIF",
+        field_name: "animation", filename: "test.gif", content_type: "image/gif")
+
+      body.should contain("name=\"chat_id\"")
+      body.should contain("123")
+      body.should contain("name=\"animation\"")
+      body.should contain("filename=\"test.gif\"")
+      body.should contain("Content-Type: image/gif")
+      body.should contain("name=\"caption\"")
+      body.should contain("A GIF")
+    end
+
+    it "builds multipart body for document" do
+      channel = build_channel
+      body = channel.test_build_media_multipart("456", "pdf".to_slice, "A PDF",
+        field_name: "document", filename: "report.pdf", content_type: "application/pdf")
+
+      body.should contain("name=\"document\"")
+      body.should contain("filename=\"report.pdf\"")
+      body.should contain("Content-Type: application/pdf")
     end
   end
 

@@ -49,7 +49,7 @@ module Autobot
       register_filesystem_tools(registry, executor)
       register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
         sandbox_config, workspace)
-      register_web_tools(registry, brave_api_key, web_fetch_max_chars)
+      register_web_tools(registry, executor, brave_api_key, web_fetch_max_chars)
       register_bash_tools(registry, executor, skills_dirs)
 
       # Store reference in registry for plugin access
@@ -126,6 +126,7 @@ module Autobot
 
     private def self.register_web_tools(
       registry : Registry,
+      executor : SandboxExecutor,
       brave_api_key : String?,
       web_fetch_max_chars : Int32,
     )
@@ -138,7 +139,7 @@ module Autobot
 
       registry.register(WebSearchTool.new(api_key: brave_api_key))
       registry.register(WebFetchTool.new(max_chars: web_fetch_max_chars))
-      registry.register(MessageTool.new)
+      registry.register(MessageTool.new(executor: executor))
     end
 
     private def self.register_bash_tools(

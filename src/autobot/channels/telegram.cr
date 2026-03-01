@@ -245,14 +245,15 @@ module Autobot::Channels
       @typing_channels.clear
     end
 
-    MULTIPART_BOUNDARY  = "----AutobotMediaBoundary"
-    PHOTO_CAPTION_LIMIT = 1024
+    MULTIPART_BOUNDARY     = "----AutobotMediaBoundary"
+    PHOTO_CAPTION_LIMIT    = 1024
+    DOCUMENT_CAPTION_LIMIT = 1024
 
     def send_message(message : Bus::OutboundMessage) : Nil
       stop_typing(message.chat_id)
 
-      if photo = find_photo_attachment(message.media?)
-        send_photo(message.chat_id, photo, message.content)
+      if attachment = find_sendable_attachment(message.media?)
+        send_media(message.chat_id, attachment, message.content)
         return
       end
 
@@ -280,23 +281,64 @@ module Autobot::Channels
       end
     end
 
+    private def find_sendable_attachment(media : Array(Bus::MediaAttachment)?) : Bus::MediaAttachment?
+      return nil unless media
+      media.find(&.data)
+    end
+
     private def find_photo_attachment(media : Array(Bus::MediaAttachment)?) : Bus::MediaAttachment?
       return nil unless media
       media.find { |attachment| attachment.type == "photo" && attachment.data }
     end
 
-    private def send_photo(chat_id : String, attachment : Bus::MediaAttachment, caption : String) : Nil
+    private def send_media(chat_id : String, attachment : Bus::MediaAttachment, caption : String) : Nil
       data = attachment.data
       unless data
-        Log.warn { "Photo attachment has no data, falling back to text" }
+        Log.warn { "Media attachment has no data, falling back to text" }
         send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
         return
       end
 
-      photo_bytes = Base64.decode(data)
-      body = build_photo_multipart(chat_id, photo_bytes, caption)
+      file_bytes = Base64.decode(data)
 
-      url = "#{TELEGRAM_API_BASE}/bot#{@token}/sendPhoto"
+      case attachment.type
+      when "photo"
+        send_media_request(chat_id, file_bytes, caption,
+          api_method: "sendPhoto",
+          field_name: "photo",
+          filename: media_filename(attachment, "image.png"),
+          content_type: attachment.mime_type || "image/png")
+      when "animation"
+        send_media_request(chat_id, file_bytes, caption,
+          api_method: "sendAnimation",
+          field_name: "animation",
+          filename: media_filename(attachment, "animation.gif"),
+          content_type: attachment.mime_type || "image/gif")
+      else
+        send_media_request(chat_id, file_bytes, caption,
+          api_method: "sendDocument",
+          field_name: "document",
+          filename: media_filename(attachment, "file"),
+          content_type: attachment.mime_type || "application/octet-stream")
+      end
+    rescue ex
+      Log.error { "Error sending media: #{ex.message}" }
+      send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
+    end
+
+    private def send_media_request(
+      chat_id : String,
+      file_bytes : Bytes,
+      caption : String,
+      api_method : String,
+      field_name : String,
+      filename : String,
+      content_type : String,
+    ) : Nil
+      body = build_media_multipart(chat_id, file_bytes, caption,
+        field_name: field_name, filename: filename, content_type: content_type)
+
+      url = "#{TELEGRAM_API_BASE}/bot#{@token}/#{api_method}"
       headers = HTTP::Headers{
         "Content-Type" => "multipart/form-data; boundary=#{MULTIPART_BOUNDARY}",
       }
@@ -304,15 +346,19 @@ module Autobot::Channels
       response = HTTP::Client.post(url, headers: headers, body: body)
 
       unless response.status_code == 200
-        Log.error { "sendPhoto failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
+        Log.error { "#{api_method} failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
         send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
       end
-    rescue ex
-      Log.error { "Error sending photo: #{ex.message}" }
-      send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
     end
 
-    private def build_photo_multipart(chat_id : String, photo_bytes : Bytes, caption : String) : String
+    private def build_media_multipart(
+      chat_id : String,
+      file_bytes : Bytes,
+      caption : String,
+      field_name : String,
+      filename : String,
+      content_type : String,
+    ) : String
       io = IO::Memory.new
 
       # chat_id field
@@ -320,21 +366,35 @@ module Autobot::Channels
       io << "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n"
       io << chat_id << "\r\n"
 
-      # photo field (binary)
+      # file field (binary)
       io << "--" << MULTIPART_BOUNDARY << "\r\n"
-      io << "Content-Disposition: form-data; name=\"photo\"; filename=\"image.png\"\r\n"
-      io << "Content-Type: image/png\r\n\r\n"
-      io.write(photo_bytes)
+      io << "Content-Disposition: form-data; name=\"" << field_name << "\"; filename=\"" << filename << "\"\r\n"
+      io << "Content-Type: " << content_type << "\r\n\r\n"
+      io.write(file_bytes)
       io << "\r\n"
 
-      # caption field (truncated to Telegram limit)
-      truncated_caption = caption.size > PHOTO_CAPTION_LIMIT ? caption[0, PHOTO_CAPTION_LIMIT] : caption
+      # caption field
+      truncated_caption = caption.size > DOCUMENT_CAPTION_LIMIT ? caption[0, DOCUMENT_CAPTION_LIMIT] : caption
       io << "--" << MULTIPART_BOUNDARY << "\r\n"
       io << "Content-Disposition: form-data; name=\"caption\"\r\n\r\n"
       io << truncated_caption << "\r\n"
 
       io << "--" << MULTIPART_BOUNDARY << "--\r\n"
       io.to_s
+    end
+
+    private def media_filename(attachment : Bus::MediaAttachment, default : String) : String
+      if path = attachment.file_path
+        File.basename(path)
+      else
+        default
+      end
+    end
+
+    # Legacy method kept for backward compatibility with tests.
+    private def build_photo_multipart(chat_id : String, photo_bytes : Bytes, caption : String) : String
+      build_media_multipart(chat_id, photo_bytes, caption,
+        field_name: "photo", filename: "image.png", content_type: "image/png")
     end
 
     private def poll_updates : Nil
