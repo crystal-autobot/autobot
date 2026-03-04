@@ -156,6 +156,41 @@ Or if no provider is configured:
 
 ---
 
+## File sending
+
+The `message` tool supports attaching files from the workspace via the `file_path` parameter. This allows the LLM to send generated files (images, GIFs, documents) back to users.
+
+### How it works
+
+```
+LLM generates file (exec tool) -> message(content, file_path) -> Read & base64 encode -> Channel -> User
+```
+
+1. The LLM generates a file in the workspace (e.g. via `exec` running a Python script)
+2. The LLM calls `message(content: "Here's your file", file_path: "output.gif")`
+3. The tool reads the file from the workspace via the sandbox executor (base64-encoded)
+4. The file is attached as a `MediaAttachment` on the `OutboundMessage`
+5. The channel sends it using the appropriate API method
+
+### Supported file types
+
+| Extension | Media type | Telegram API method |
+|-----------|-----------|---------------------|
+| `.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp` | photo | `sendPhoto` |
+| `.gif` | animation | `sendAnimation` |
+| `.mp4` | video | `sendDocument` |
+| `.pdf` | document | `sendDocument` |
+| Other | document | `sendDocument` |
+
+### Supported channels
+
+| Channel   | Status    | Notes                                    |
+|-----------|-----------|------------------------------------------|
+| Telegram  | Supported | Photos, animations (GIFs), and documents |
+| Slack     | Text fallback | Logs warning, sends caption as text    |
+
+---
+
 ## Voice transcription
 
 Voice and audio messages received via Telegram are automatically transcribed to text using the Whisper API before being sent to the LLM.
