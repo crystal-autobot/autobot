@@ -115,7 +115,7 @@ module Autobot::Config
           severity: Severity::Error,
           message: "CRITICAL: Sandbox enabled but no sandbox tool found. " \
                    "Install bubblewrap (sudo apt install bubblewrap) or Docker. " \
-                   "See docs/security.md for installation instructions."
+                   "See #{WEBSITE_URL}/sandboxing/"
         )
       end
 

@@ -332,11 +332,29 @@ module Autobot
         "'#{arg.gsub("'", "'\\''")}'"
       end
 
+      EXTRA_SEARCH_PATHS = ["/usr/local/bin", "/opt/homebrew/bin"]
+
       private def self.command_exists?(cmd : String) : Bool
+        ensure_path!
         Process.run("which", [cmd], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
       rescue
         false
       end
+
+      # Ensure well-known binary directories are in PATH.
+      # Services (systemd, launchd) often start with a minimal PATH
+      # that doesn't include /usr/local/bin or /opt/homebrew/bin.
+      private def self.ensure_path! : Nil
+        return if @@path_ensured
+        @@path_ensured = true
+
+        current = ENV.fetch("PATH", "")
+        dirs = current.split(':')
+        missing = EXTRA_SEARCH_PATHS.reject { |dir| dirs.includes?(dir) }
+        ENV["PATH"] = (dirs + missing).join(':') unless missing.empty?
+      end
+
+      @@path_ensured = false
     end
 
     # Exception raised when sandbox tools are not available
@@ -365,7 +383,7 @@ module Autobot
             Linux:         sudo apt install docker.io
             Others:        https://docs.docker.com/engine/install/
 
-        Learn more: docs/sandboxing.md
+        Learn more: #{WEBSITE_URL}/sandboxing/
         ERROR
       end
     end

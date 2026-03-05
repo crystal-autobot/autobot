@@ -139,20 +139,19 @@ docker-compose logs -f autobot
 
 ---
 
-### Systemd (Linux)
+### Service Installation
 
-Use the provided service template:
+Autobot can install itself as a system service. Run from the bot directory so paths are auto-detected:
 
 ```bash
-# Copy service file
-sudo cp docs/templates/autobot.service /etc/systemd/system/
+cd /path/to/your/bot
+autobot service generate   # preview the generated service file
+```
 
-# Build and install binary
-make release
-sudo cp bin/autobot /usr/local/bin/
-sudo chmod 755 /usr/local/bin/autobot
+#### Linux (systemd)
 
-# Enable service
+```bash
+sudo autobot service install
 sudo systemctl daemon-reload
 sudo systemctl enable --now autobot
 ```
@@ -163,7 +162,20 @@ sudo systemctl status autobot
 sudo journalctl -u autobot -f
 ```
 
-**Service includes**: Security hardening (NoNewPrivileges, ProtectSystem), resource limits, automatic restarts.
+#### macOS (launchd)
+
+```bash
+autobot service install
+```
+
+Check status:
+```bash
+launchctl list | grep autobot
+```
+
+Logs are written to `logs/autobot.log` and `logs/autobot.error.log` in the bot directory.
+
+**Service includes**: Automatic restarts, working directory setup, environment variables from `.env`. On Linux, security hardening (NoNewPrivileges, ProtectSystem) is also enabled.
 
 ---
 
@@ -303,16 +315,17 @@ sudo chown autobot:staff /var/lib/autobot
 
 ### Resource Limits (Systemd)
 
-Add to `autobot.service`:
+Optionally add resource limits to `/etc/systemd/system/autobot.service` under `[Service]`:
 
 ```ini
-[Service]
 CPUQuota=200%      # Max 2 cores
 MemoryMax=2G       # Hard limit
 MemoryHigh=1.5G    # Soft limit
 LimitNOFILE=65536  # File descriptors
 TasksMax=512       # Max processes
 ```
+
+After editing, reload: `sudo systemctl daemon-reload && sudo systemctl restart autobot`
 
 ### Backup
 
@@ -388,6 +401,8 @@ autobot doctor                   # Validate config
 autobot doctor --strict          # Strict validation
 autobot gateway                  # Start gateway
 autobot gateway --port 8080      # Custom port
+autobot service generate         # Preview service file
+autobot service install          # Install as system service
 ```
 
 ### Files
