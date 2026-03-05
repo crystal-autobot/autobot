@@ -13,6 +13,8 @@ ExecStart=/usr/local/bin/autobot gateway
 
 NoNewPrivileges=true
 ProtectSystem=strict
+# ProtectHome=true is included automatically when the workspace
+# is outside of home directories (e.g. /var/lib/autobot).
 ProtectHome=true
 ReadWritePaths=/var/lib/autobot
 

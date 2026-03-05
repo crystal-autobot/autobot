@@ -20,8 +20,7 @@ module Autobot
 
         NoNewPrivileges=true
         ProtectSystem=strict
-        ProtectHome=true
-        ReadWritePaths=%s
+        %sReadWritePaths=%s
 
         Restart=on-failure
         RestartSec=10
@@ -89,7 +88,8 @@ module Autobot
       # -- Systemd --
 
       def self.render_systemd_unit(working_dir : String, binary_path : String, user : String) : String
-        SYSTEMD_TEMPLATE % {user, user, working_dir, working_dir, binary_path, working_dir}
+        protect_home = home_directory?(working_dir) ? "" : "ProtectHome=true\n        "
+        SYSTEMD_TEMPLATE % {user, user, working_dir, working_dir, binary_path, protect_home, working_dir}
       end
 
       private def self.render_systemd_unit : String
@@ -164,6 +164,12 @@ module Autobot
 
       def self.escape_xml(str : String) : String
         str.gsub('&', "&amp;").gsub('<', "&lt;").gsub('>', "&gt;")
+      end
+
+      HOME_PREFIXES = {"/home/", "/root", "/run/user/", "/Users/"}
+
+      private def self.home_directory?(path : String) : Bool
+        HOME_PREFIXES.any? { |prefix| path.starts_with?(prefix) }
       end
 
       private def self.detect_binary_path : String
