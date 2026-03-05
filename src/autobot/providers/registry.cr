@@ -29,6 +29,9 @@ module Autobot
       getter? use_max_completion_tokens : Bool
       getter max_tokens_legacy_patterns : Array(String)
 
+      # Whether the provider supports the "system" role in messages
+      getter? supports_system_role : Bool
+
       def initialize(
         @name,
         @keywords,
@@ -45,6 +48,7 @@ module Autobot
         @model_overrides = {} of String => Hash(String, JSON::Any),
         @use_max_completion_tokens = false,
         @max_tokens_legacy_patterns = [] of String,
+        @supports_system_role = true,
       )
         @display_name = @name.capitalize if @display_name.empty?
       end
@@ -142,6 +146,15 @@ module Autobot
       ),
 
       # === Local ===
+      ProviderSpec.new(
+        name: "duckai",
+        keywords: ["duckai"],
+        display_name: "DuckAI",
+        local: true,
+        detect_by_base_keyword: "duckai",
+        supports_system_role: false,
+      ),
+
       ProviderSpec.new(
         name: "vllm",
         keywords: ["vllm"],
