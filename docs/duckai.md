@@ -110,10 +110,10 @@ For heavy usage, consider using a paid provider instead.
 
 ## Known limitations
 
-- **No streaming** - Responses are returned in full after the model finishes generating.
-- **No tool/function calling** - DuckDuckGo's API does not support function calling. Tools like `exec`, `read_file`, etc. will not work.
+- **No system role** - DuckDuckGo's API does not support the `system` message role. Autobot automatically merges system prompts into the first user message.
 - **Rate limited** - Free service with usage limits. Not suitable for production workloads.
 - **Proxy required** - The DuckAI proxy must be running alongside autobot.
+- **Model availability** - Models may be listed by the proxy but rejected by DuckDuckGo's backend. Availability changes without notice.
 - **No voice transcription** - If you need voice message support, configure an additional [Groq](groq.md) or [OpenAI](openai.md) provider.
 
 ## Troubleshooting

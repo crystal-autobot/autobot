@@ -124,7 +124,12 @@ Autobot automatically detects and logs the sandbox method on startup — Docker 
 
 ## 📚 Documentation
 
-[Getting started](https://crystal-autobot.github.io/autobot/quickstart/) · [Providers](https://crystal-autobot.github.io/autobot/providers/) · [Channels](https://crystal-autobot.github.io/autobot/telegram/) · [Security](https://crystal-autobot.github.io/autobot/security/) · [Deployment](https://crystal-autobot.github.io/autobot/deployment/) · [Full docs](https://crystal-autobot.github.io/autobot/)
+- [Getting started](https://crystal-autobot.github.io/autobot/quickstart/)
+- [Providers](https://crystal-autobot.github.io/autobot/providers/)
+- [Channels](https://crystal-autobot.github.io/autobot/telegram/)
+- [Security](https://crystal-autobot.github.io/autobot/security/)
+- [Deployment](https://crystal-autobot.github.io/autobot/deployment/)
+- [Full docs](https://crystal-autobot.github.io/autobot/)
 
 ## 💡 Examples
 
