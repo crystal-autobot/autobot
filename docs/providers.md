@@ -13,6 +13,7 @@ Autobot supports multiple LLM providers out of the box. Configure at least one p
 | [Google Gemini](gemini.md) | Direct | — | Gemini Pro, Flash models |
 | [OpenRouter](openrouter.md) | Gateway | — | Hundreds of models, single API key |
 | [AWS Bedrock](bedrock.md) | Cloud | — | Claude, Nova via AWS SigV4 auth |
+| [DuckAI](duckai.md) | Free | — | Free models via duck.ai proxy (rate limited) |
 | [vLLM / Local](vllm.md) | Local | — | Self-hosted, any OpenAI-compatible server |
 
 **Direct** providers connect to the provider's own API. **Gateway** providers aggregate multiple upstream providers behind a single key. **Local** providers run on your own hardware.
@@ -29,6 +30,8 @@ Autobot supports multiple LLM providers out of the box. Configure at least one p
 
 **Best for enterprise** — [AWS Bedrock](bedrock.md). Runs in your AWS account with IAM-based access control.
 
+**Best for free** — [DuckAI](duckai.md). Free access to multiple models via duck.ai (rate limited).
+
 **Best for privacy** — [vLLM / Local](vllm.md). Data never leaves your machine.
 
 ## Model naming convention
@@ -43,6 +46,7 @@ model: "groq/llama-3.3-70b-versatile"
 model: "gemini/gemini-2.5-flash"
 model: "openrouter/anthropic/claude-sonnet-4-5"
 model: "bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+model: "duckai/gpt-4o-mini"
 model: "vllm/meta-llama/Llama-3.3-70B-Instruct"
 ```
 

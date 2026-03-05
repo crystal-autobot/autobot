@@ -12,10 +12,16 @@ The [DuckAI proxy](https://github.com/amirkabiri/duckai) runs locally and handle
 
 | Model | Description |
 |---|---|
-| `gpt-4o-mini` | OpenAI GPT-4o Mini (default) |
+| `gpt-4o-mini` | OpenAI GPT-4o Mini (recommended) |
 | `claude-3-5-haiku-latest` | Anthropic Claude 3.5 Haiku |
 | `meta-llama/Llama-4-Scout-17B-16E-Instruct` | Meta Llama 4 Scout |
 | `mistralai/Mistral-Small-24B-Instruct-2501` | Mistral Small |
+
+Model availability depends on DuckDuckGo and may change at any time. The proxy may list models that are temporarily unavailable upstream. Check working models via:
+
+```sh
+curl http://localhost:3000/v1/models
+```
 
 ## Setup
 
@@ -41,6 +47,12 @@ curl http://localhost:3000/health
 
 ### 2. Configure the provider
 
+Add the proxy URL to your `.env` file:
+
+```sh
+DUCKAI_API_BASE=http://localhost:3000/v1
+```
+
 In `config.yml`:
 
 ```yaml
@@ -50,11 +62,11 @@ agents:
 
 providers:
   duckai:
-    api_base: "http://localhost:3000/v1"
-    api_key: "token"
+    api_base: "${DUCKAI_API_BASE}"
+    api_key: "unused"
 ```
 
-The `api_key` field is required by the config schema but the DuckAI proxy ignores it. Use any non-empty value.
+No API key is needed. DuckAI is a free service with no authentication. The `api_key` field is required by the config schema but the proxy ignores it — set it to any non-empty value like `"unused"`.
 
 ### 3. Verify
 
@@ -80,11 +92,11 @@ The `duckai/` prefix tells autobot to route to the DuckAI proxy. It is stripped 
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `api_key` | Yes* | - | Any non-empty value (proxy ignores it) |
-| `api_base` | Yes | - | DuckAI proxy URL (e.g. `http://localhost:3000/v1`) |
+| `api_base` | Yes | - | DuckAI proxy URL (e.g. `${DUCKAI_API_BASE}`) |
+| `api_key` | Yes* | - | Any non-empty value — no real key needed, proxy ignores it |
 | `extra_headers` | No | - | Additional HTTP headers for every request |
 
-*Required by config schema, but the value does not matter.
+*Required by config schema, but the value does not matter. DuckAI is free with no authentication.
 
 ## Rate limits
 
@@ -118,6 +130,6 @@ LOG_LEVEL=DEBUG autobot agent -m "Hello"
 
 **"LLM request failed: Connection refused"** - The DuckAI proxy is not running. Start it with `docker run -p 3000:3000 docker.io/amirkabiri/duckai`.
 
-**"API error: DuckAI API error: 400 Bad Request"** - The model ID is not supported. Check the [available models](#available-models) list.
+**"API error: DuckAI API error: 400 Bad Request"** - The model is not available. Some models may be listed by the proxy but rejected by DuckDuckGo's backend. Try a different model (e.g. `gpt-4o-mini`).
 
 **"API error: 429 Too Many Requests"** - Rate limited. Wait a moment and try again. The proxy handles backoff automatically for subsequent requests.
