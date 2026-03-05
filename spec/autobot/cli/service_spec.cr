@@ -90,6 +90,14 @@ describe Autobot::CLI::Service do
       unit.should contain("ReadWritePaths=/var/lib/autobot")
     end
 
+    it "omits ProtectHome when workspace is under home directory" do
+      unit = Autobot::CLI::Service.render_systemd_unit(
+        "/home/myuser/bot", "/opt/bin/autobot", "myuser"
+      )
+
+      unit.should_not contain("ProtectHome=true")
+    end
+
     it "uses provided user and paths" do
       unit = Autobot::CLI::Service.render_systemd_unit(
         "/home/myuser/bot", "/opt/bin/autobot", "myuser"
