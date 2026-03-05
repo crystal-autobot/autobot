@@ -25,7 +25,7 @@ module Autobot
           # Providers
           puts "\nProviders:"
           if p = config.providers
-            {% for name in %w[anthropic openai openrouter deepseek groq gemini vllm] %}
+            {% for name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
               if provider = p.{{ name.id }}
                 has_key = provider.api_key != ""
                 status = has_key ? "✓ configured" : "not set"

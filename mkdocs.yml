@@ -66,6 +66,7 @@ nav:
       - Google Gemini: gemini.md
       - OpenRouter: openrouter.md
       - AWS Bedrock: bedrock.md
+      - DuckAI: duckai.md
       - vLLM / Local: vllm.md
   - Channels:
       - Telegram: telegram.md

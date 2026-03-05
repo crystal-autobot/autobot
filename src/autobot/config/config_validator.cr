@@ -27,7 +27,7 @@ module Autobot::Config
 
       has_configured_provider = false
 
-      {% for provider in %w[anthropic openai openrouter deepseek groq gemini vllm] %}
+      {% for provider in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
         if provider_cfg = providers.{{ provider.id }}
           api_key = provider_cfg.api_key
           if !api_key.empty? && !api_key.includes?("${")

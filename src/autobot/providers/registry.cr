@@ -143,6 +143,14 @@ module Autobot
 
       # === Local ===
       ProviderSpec.new(
+        name: "duckai",
+        keywords: ["duckai"],
+        display_name: "DuckAI",
+        local: true,
+        detect_by_base_keyword: "duckai",
+      ),
+
+      ProviderSpec.new(
         name: "vllm",
         keywords: ["vllm"],
         display_name: "vLLM/Local",
