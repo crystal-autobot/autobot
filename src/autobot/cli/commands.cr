@@ -137,7 +137,13 @@ module Autobot
       end
 
       private def self.setup_logging(verbose : Bool) : Nil
-        level = verbose ? ::Log::Severity::Debug : ::Log::Severity::Info
+        level = if env_level = ENV["LOG_LEVEL"]?
+                  ::Log::Severity.parse?(env_level) || ::Log::Severity::Info
+                elsif verbose
+                  ::Log::Severity::Debug
+                else
+                  ::Log::Severity::Info
+                end
         Logging.setup(level)
       end
 

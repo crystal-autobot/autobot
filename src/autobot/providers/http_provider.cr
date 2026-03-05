@@ -23,7 +23,6 @@ module Autobot
       getter model : String
       getter extra_headers : Hash(String, String)
 
-      @spec : ProviderSpec?
       @gateway : ProviderSpec?
 
       def initialize(
@@ -35,7 +34,6 @@ module Autobot
       )
         super(api_key, api_base)
         @gateway = Providers.find_gateway(provider_name, api_key, api_base)
-        @spec = @gateway || Providers.find_by_model(@model)
       end
 
       def default_model : String
@@ -86,10 +84,11 @@ module Autobot
 
       private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
         token_param = max_tokens_param_name(model, spec)
+        effective_messages = maybe_merge_system_role(messages, spec)
 
         body = {
           "model"     => JSON::Any.new(resolve_model_name(model, spec)),
-          "messages"  => JSON::Any.new(messages.map { |message| JSON::Any.new(message.transform_values { |value| value }) }),
+          "messages"  => JSON::Any.new(effective_messages.map { |message| JSON::Any.new(message.transform_values { |value| value }) }),
           token_param => JSON::Any.new(max_tokens.to_i64),
         } of String => JSON::Any
 
@@ -201,9 +200,7 @@ module Autobot
       end
 
       private def convert_to_anthropic_messages(messages) : Array(JSON::Any)
-        messages
-          .reject { |message| message["role"]?.try(&.as_s?) == Constants::ROLE_SYSTEM }
-          .map { |message| convert_single_anthropic_message(message) }
+        reject_system_messages(messages).map { |message| convert_single_anthropic_message(message) }
       end
 
       private def convert_single_anthropic_message(message : Hash(String, JSON::Any)) : JSON::Any
@@ -478,6 +475,46 @@ module Autobot
         legacy ? "max_tokens" : "max_completion_tokens"
       end
 
+      # Merges system messages into the first user message when the provider
+      # does not support the "system" role (e.g. DuckAI).
+      private def maybe_merge_system_role(
+        messages : Array(Hash(String, JSON::Any)),
+        spec : ProviderSpec?,
+      ) : Array(Hash(String, JSON::Any))
+        return messages if spec.nil? || spec.supports_system_role?
+
+        system_text = extract_system_prompt(messages)
+        other_messages = reject_system_messages(messages)
+        return other_messages if system_text.empty?
+
+        prepend_system_to_first_user(other_messages, system_text)
+      end
+
+      private def reject_system_messages(messages) : Array(Hash(String, JSON::Any))
+        messages.reject { |message| message["role"]?.try(&.as_s?) == Constants::ROLE_SYSTEM }
+      end
+
+      private def prepend_system_to_first_user(
+        messages : Array(Hash(String, JSON::Any)),
+        system_text : String,
+      ) : Array(Hash(String, JSON::Any))
+        first_user_idx = messages.index { |msg| msg["role"]?.try(&.as_s?) == Constants::ROLE_USER }
+
+        if first_user_idx
+          original = messages[first_user_idx]["content"]?.try(&.as_s?) || ""
+          merged = messages[first_user_idx].dup
+          merged["content"] = JSON::Any.new("#{system_text}\n\n#{original}")
+          messages[first_user_idx] = merged
+        else
+          messages.unshift({
+            "role"    => JSON::Any.new(Constants::ROLE_USER),
+            "content" => JSON::Any.new(system_text),
+          })
+        end
+
+        messages
+      end
+
       private def apply_model_overrides(model : String, spec : ProviderSpec?, body)
         return unless s = spec
         lower = model.downcase
@@ -572,7 +609,11 @@ module Autobot
         path = uri.request_target
         response = client.post(path, headers: headers, body: body)
 
-        Log.debug { "Response #{response.status_code} (#{response.body.size} bytes)" }
+        if response.success?
+          Log.debug { "Response #{response.status_code} (#{response.body.size} bytes)" }
+        else
+          Log.debug { "Response #{response.status_code}: #{response.body}" }
+        end
         response
       ensure
         client.try(&.close)

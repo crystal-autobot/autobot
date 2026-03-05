@@ -48,11 +48,13 @@ module Autobot
             guardrail_version: bedrock.guardrail_version,
           )
         else
-          provider_config, _name = config.match_provider
+          provider_config, provider_name = config.match_provider
           raise "No provider configured" unless provider_config
           Providers::HttpProvider.new(
             api_key: provider_config.api_key,
             api_base: provider_config.api_base?,
+            model: config.default_model,
+            provider_name: provider_name,
           )
         end
       end
