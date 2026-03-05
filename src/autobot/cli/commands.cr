@@ -54,6 +54,8 @@ module Autobot
           Gateway.run(options[:config_path], options[:port], options[:verbose])
         when "cron"
           handle_cron_subcommand(options)
+        when "service"
+          Service.run(options[:args])
         when "status"
           Status.run(options[:config_path])
         when "version"
@@ -274,6 +276,7 @@ module Autobot
         puts "  agent     Interact with the agent (single message or interactive)"
         puts "  gateway   Start the gateway server"
         puts "  cron      Manage scheduled tasks (list|show|add|update|remove|enable|disable|run|clear)"
+        puts "  service   Manage systemd service (generate|install)"
         puts "  status    Show system status"
         puts "  version   Show version info"
         puts "  help      Show this help\n\n"
@@ -308,6 +311,8 @@ module Autobot
         puts "  autobot gateway -p 8080"
         puts "  autobot cron list"
         puts "  autobot cron add -n daily_check -m \"Check system\" --cron \"0 9 * * *\""
+        puts "  autobot service generate"
+        puts "  sudo autobot service install"
         puts "  autobot status"
       end
     end

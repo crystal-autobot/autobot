@@ -5,4 +5,7 @@ module Autobot
   # Build info
   CRYSTAL_VERSION = {{ Crystal::VERSION }}
   BUILD_DATE      = {{ `date -u +%Y-%m-%d`.stringify.strip }}
+
+  # Website
+  WEBSITE_URL = "https://crystal-autobot.github.io/autobot"
 end
