@@ -443,9 +443,7 @@ module Autobot::Channels
 
       content, media_attachments = build_content_and_media(msg)
 
-      if reply_context = extract_reply_context(msg)
-        content = "[Replying to: \"#{reply_context}\"]\n\n#{content}"
-      end
+      content = prepend_reply_context(content, extract_reply_context(msg))
 
       Log.debug { "Message from #{sender[:sender_id]}: #{content}" }
 
@@ -484,16 +482,11 @@ module Autobot::Channels
       }
     end
 
-    REPLY_CONTEXT_MAX_LENGTH = 500
-
     private def extract_reply_context(msg : JSON::Any) : String?
       reply_msg = msg["reply_to_message"]?
       return nil unless reply_msg
 
-      text = reply_msg["text"]?.try(&.as_s) || reply_msg["caption"]?.try(&.as_s)
-      return nil if text.nil? || text.empty?
-
-      text.size > REPLY_CONTEXT_MAX_LENGTH ? "#{text[0, REPLY_CONTEXT_MAX_LENGTH]}..." : text
+      reply_msg["text"]?.try(&.as_s) || reply_msg["caption"]?.try(&.as_s)
     end
 
     private def build_content_and_media(msg : JSON::Any) : {String, Array(Bus::MediaAttachment)}

@@ -162,9 +162,7 @@ module Autobot::Channels
 
       text = strip_bot_mention(event_data[:text])
 
-      if reply_context = fetch_reply_context(event_data)
-        text = "[Replying to: \"#{reply_context}\"]\n\n#{text}"
-      end
+      text = prepend_reply_context(text, fetch_reply_context(event_data[:chat_id], event_data[:thread_ts], event_data[:ts]))
 
       if ts = event_data[:ts]
         spawn { add_reaction(event_data[:chat_id], ts, DEFAULT_REACTION_EMOJI) }
@@ -287,18 +285,13 @@ module Autobot::Channels
       Log.debug { "Slack reactions.add failed: #{ex.message}" }
     end
 
-    REPLY_CONTEXT_MAX_LENGTH = 500
+    REPLY_CONTEXT_TIMEOUT = 10.seconds
 
-    private def fetch_reply_context(
-      event_data : NamedTuple(event_type: String, sender_id: String, chat_id: String, text: String, channel_type: String, thread_ts: String, ts: String?),
-    ) : String?
-      ts = event_data[:ts]
-      thread_ts = event_data[:thread_ts]
-
+    private def fetch_reply_context(chat_id : String, thread_ts : String, ts : String?) : String?
       return nil if thread_ts.empty? || ts.nil? || thread_ts == ts
 
       response = slack_api_get("conversations.replies", {
-        "channel"   => event_data[:chat_id],
+        "channel"   => chat_id,
         "ts"        => thread_ts,
         "limit"     => "1",
         "inclusive" => "true",
@@ -311,21 +304,24 @@ module Autobot::Channels
       messages = data["messages"]?.try(&.as_a?)
       return nil if messages.nil? || messages.empty?
 
-      text = messages[0]["text"]?.try(&.as_s)
-      return nil if text.nil? || text.empty?
-
-      text.size > REPLY_CONTEXT_MAX_LENGTH ? "#{text[0, REPLY_CONTEXT_MAX_LENGTH]}..." : text
-    rescue
+      messages[0]["text"]?.try(&.as_s)
+    rescue ex
+      Log.debug { "Failed to fetch reply context: #{ex.message}" }
       nil
     end
 
     private def slack_api_get(method : String, params : Hash(String, String)) : String?
+      uri = URI.parse(SLACK_API_BASE)
+      client = HTTP::Client.new(uri)
+      client.read_timeout = REPLY_CONTEXT_TIMEOUT
+
       query = URI::Params.encode(params)
       headers = HTTP::Headers{
         "Authorization" => "Bearer #{@bot_token}",
       }
 
-      response = HTTP::Client.get("#{SLACK_API_BASE}/#{method}?#{query}", headers: headers)
+      response = client.get("/#{method}?#{query}", headers: headers)
+      client.close
 
       if response.status.ok?
         return response.body

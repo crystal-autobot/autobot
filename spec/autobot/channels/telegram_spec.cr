@@ -34,6 +34,10 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     extract_reply_context(msg)
   end
 
+  def test_prepend_reply_context(content : String, reply_text : String?) : String
+    prepend_reply_context(content, reply_text)
+  end
+
   def test_media_filename(attachment : Autobot::Bus::MediaAttachment, default : String) : String
     media_filename(attachment, default)
   end
@@ -177,6 +181,40 @@ describe Autobot::Channels::TelegramChannel do
     end
   end
 
+  describe "#prepend_reply_context" do
+    it "returns content unchanged when reply_text is nil" do
+      channel = build_channel
+      channel.test_prepend_reply_context("hello", nil).should eq("hello")
+    end
+
+    it "returns content unchanged when reply_text is empty" do
+      channel = build_channel
+      channel.test_prepend_reply_context("hello", "").should eq("hello")
+    end
+
+    it "prepends reply context" do
+      channel = build_channel
+      result = channel.test_prepend_reply_context("yes", "Do you agree?")
+      result.should eq("[Replying to: \"Do you agree?\"]\n\nyes")
+    end
+
+    it "truncates long reply text" do
+      channel = build_channel
+      long_text = "a" * 600
+      result = channel.test_prepend_reply_context("ok", long_text)
+      result.should contain("[Replying to: \"#{"a" * 500}...\"]")
+      result.should end_with("\n\nok")
+    end
+
+    it "does not truncate text at exactly max length" do
+      channel = build_channel
+      exact_text = "a" * 500
+      result = channel.test_prepend_reply_context("ok", exact_text)
+      result.should_not contain("...")
+      result.should contain(exact_text)
+    end
+  end
+
   describe "#extract_reply_context" do
     it "returns nil when no reply_to_message" do
       msg = JSON.parse(%({"text": "hello"}))
@@ -202,20 +240,18 @@ describe Autobot::Channels::TelegramChannel do
       channel.test_extract_reply_context(msg).should be_nil
     end
 
-    it "returns nil when reply_to_message text is empty" do
+    it "returns empty string when reply_to_message text is empty" do
       msg = JSON.parse(%({"text": "hello", "reply_to_message": {"text": ""}}))
       channel = build_channel
-      channel.test_extract_reply_context(msg).should be_nil
+      channel.test_extract_reply_context(msg).should eq("")
     end
 
-    it "truncates long reply context" do
+    it "returns full text without truncation" do
       long_text = "a" * 600
       msg = JSON.parse(%({"text": "ok", "reply_to_message": {"text": "#{long_text}"}}))
       channel = build_channel
       result = channel.test_extract_reply_context(msg)
-      result.should_not be_nil
-      result.as(String).size.should eq(503) # 500 + "..."
-      result.as(String).should end_with("...")
+      result.should eq(long_text)
     end
   end
 

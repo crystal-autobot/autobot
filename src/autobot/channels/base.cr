@@ -44,6 +44,21 @@ module Autobot::Channels
       false
     end
 
+    REPLY_CONTEXT_MAX_LENGTH = 500
+
+    # Truncate reply context text and format it as a prefix for the message content.
+    protected def prepend_reply_context(content : String, reply_text : String?) : String
+      return content if reply_text.nil? || reply_text.empty?
+
+      truncated = if reply_text.size > REPLY_CONTEXT_MAX_LENGTH
+                    "#{reply_text[0, REPLY_CONTEXT_MAX_LENGTH]}..."
+                  else
+                    reply_text
+                  end
+
+      "[Replying to: \"#{truncated}\"]\n\n#{content}"
+    end
+
     # Handle an incoming message from the chat platform.
     # Checks permissions and forwards to the message bus.
     protected def handle_message(

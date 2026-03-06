@@ -138,11 +138,7 @@ module Autobot::Channels
         content = "[Voice Message: Transcription not available for WhatsApp yet]"
       end
 
-      if reply_context = extract_reply_context(data)
-        content = "[Replying to: \"#{reply_context}\"]\n\n#{content}"
-      end
-
-      content
+      prepend_reply_context(content, extract_reply_context(data))
     end
 
     private def build_metadata(data : JSON::Any) : Hash(String, String)
@@ -154,13 +150,8 @@ module Autobot::Channels
       }
     end
 
-    REPLY_CONTEXT_MAX_LENGTH = 500
-
     private def extract_reply_context(data : JSON::Any) : String?
-      quoted = data["quoted"]?.try(&.as_s)
-      return nil if quoted.nil? || quoted.empty?
-
-      quoted.size > REPLY_CONTEXT_MAX_LENGTH ? "#{quoted[0, REPLY_CONTEXT_MAX_LENGTH]}..." : quoted
+      data["quoted"]?.try(&.as_s)
     end
 
     private def handle_status(data : JSON::Any) : Nil

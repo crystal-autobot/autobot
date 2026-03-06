@@ -38,10 +38,10 @@ describe Autobot::Channels::WhatsAppChannel do
       channel.test_extract_reply_context(data).should be_nil
     end
 
-    it "returns nil when quoted is empty" do
+    it "returns empty string when quoted is empty" do
       data = JSON.parse(%({"content": "hello", "quoted": ""}))
       channel = build_whatsapp_channel
-      channel.test_extract_reply_context(data).should be_nil
+      channel.test_extract_reply_context(data).should eq("")
     end
 
     it "extracts quoted text" do
@@ -50,14 +50,11 @@ describe Autobot::Channels::WhatsAppChannel do
       channel.test_extract_reply_context(data).should eq("Do you want to proceed?")
     end
 
-    it "truncates long quoted text" do
+    it "returns full text without truncation" do
       long_text = "a" * 600
       data = JSON.parse(%({"content": "ok", "quoted": "#{long_text}"}))
       channel = build_whatsapp_channel
-      result = channel.test_extract_reply_context(data)
-      result.should_not be_nil
-      result.as(String).size.should eq(503) # 500 + "..."
-      result.as(String).should end_with("...")
+      channel.test_extract_reply_context(data).should eq(long_text)
     end
   end
 
