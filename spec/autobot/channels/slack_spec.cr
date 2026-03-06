@@ -13,6 +13,10 @@ class SlackChannelTest < Autobot::Channels::SlackChannel
   def test_strip_bot_mention(text : String) : String
     strip_bot_mention(text)
   end
+
+  def test_parse_socket_event(event : JSON::Any)
+    parse_socket_event(event)
+  end
 end
 
 private def build_slack_channel(
@@ -125,6 +129,42 @@ describe Autobot::Channels::SlackChannel do
     it "returns text unchanged when no bot ID" do
       channel = build_slack_channel
       channel.test_strip_bot_mention("hello world").should eq("hello world")
+    end
+  end
+
+  describe "#parse_socket_event" do
+    it "extracts thread_ts from thread reply" do
+      event = JSON.parse(%({"type": "message", "user": "U123", "channel": "C123", "text": "reply", "channel_type": "channel", "ts": "1111.2222", "thread_ts": "1111.1111"}))
+      channel = build_slack_channel
+      result = channel.test_parse_socket_event(event)
+      result.should_not be_nil
+      data = result.not_nil!
+      data[:thread_ts].should eq("1111.1111")
+      data[:ts].should eq("1111.2222")
+    end
+
+    it "sets thread_ts to ts when not in a thread" do
+      event = JSON.parse(%({"type": "message", "user": "U123", "channel": "C123", "text": "hello", "channel_type": "channel", "ts": "1111.2222"}))
+      channel = build_slack_channel
+      result = channel.test_parse_socket_event(event)
+      result.should_not be_nil
+      data = result.not_nil!
+      data[:thread_ts].should eq("1111.2222")
+      data[:ts].should eq("1111.2222")
+    end
+
+    it "returns nil for subtype events" do
+      event = JSON.parse(%({"type": "message", "subtype": "bot_message", "user": "U123", "channel": "C123", "text": "hi"}))
+      channel = build_slack_channel
+      channel.test_parse_socket_event(event).should be_nil
+    end
+
+    it "parses app_mention events" do
+      event = JSON.parse(%({"type": "app_mention", "user": "U123", "channel": "C123", "text": "<@BOT> help", "channel_type": "channel", "ts": "1111.2222"}))
+      channel = build_slack_channel
+      result = channel.test_parse_socket_event(event)
+      result.should_not be_nil
+      result.not_nil![:event_type].should eq("app_mention")
     end
   end
 end
