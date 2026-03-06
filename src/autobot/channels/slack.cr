@@ -1,6 +1,7 @@
 require "http/web_socket"
 require "http/client"
 require "json"
+require "uri"
 require "../constants"
 require "./base"
 
@@ -161,6 +162,8 @@ module Autobot::Channels
 
       text = strip_bot_mention(event_data[:text])
 
+      text = prepend_reply_context(text, fetch_reply_context(event_data[:chat_id], event_data[:thread_ts], event_data[:ts]))
+
       if ts = event_data[:ts]
         spawn { add_reaction(event_data[:chat_id], ts, DEFAULT_REACTION_EMOJI) }
       end
@@ -280,6 +283,55 @@ module Autobot::Channels
       slack_api("reactions.add", body)
     rescue ex
       Log.debug { "Slack reactions.add failed: #{ex.message}" }
+    end
+
+    REPLY_CONTEXT_TIMEOUT = 10.seconds
+
+    private def fetch_reply_context(chat_id : String, thread_ts : String, ts : String?) : String?
+      return nil if thread_ts.empty? || ts.nil? || thread_ts == ts
+
+      response = slack_api_get("conversations.replies", {
+        "channel"   => chat_id,
+        "ts"        => thread_ts,
+        "limit"     => "1",
+        "inclusive" => "true",
+      })
+      return nil unless response
+
+      data = JSON.parse(response)
+      return nil unless data["ok"]?.try(&.as_bool)
+
+      messages = data["messages"]?.try(&.as_a?)
+      return nil if messages.nil? || messages.empty?
+
+      messages[0]["text"]?.try(&.as_s)
+    rescue ex
+      Log.debug { "Failed to fetch reply context: #{ex.message}" }
+      nil
+    end
+
+    private def slack_api_get(method : String, params : Hash(String, String)) : String?
+      uri = URI.parse(SLACK_API_BASE)
+      client = HTTP::Client.new(uri)
+      client.read_timeout = REPLY_CONTEXT_TIMEOUT
+
+      query = URI::Params.encode(params)
+      headers = HTTP::Headers{
+        "Authorization" => "Bearer #{@bot_token}",
+      }
+
+      response = client.get("/#{method}?#{query}", headers: headers)
+      client.close
+
+      if response.status.ok?
+        return response.body
+      end
+
+      Log.error { "Slack API GET #{method} HTTP #{response.status_code}" }
+      nil
+    rescue ex
+      Log.error { "Slack API GET #{method} error: #{ex.message}" }
+      nil
     end
 
     private def slack_api(method : String, body : String? = nil) : String?

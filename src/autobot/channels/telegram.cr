@@ -443,6 +443,8 @@ module Autobot::Channels
 
       content, media_attachments = build_content_and_media(msg)
 
+      content = prepend_reply_context(content, extract_reply_context(msg))
+
       Log.debug { "Message from #{sender[:sender_id]}: #{content}" }
 
       start_typing(sender[:chat_id])
@@ -478,6 +480,13 @@ module Autobot::Channels
         sender_id:  sender_id,
         is_group:   is_group,
       }
+    end
+
+    private def extract_reply_context(msg : JSON::Any) : String?
+      reply_msg = msg["reply_to_message"]?
+      return nil unless reply_msg
+
+      reply_msg["text"]?.try(&.as_s) || reply_msg["caption"]?.try(&.as_s)
     end
 
     private def build_content_and_media(msg : JSON::Any) : {String, Array(Bus::MediaAttachment)}

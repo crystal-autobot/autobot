@@ -131,7 +131,7 @@ DMs are disabled by default. When enabled with `allowlist` policy, only users in
 
 - **Socket Mode** — WebSocket connection, no public IP needed
 - **@mention responses** — responds when mentioned in channels
-- **Thread support** — replies in threads for channel messages
+- **Thread support** — replies in threads for channel messages, with parent message context included for thread replies
 - **DM support** — configurable direct message handling
 - **Emoji reactions** — adds :eyes: to received messages
 - **Auto-reconnect** — reconnects automatically on disconnection
