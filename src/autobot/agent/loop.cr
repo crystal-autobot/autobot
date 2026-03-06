@@ -184,15 +184,18 @@ module Autobot::Agent
     end
 
     # Handle a cron-triggered background turn.
-    # Uses minimal context (no history), stops after the message tool fires.
-    # Returns nil because cron turns must deliver via the message tool explicitly.
+    # Includes session history so the LLM has conversation context.
+    # Stops after the message tool fires.
+    # Saves the exchange to the session so followup messages have context.
+    # Returns nil because cron turns deliver via the message tool explicitly.
     private def process_cron_message(msg : Bus::InboundMessage) : Nil
       origin_channel, origin_chat_id = parse_origin(msg.chat_id)
       session = @sessions.get_or_create("#{origin_channel}:#{origin_chat_id}")
       update_tool_contexts(origin_channel, origin_chat_id)
+      @message_tool.try(&.clear_last_sent)
 
       messages = @context.build_messages(
-        history: [] of Hash(String, String),
+        history: session.get_history,
         current_message: build_cron_prompt(msg),
         channel: origin_channel,
         chat_id: origin_chat_id,
@@ -206,8 +209,17 @@ module Autobot::Agent
         stop_after_tool: "message"
       )
 
+      save_cron_to_session(session, msg.content, result)
       Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, tools=#{result.tools_used}" }
       nil
+    end
+
+    # Persist the cron exchange to session so followup messages have context.
+    private def save_cron_to_session(session : Session::Session, task_content : String, result : ToolExecutor::Result) : Nil
+      response_content = @message_tool.try(&.last_sent_content) || result.content
+      return unless response_content
+
+      save_to_session(session, "[Scheduled task] #{task_content}", response_content, result.tools_used)
     end
 
     # Handle a subagent result announcement.

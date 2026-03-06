@@ -32,6 +32,7 @@ module Autobot
       @send_callback : SendCallback?
       @default_channel : String
       @default_chat_id : String
+      @last_sent_content : String?
 
       def initialize(
         @executor : SandboxExecutor? = nil,
@@ -39,6 +40,13 @@ module Autobot
         @default_channel : String = "",
         @default_chat_id : String = "",
       )
+      end
+
+      # Content of the last successfully sent message (used by cron to save to session).
+      getter last_sent_content : String?
+
+      def clear_last_sent : Nil
+        @last_sent_content = nil
       end
 
       # Set the current message context (called when processing a new inbound message).
@@ -98,6 +106,7 @@ module Autobot
         )
 
         callback.call(msg)
+        @last_sent_content = content
         ToolResult.success("Message sent to #{channel}:#{chat_id}")
       rescue ex
         ToolResult.error("Error sending message: #{ex.message}")
