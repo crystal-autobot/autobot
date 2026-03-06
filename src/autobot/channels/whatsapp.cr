@@ -112,32 +112,55 @@ module Autobot::Channels
     end
 
     private def handle_incoming_message(data : JSON::Any) : Nil
-      pn = data["pn"]?.try(&.as_s) || ""
       sender = data["sender"]?.try(&.as_s) || ""
-      content = data["content"]?.try(&.as_s) || ""
+      sender_id = resolve_sender_id(data, sender)
+      content = build_content(data, sender_id)
 
+      handle_message(
+        sender_id: sender_id,
+        chat_id: sender,
+        content: content,
+        metadata: build_metadata(data),
+      )
+    end
+
+    private def resolve_sender_id(data : JSON::Any, sender : String) : String
+      pn = data["pn"]?.try(&.as_s) || ""
       user_id = pn.empty? ? sender : pn
-      sender_id = user_id.includes?('@') ? user_id.split('@').first : user_id
+      user_id.includes?('@') ? user_id.split('@').first : user_id
+    end
+
+    private def build_content(data : JSON::Any, sender_id : String) : String
+      content = data["content"]?.try(&.as_s) || ""
 
       if content == "[Voice Message]"
         Log.info { "Voice message from #{sender_id} (transcription not yet supported)" }
         content = "[Voice Message: Transcription not available for WhatsApp yet]"
       end
 
-      is_group = data["isGroup"]?.try(&.as_bool?) || false
+      if reply_context = extract_reply_context(data)
+        content = "[Replying to: \"#{reply_context}\"]\n\n#{content}"
+      end
 
-      metadata = {
+      content
+    end
+
+    private def build_metadata(data : JSON::Any) : Hash(String, String)
+      is_group = data["isGroup"]?.try(&.as_bool?) || false
+      {
         "message_id" => data["id"]?.try(&.as_s) || "",
         "timestamp"  => data["timestamp"]?.try(&.as_s) || "",
         "is_group"   => is_group.to_s,
       }
+    end
 
-      handle_message(
-        sender_id: sender_id,
-        chat_id: sender,
-        content: content,
-        metadata: metadata,
-      )
+    REPLY_CONTEXT_MAX_LENGTH = 500
+
+    private def extract_reply_context(data : JSON::Any) : String?
+      quoted = data["quoted"]?.try(&.as_s)
+      return nil if quoted.nil? || quoted.empty?
+
+      quoted.size > REPLY_CONTEXT_MAX_LENGTH ? "#{quoted[0, REPLY_CONTEXT_MAX_LENGTH]}..." : quoted
     end
 
     private def handle_status(data : JSON::Any) : Nil

@@ -98,6 +98,7 @@ channels:
 ## Features
 
 - **Long polling** — no webhook or public IP needed
+- **Reply context** — when replying to a message, the original text is included as context so the bot understands what you're referring to
 - **Voice messages** — auto-transcribed via Whisper (requires Groq or OpenAI provider)
 - **Photos** — sent as image attachments to the LLM
 - **Documents** — attached to the message context

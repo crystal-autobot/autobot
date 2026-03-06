@@ -1,6 +1,7 @@
 require "http/web_socket"
 require "http/client"
 require "json"
+require "uri"
 require "../constants"
 require "./base"
 
@@ -161,6 +162,10 @@ module Autobot::Channels
 
       text = strip_bot_mention(event_data[:text])
 
+      if reply_context = fetch_reply_context(event_data)
+        text = "[Replying to: \"#{reply_context}\"]\n\n#{text}"
+      end
+
       if ts = event_data[:ts]
         spawn { add_reaction(event_data[:chat_id], ts, DEFAULT_REACTION_EMOJI) }
       end
@@ -280,6 +285,57 @@ module Autobot::Channels
       slack_api("reactions.add", body)
     rescue ex
       Log.debug { "Slack reactions.add failed: #{ex.message}" }
+    end
+
+    REPLY_CONTEXT_MAX_LENGTH = 500
+
+    private def fetch_reply_context(
+      event_data : NamedTuple(event_type: String, sender_id: String, chat_id: String, text: String, channel_type: String, thread_ts: String, ts: String?),
+    ) : String?
+      ts = event_data[:ts]
+      thread_ts = event_data[:thread_ts]
+
+      return nil if thread_ts.empty? || ts.nil? || thread_ts == ts
+
+      response = slack_api_get("conversations.replies", {
+        "channel"   => event_data[:chat_id],
+        "ts"        => thread_ts,
+        "limit"     => "1",
+        "inclusive" => "true",
+      })
+      return nil unless response
+
+      data = JSON.parse(response)
+      return nil unless data["ok"]?.try(&.as_bool)
+
+      messages = data["messages"]?.try(&.as_a?)
+      return nil if messages.nil? || messages.empty?
+
+      text = messages[0]["text"]?.try(&.as_s)
+      return nil if text.nil? || text.empty?
+
+      text.size > REPLY_CONTEXT_MAX_LENGTH ? "#{text[0, REPLY_CONTEXT_MAX_LENGTH]}..." : text
+    rescue
+      nil
+    end
+
+    private def slack_api_get(method : String, params : Hash(String, String)) : String?
+      query = URI::Params.encode(params)
+      headers = HTTP::Headers{
+        "Authorization" => "Bearer #{@bot_token}",
+      }
+
+      response = HTTP::Client.get("#{SLACK_API_BASE}/#{method}?#{query}", headers: headers)
+
+      if response.status.ok?
+        return response.body
+      end
+
+      Log.error { "Slack API GET #{method} HTTP #{response.status_code}" }
+      nil
+    rescue ex
+      Log.error { "Slack API GET #{method} error: #{ex.message}" }
+      nil
     end
 
     private def slack_api(method : String, body : String? = nil) : String?

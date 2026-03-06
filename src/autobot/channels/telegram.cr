@@ -443,6 +443,10 @@ module Autobot::Channels
 
       content, media_attachments = build_content_and_media(msg)
 
+      if reply_context = extract_reply_context(msg)
+        content = "[Replying to: \"#{reply_context}\"]\n\n#{content}"
+      end
+
       Log.debug { "Message from #{sender[:sender_id]}: #{content}" }
 
       start_typing(sender[:chat_id])
@@ -478,6 +482,18 @@ module Autobot::Channels
         sender_id:  sender_id,
         is_group:   is_group,
       }
+    end
+
+    REPLY_CONTEXT_MAX_LENGTH = 500
+
+    private def extract_reply_context(msg : JSON::Any) : String?
+      reply_msg = msg["reply_to_message"]?
+      return nil unless reply_msg
+
+      text = reply_msg["text"]?.try(&.as_s) || reply_msg["caption"]?.try(&.as_s)
+      return nil if text.nil? || text.empty?
+
+      text.size > REPLY_CONTEXT_MAX_LENGTH ? "#{text[0, REPLY_CONTEXT_MAX_LENGTH]}..." : text
     end
 
     private def build_content_and_media(msg : JSON::Any) : {String, Array(Bus::MediaAttachment)}
