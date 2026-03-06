@@ -148,4 +148,41 @@ describe Autobot::Tools::MessageTool do
     result.success?.should be_false
     result.content.should contain("Cannot read file")
   end
+
+  describe "#last_sent_content" do
+    it "is nil before any message is sent" do
+      tool = Autobot::Tools::MessageTool.new
+      tool.last_sent_content.should be_nil
+    end
+
+    it "captures content after successful send" do
+      tool = Autobot::Tools::MessageTool.new
+      tool.set_context("telegram", "123")
+      tool.send_callback = ->(_msg : Autobot::Bus::OutboundMessage) { nil }
+
+      tool.execute({"content" => JSON::Any.new("weather report")})
+      tool.last_sent_content.should eq("weather report")
+    end
+
+    it "does not capture content on send failure" do
+      tool = Autobot::Tools::MessageTool.new
+      # No callback configured → will fail
+      tool.set_context("telegram", "123")
+
+      tool.execute({"content" => JSON::Any.new("will fail")})
+      tool.last_sent_content.should be_nil
+    end
+
+    it "is cleared by clear_last_sent" do
+      tool = Autobot::Tools::MessageTool.new
+      tool.set_context("telegram", "123")
+      tool.send_callback = ->(_msg : Autobot::Bus::OutboundMessage) { nil }
+
+      tool.execute({"content" => JSON::Any.new("first message")})
+      tool.last_sent_content.should eq("first message")
+
+      tool.clear_last_sent
+      tool.last_sent_content.should be_nil
+    end
+  end
 end

@@ -180,6 +180,50 @@ describe Autobot::Agent::Loop do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "saves cron exchange to session for followup context" do
+      tmp = TestHelper.tmp_dir
+      cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      sessions = Autobot::Session::Manager.new(tmp)
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      provider = MockProvider.new
+      tools = Autobot::Tools::Registry.new
+
+      message_tool = Autobot::Tools::MessageTool.new
+      tools.register(message_tool)
+
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: provider,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        cron_service: cron,
+        memory_window: 0,
+        sandbox_config: "none"
+      )
+
+      # Simulate the message tool having sent content
+      message_tool.send_callback = ->(_msg : Autobot::Bus::OutboundMessage) { nil }
+      message_tool.set_context("telegram", "user1")
+      message_tool.execute({"content" => JSON::Any.new("Here is your weather report")})
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "cron:weather1",
+        chat_id: "telegram:user1",
+        content: "Check weather forecast"
+      )
+
+      loop_inst.test_process_message(msg)
+
+      # Session should now contain the cron exchange
+      session = sessions.get_or_create("telegram:user1")
+      history = session.get_history
+      history.should_not be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "returns outbound message for non-cron system messages" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)

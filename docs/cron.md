@@ -90,6 +90,10 @@ Cron turns never auto-deliver the final response. The agent must use the `messag
 
 The `cron` tool is available so jobs can self-remove when their task defines a stop condition (e.g., "monitor X until condition Y, then stop").
 
+### Session context
+
+Cron turns include the conversation history from the originating session, so the agent has context of previous interactions when executing the task. After execution, the cron exchange (task prompt + delivered message) is saved back to the session. This means followup questions from the user will naturally reference what the agent reported during the scheduled turn.
+
 ---
 
 ## Exec Payloads
