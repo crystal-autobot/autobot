@@ -77,9 +77,23 @@ Autobot.run
 
 ## Builtin Plugins
 
+All builtin plugins are **enabled by default**. Disable any plugin via `config.yml`:
+
+```yaml
+plugins:
+  sqlite:
+    enabled: true
+  github:
+    enabled: true
+  weather:
+    enabled: false  # disable weather plugin
+```
+
+Omitting the `plugins` section keeps all builtins enabled. Use `autobot doctor` to verify plugin status and dependencies.
+
 ### GitHub
 
-Provides a `github` tool for interacting with GitHub via the `gh` CLI (issues, PRs, runs, releases). Auto-detected: registered only when `gh` is installed.
+Provides a `github` tool for interacting with GitHub via the `gh` CLI (issues, PRs, runs, releases). Requires `gh` to be installed.
 
 ### Weather
 
@@ -87,7 +101,7 @@ Provides a `get_weather` tool for fetching weather data from wttr.in. No API key
 
 ### SQLite
 
-Provides a `sqlite` tool for persistent structured data storage. Auto-detected: registered only when `sqlite3` is installed.
+Provides a `sqlite` tool for persistent structured data storage. Requires `sqlite3` to be installed.
 
 **Actions:**
 

@@ -300,6 +300,44 @@ module Autobot::Config
     end
   end
 
+  # Configuration for a single plugin (e.g. sqlite, github, weather).
+  class PluginConfig
+    include YAML::Serializable
+    property? enabled : Bool = true
+
+    def initialize
+    end
+  end
+
+  # Top-level plugins configuration. Builtin plugins are enabled by default.
+  # Users can opt out by setting `enabled: false`.
+  #
+  #   plugins:
+  #     sqlite:
+  #       enabled: true
+  #     github:
+  #       enabled: false
+  class PluginsConfig
+    include YAML::Serializable
+    property sqlite : PluginConfig?
+    property github : PluginConfig?
+    property weather : PluginConfig?
+
+    def initialize
+    end
+
+    # Returns true if the named plugin is enabled (default: true).
+    def enabled?(name : String) : Bool
+      config = case name
+               when "sqlite"  then sqlite
+               when "github"  then github
+               when "weather" then weather
+               else                nil
+               end
+      config.try(&.enabled?) != false
+    end
+  end
+
   class Config
     include YAML::Serializable
     property agents : AgentsConfig?
@@ -309,6 +347,7 @@ module Autobot::Config
     property tools : ToolsConfig?
     property cron : CronConfig?
     property mcp : McpConfig?
+    property plugins : PluginsConfig?
 
     def initialize
     end
@@ -368,6 +407,11 @@ module Autobot::Config
         end
       {% end %}
       nil
+    end
+
+    # Check if a named plugin is enabled (defaults to true if unconfigured).
+    def plugin_enabled?(name : String) : Bool
+      plugins.try(&.enabled?(name)) != false
     end
 
     def validate! : Nil

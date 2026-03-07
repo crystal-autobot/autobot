@@ -19,13 +19,14 @@ module Autobot
         bus = Bus::MessageBus.new
         session_manager = Session::Manager.new(config.workspace_path)
 
-        tool_registry, plugin_registry, mcp_clients = setup_tools(config)
+        tool_registry, mcp_clients = setup_tools(config)
         provider = create_provider(config)
 
         elapsed_ms = started_at.elapsed.total_milliseconds.to_i
         puts "✓ Gateway ready in #{elapsed_ms}ms\n"
 
-        # Post-ready setup: cron, channels, agent loop
+        # Post-ready setup: plugins, cron, channels, agent loop
+        plugin_registry = SetupHelper.load_plugins(config, tool_registry)
         cron_service = setup_cron(config, bus)
         channel_manager = setup_channels(config, bus, session_manager, cron_service)
         agent_loop = create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service)
@@ -53,7 +54,7 @@ module Autobot
       end
 
       private def self.setup_tools(config : Config::Config)
-        tool_registry, plugin_registry, mcp_clients = SetupHelper.setup_tools(config)
+        tool_registry, mcp_clients = SetupHelper.setup_tools(config)
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
         if img = config.tools.try(&.docker_image)
@@ -61,7 +62,7 @@ module Autobot
         end
         log_sandbox_info(sandbox_config)
 
-        {tool_registry, plugin_registry, mcp_clients}
+        {tool_registry, mcp_clients}
       end
 
       private def self.setup_cron(config : Config::Config, bus : Bus::MessageBus) : Cron::Service

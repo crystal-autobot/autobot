@@ -21,6 +21,10 @@ module Autobot
           "0.1.0"
         end
 
+        def required_executable : String?
+          "sqlite3"
+        end
+
         def setup(context : PluginContext) : Nil
           unless Process.find_executable("sqlite3")
             Log.warn { "SQLite plugin: 'sqlite3' CLI not found, skipping tool registration" }

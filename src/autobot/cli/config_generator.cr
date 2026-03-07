@@ -98,6 +98,13 @@ module Autobot
         lines << "    timeout: 60"
         lines << ""
 
+        lines << "plugins:"
+        SetupHelper::BUILTIN_PLUGINS.each_key do |name|
+          lines << "  #{name}:"
+          lines << "    enabled: true"
+        end
+        lines << ""
+
         lines << "gateway:"
         lines << "  host: \"127.0.0.1\""
         lines << "  port: 18790"
