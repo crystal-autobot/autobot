@@ -60,6 +60,7 @@ module Autobot
         if img = config.tools.try(&.docker_image)
           Tools::Sandbox.docker_image = img
         end
+        Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
         log_sandbox_info(sandbox_config)
 
         {tool_registry, mcp_clients}

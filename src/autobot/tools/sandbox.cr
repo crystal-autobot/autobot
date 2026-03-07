@@ -14,6 +14,8 @@ module Autobot
       DOCKER_MEMORY_LIMIT   = "512m"
       DOCKER_CPU_LIMIT      = "1"
       DOCKER_DEFAULT_IMAGE  = "alpine:latest"
+      SANDBOX_DOCKERFILE    = "Dockerfile.sandbox"
+      SANDBOX_IMAGE_TAG     = "autobot-sandbox"
       DEFAULT_MAX_FILE_SIZE = 1_000_000
       READ_FILE_TIMEOUT     =        10
       WRITE_FILE_TIMEOUT    =        30
@@ -175,6 +177,47 @@ module Autobot
         args.concat(cmd_args)
 
         run_sandboxed_command("docker", args, timeout, max_output_size)
+      end
+
+      # Resolve the Docker image to use, checking for a Dockerfile.sandbox
+      # in the given directory. If found and no explicit docker_image is set,
+      # builds and caches the image automatically.
+      def self.resolve_sandbox_image(config_dir : Path) : Nil
+        return if @@docker_image # explicit override takes priority
+
+        dockerfile = config_dir / SANDBOX_DOCKERFILE
+        return unless File.exists?(dockerfile)
+
+        if docker_image_exists?(SANDBOX_IMAGE_TAG)
+          @@docker_image = SANDBOX_IMAGE_TAG
+          Log.debug { "Using sandbox image: #{SANDBOX_IMAGE_TAG}" }
+        else
+          if build_sandbox_image(dockerfile)
+            @@docker_image = SANDBOX_IMAGE_TAG
+          end
+        end
+      end
+
+      # Build the sandbox Docker image from a Dockerfile.
+      def self.build_sandbox_image(dockerfile : Path) : Bool
+        Log.info { "Building sandbox image from #{dockerfile}..." }
+        status = Process.run(
+          "docker", ["build", "-t", SANDBOX_IMAGE_TAG, "-f", dockerfile.to_s, dockerfile.parent.to_s],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close
+        )
+        if status.success?
+          Log.info { "Sandbox image built: #{SANDBOX_IMAGE_TAG}" }
+          true
+        else
+          Log.warn { "Failed to build sandbox image from #{dockerfile}" }
+          false
+        end
+      end
+
+      # Check if Dockerfile.sandbox exists in the given directory.
+      def self.sandbox_dockerfile?(config_dir : Path) : Bool
+        File.exists?(config_dir / SANDBOX_DOCKERFILE)
       end
 
       # Pulls the Docker image if not available locally.

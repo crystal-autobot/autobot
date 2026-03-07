@@ -191,13 +191,34 @@ module Autobot
 
       def self.check_docker_image(config : Config::Config, errors : Int32) : Int32
         image = config.tools.try(&.docker_image)
-        return errors unless image
 
-        if Tools::Sandbox.docker_image_exists?(image)
-          report(Status::Pass, "Docker image available (#{image})")
+        if image
+          if Tools::Sandbox.docker_image_exists?(image)
+            report(Status::Pass, "Docker image available (#{image})")
+          else
+            report(Status::Warn, "Docker image not found locally (#{image})")
+            hint("It will be pulled on first use: docker pull #{image}")
+          end
+          return errors
+        end
+
+        # Check for Dockerfile.sandbox convention
+        config_dir = Config::Loader.config_dir
+        dockerfile = config_dir / Tools::Sandbox::SANDBOX_DOCKERFILE
+        sandbox_type = Tools::Sandbox.detect
+
+        return errors unless sandbox_type == Tools::Sandbox::Type::Docker
+
+        if File.exists?(dockerfile)
+          if Tools::Sandbox.docker_image_exists?(Tools::Sandbox::SANDBOX_IMAGE_TAG)
+            report(Status::Pass, "Sandbox image built (#{Tools::Sandbox::SANDBOX_IMAGE_TAG})")
+          else
+            report(Status::Warn, "Dockerfile.sandbox found but image not built yet")
+            hint("It will be built on first run, or manually: docker build -t #{Tools::Sandbox::SANDBOX_IMAGE_TAG} -f #{dockerfile} .")
+          end
         else
-          report(Status::Warn, "Docker image not found locally (#{image})")
-          hint("It will be pulled on first use: docker pull #{image}")
+          report(Status::Warn, "No Dockerfile.sandbox found (using #{Tools::Sandbox::DOCKER_DEFAULT_IMAGE})")
+          hint("Create Dockerfile.sandbox to customize sandbox tools (python3, sqlite3, etc.)")
         end
 
         errors

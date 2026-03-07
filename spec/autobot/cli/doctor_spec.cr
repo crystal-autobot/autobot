@@ -184,19 +184,22 @@ describe Autobot::CLI::Doctor do
   end
 
   describe ".check_docker_image" do
-    it "skips when no docker_image configured" do
+    it "skips when no docker_image configured and sandbox is not docker" do
       config = make_config(<<-YAML
       tools:
         sandbox: "auto"
       YAML
       )
 
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
       with_doctor_io do |io|
         errors = Autobot::CLI::Doctor.check_docker_image(config, 0)
 
         errors.should eq(0)
         io.to_s.should be_empty
       end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
     end
 
     it "warns when docker image is not found locally" do
@@ -213,6 +216,26 @@ describe Autobot::CLI::Doctor do
         io.to_s.should contain("! Docker image not found locally")
         io.to_s.should contain("docker pull")
       end
+    end
+
+    it "warns about missing Dockerfile.sandbox when using docker sandbox" do
+      config = make_config(<<-YAML
+      tools:
+        sandbox: "auto"
+      YAML
+      )
+
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Docker
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_docker_image(config, 0)
+
+        errors.should eq(0)
+        output = io.to_s
+        output.should contain("No Dockerfile.sandbox found")
+        output.should contain("alpine:latest")
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
     end
   end
 
