@@ -59,8 +59,9 @@ module Autobot
         end
       end
 
-      # Sets up tool registry with built-in tools, MCP servers, and plugins.
-      # Returns {tool_registry, plugin_registry, mcp_clients}.
+      # Sets up tool registry with built-in tools and MCP servers.
+      # Returns {tool_registry, mcp_clients}. Plugins are loaded separately
+      # via `load_plugins` to avoid blocking startup.
       def self.setup_tools(config : Config::Config)
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
@@ -80,6 +81,12 @@ module Autobot
         # MCP servers (started in background, tools register as they connect)
         mcp_clients = Mcp.setup(config, tool_registry)
 
+        {tool_registry, mcp_clients}
+      end
+
+      # Load and start plugins. Call after gateway is ready to avoid
+      # blocking startup with plugin setup (binary checks, migrations, etc.).
+      def self.load_plugins(config : Config::Config, tool_registry : Tools::Registry) : Plugins::Registry
         plugin_registry = Plugins::Registry.new
         executor = tool_registry.sandbox_executor || Tools::SandboxExecutor.new(nil)
         plugin_context = Plugins::PluginContext.new(
@@ -88,10 +95,10 @@ module Autobot
           workspace: config.workspace_path,
           sandbox_executor: executor
         )
+        register_builtin_plugins(config)
         Plugins::Loader.load_all(plugin_registry, plugin_context)
         plugin_registry.start_all
-
-        {tool_registry, plugin_registry, mcp_clients}
+        plugin_registry
       end
 
       # Register the image generation tool if a suitable provider is available.
@@ -146,6 +153,23 @@ module Autobot
       end
 
       IMAGE_CAPABLE_PROVIDERS = {"openai", "gemini"}
+
+      BUILTIN_PLUGINS = {
+        "sqlite"  => -> { Plugins::Builtin::SQLitePlugin.new.as(Plugins::Plugin) },
+        "github"  => -> { Plugins::Builtin::GithubPlugin.new.as(Plugins::Plugin) },
+        "weather" => -> { Plugins::Builtin::WeatherPlugin.new.as(Plugins::Plugin) },
+      }
+
+      # Register builtin plugins that are enabled in config (all enabled by default).
+      def self.register_builtin_plugins(config : Config::Config) : Nil
+        BUILTIN_PLUGINS.each do |name, factory|
+          if config.plugin_enabled?(name)
+            Plugins::Loader.register(factory.call)
+          else
+            ::Log.for("plugins").info { "Builtin plugin '#{name}' disabled by config" }
+          end
+        end
+      end
     end
   end
 end

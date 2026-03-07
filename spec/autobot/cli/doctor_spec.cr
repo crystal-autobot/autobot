@@ -611,6 +611,75 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_plugins" do
+    it "reports enabled plugins with available dependencies" do
+      config = make_config("{}")
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_plugins(config)
+
+        output = io.to_s
+        # Weather has no dependency, should always pass
+        output.should contain("✓ Plugin: weather")
+      end
+    end
+
+    it "skips disabled plugins" do
+      config = make_config(<<-YAML
+      plugins:
+        weather:
+          enabled: false
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_plugins(config)
+
+        io.to_s.should contain("— Plugin: weather (disabled)")
+      end
+    end
+
+    it "checks sqlite3 dependency for sqlite plugin" do
+      config = make_config(<<-YAML
+      plugins:
+        sqlite:
+          enabled: true
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_plugins(config)
+
+        output = io.to_s
+        if Process.find_executable("sqlite3")
+          output.should contain("✓ Plugin: sqlite (sqlite3 found)")
+        else
+          output.should contain("! Plugin: sqlite enabled but 'sqlite3' not found")
+        end
+      end
+    end
+
+    it "checks gh dependency for github plugin" do
+      config = make_config(<<-YAML
+      plugins:
+        github:
+          enabled: true
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_plugins(config)
+
+        output = io.to_s
+        if Process.find_executable("gh")
+          output.should contain("✓ Plugin: github (gh found)")
+        else
+          output.should contain("! Plugin: github enabled but 'gh' not found")
+        end
+      end
+    end
+  end
+
   describe ".print_summary" do
     it "shows all checks passed when no issues" do
       with_doctor_io do |io|

@@ -92,6 +92,9 @@ module Autobot
         # Gateway
         warnings = check_gateway(config, warnings)
 
+        # Plugins
+        check_plugins(config)
+
         print_summary(errors, warnings, strict)
 
         exit_code = if errors > 0
@@ -351,6 +354,27 @@ module Autobot
         else
           report(Status::Pass, "Gateway bound to #{gateway.host}")
           warnings
+        end
+      end
+
+      def self.check_plugins(config : Config::Config) : Nil
+        SetupHelper::BUILTIN_PLUGINS.each do |name, factory|
+          unless config.plugin_enabled?(name)
+            report(Status::Skip, "Plugin: #{name} (disabled)")
+            next
+          end
+
+          plugin = factory.call
+          if dep = plugin.required_executable
+            if Process.find_executable(dep)
+              report(Status::Pass, "Plugin: #{name} (#{dep} found)")
+            else
+              report(Status::Warn, "Plugin: #{name} enabled but '#{dep}' not found")
+              hint("Install '#{dep}' or disable: plugins.#{name}.enabled: false")
+            end
+          else
+            report(Status::Pass, "Plugin: #{name}")
+          end
         end
       end
 
