@@ -14,7 +14,7 @@ module Autobot
           Log.warn { "Replacing existing plugin: #{plugin.name}" }
         end
         @plugins[plugin.name] = plugin
-        Log.info { "Registered plugin: #{plugin.name} v#{plugin.version}" }
+        Log.debug { "Registered plugin: #{plugin.name} v#{plugin.version}" }
       end
 
       # Setup all registered plugins with the given context.
@@ -22,7 +22,7 @@ module Autobot
         @plugins.each_value do |plugin|
           begin
             plugin.setup(context)
-            Log.info { "Plugin setup complete: #{plugin.name}" }
+            Log.debug { "Plugin setup complete: #{plugin.name}" }
           rescue ex
             Log.error { "Plugin setup failed for #{plugin.name}: #{ex.message}" }
           end

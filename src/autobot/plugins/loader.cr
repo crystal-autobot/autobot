@@ -21,7 +21,7 @@ module Autobot
       # Call this at the top level of your shard to make the plugin available.
       def self.register(plugin : Plugin) : Nil
         @@pending << plugin
-        Log.info { "Plugin queued for loading: #{plugin.name} v#{plugin.version}" }
+        Log.debug { "Plugin queued: #{plugin.name} v#{plugin.version}" }
       end
 
       # Load all registered plugins into the registry and set them up.
@@ -32,7 +32,8 @@ module Autobot
         @@pending.clear
 
         registry.setup_all(context)
-        Log.info { "Loaded #{registry.size} plugin(s)" }
+        names = registry.plugin_names
+        Log.info { "Loaded #{names.size} plugin(s): #{names.join(", ")}" }
       end
 
       # Get the list of pending (not yet loaded) plugins.

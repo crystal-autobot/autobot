@@ -149,6 +149,9 @@ module Autobot
         # Logs
         logs/
 
+        # Plugin data (SQLite databases, etc.)
+        data/
+
         # Memory (optional - comment out if you want to commit)
         workspace/memory/
         GITIGNORE

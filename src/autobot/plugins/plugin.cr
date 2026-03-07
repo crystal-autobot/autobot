@@ -47,6 +47,12 @@ module Autobot
       # Semantic version string.
       abstract def version : String
 
+      # External CLI binary required by this plugin (e.g. "sqlite3", "gh").
+      # Returns nil if no external binary is needed.
+      def required_executable : String?
+        nil
+      end
+
       # Called during setup to register tools and configure the plugin.
       # The default implementation is a no-op.
       def setup(context : PluginContext) : Nil

@@ -469,6 +469,89 @@ describe Autobot::Config::ToolsConfig do
   end
 end
 
+describe Autobot::Config::PluginConfig do
+  it "is enabled by default" do
+    config = Autobot::Config::PluginConfig.from_yaml("--- {}")
+    config.enabled?.should be_true
+  end
+
+  it "can be disabled" do
+    config = Autobot::Config::PluginConfig.from_yaml("enabled: false")
+    config.enabled?.should be_false
+  end
+end
+
+describe Autobot::Config::PluginsConfig do
+  it "has nil plugin configs by default" do
+    config = Autobot::Config::PluginsConfig.from_yaml("--- {}")
+    config.sqlite.should be_nil
+    config.github.should be_nil
+    config.weather.should be_nil
+  end
+
+  it "parses plugin enabled/disabled states" do
+    yaml = <<-YAML
+    sqlite:
+      enabled: true
+    github:
+      enabled: false
+    YAML
+
+    config = Autobot::Config::PluginsConfig.from_yaml(yaml)
+    config.sqlite.try(&.enabled?).should be_true
+    config.github.try(&.enabled?).should be_false
+    config.weather.should be_nil
+  end
+
+  describe "#enabled?" do
+    it "returns true for unconfigured plugins (default enabled)" do
+      config = Autobot::Config::PluginsConfig.from_yaml("--- {}")
+      config.enabled?("sqlite").should be_true
+      config.enabled?("github").should be_true
+      config.enabled?("weather").should be_true
+    end
+
+    it "returns false for explicitly disabled plugins" do
+      config = Autobot::Config::PluginsConfig.from_yaml("sqlite:\n  enabled: false")
+      config.enabled?("sqlite").should be_false
+    end
+
+    it "returns true for explicitly enabled plugins" do
+      config = Autobot::Config::PluginsConfig.from_yaml("sqlite:\n  enabled: true")
+      config.enabled?("sqlite").should be_true
+    end
+
+    it "returns true for unknown plugin names" do
+      config = Autobot::Config::PluginsConfig.from_yaml("--- {}")
+      config.enabled?("unknown").should be_true
+    end
+  end
+end
+
+describe "Config plugins integration" do
+  it "parses plugins section from full config" do
+    yaml = <<-YAML
+    plugins:
+      sqlite:
+        enabled: true
+      github:
+        enabled: false
+    YAML
+
+    config = Autobot::Config::Config.from_yaml(yaml)
+    plugins = config.plugins
+    plugins.should_not be_nil
+    plugins.try(&.enabled?("sqlite")).should be_true
+    plugins.try(&.enabled?("github")).should be_false
+    plugins.try(&.enabled?("weather")).should be_true
+  end
+
+  it "has nil plugins section by default" do
+    config = Autobot::Config::Config.from_yaml("--- {}")
+    config.plugins.should be_nil
+  end
+end
+
 describe Autobot::Config::ProviderConfig do
   it "has empty API key by default" do
     pc = Autobot::Config::ProviderConfig.from_yaml("--- {}")
