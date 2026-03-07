@@ -12,6 +12,10 @@ private def json(value : String) : JSON::Any
   JSON::Any.new(value)
 end
 
+private def require_sqlite3!
+  pending "sqlite3 not installed" unless Process.find_executable("sqlite3")
+end
+
 describe Autobot::Plugins::Builtin::SQLitePlugin do
   it "has correct metadata" do
     plugin = Autobot::Plugins::Builtin::SQLitePlugin.new
@@ -131,6 +135,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "accepts valid database names" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -179,6 +184,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
 
   describe "query action" do
     it "creates a table and inserts data" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -201,6 +207,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "returns results with headers" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -225,6 +232,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "auto-creates data directory" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.exists?("data").should be_false
@@ -246,6 +254,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
 
   describe "schema action" do
     it "shows no tables message for empty database" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -258,6 +267,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "shows CREATE TABLE statements" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -280,6 +290,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
 
   describe "tables action" do
     it "shows no tables message for empty database" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -292,6 +303,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "lists table names" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -313,6 +325,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
 
   describe "migrations" do
     it "auto-applies migrations on first access" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
@@ -343,6 +356,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "tracks applied migrations in schema_migrations" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
@@ -368,6 +382,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "skips already-applied migrations" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
@@ -404,6 +419,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "uses per-database migration directories" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/app")
@@ -436,6 +452,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "works without migrations directory" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -451,6 +468,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "ignores non-sql files in migrations directory" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
@@ -480,6 +498,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
 
   describe "migrate action" do
     it "applies pending migrations and reports results" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
@@ -497,6 +516,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "reports no pending migrations" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
@@ -514,6 +534,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "applies new migrations added after initial access" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
@@ -551,6 +572,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "reports no migrations directory gracefully" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         tool = create_tool
@@ -563,6 +585,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "reports migration errors with details" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
@@ -589,6 +612,7 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
     end
 
     it "stops on first migration failure" do
+      require_sqlite3!
       tmp = TestHelper.tmp_dir
       Dir.cd(tmp) do
         Dir.mkdir_p("data/migrations/test")
