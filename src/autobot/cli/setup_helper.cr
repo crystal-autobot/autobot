@@ -65,6 +65,11 @@ module Autobot
       def self.setup_tools(config : Config::Config)
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
+        if img = config.tools.try(&.docker_image)
+          Tools::Sandbox.docker_image = img
+        end
+        Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
+
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,

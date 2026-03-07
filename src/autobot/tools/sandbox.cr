@@ -215,11 +215,6 @@ module Autobot
         end
       end
 
-      # Check if Dockerfile.sandbox exists in the given directory.
-      def self.sandbox_dockerfile?(config_dir : Path) : Bool
-        File.exists?(config_dir / SANDBOX_DOCKERFILE)
-      end
-
       # Pulls the Docker image if not available locally.
       private def self.ensure_docker_image(image : String) : Nil
         return if docker_image_exists?(image)

@@ -41,23 +41,6 @@ describe Autobot::Tools::Sandbox do
     end
   end
 
-  describe ".sandbox_dockerfile?" do
-    it "returns false when no Dockerfile.sandbox exists" do
-      tmp = TestHelper.tmp_dir
-      Autobot::Tools::Sandbox.sandbox_dockerfile?(tmp).should be_false
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
-    end
-
-    it "returns true when Dockerfile.sandbox exists" do
-      tmp = TestHelper.tmp_dir
-      File.write(tmp / "Dockerfile.sandbox", "FROM alpine:latest")
-      Autobot::Tools::Sandbox.sandbox_dockerfile?(tmp).should be_true
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
-    end
-  end
-
   describe ".resolve_sandbox_image" do
     it "does nothing when explicit docker_image is set" do
       tmp = TestHelper.tmp_dir

@@ -26,12 +26,6 @@ module Autobot
         bus = Bus::MessageBus.new
         session_manager = Session::Manager.new(config.workspace_path)
         tool_registry, mcp_clients = SetupHelper.setup_tools(config)
-
-        if img = config.tools.try(&.docker_image)
-          Tools::Sandbox.docker_image = img
-        end
-        Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
-
         plugin_registry = SetupHelper.load_plugins(config, tool_registry)
 
         if message
