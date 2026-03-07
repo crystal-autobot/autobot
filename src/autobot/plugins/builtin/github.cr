@@ -20,6 +20,10 @@ module Autobot
           "0.1.0"
         end
 
+        def required_executable : String?
+          "gh"
+        end
+
         def setup(context : PluginContext) : Nil
           unless Process.find_executable("gh")
             Log.warn { "GitHub plugin: 'gh' CLI not found, skipping tool registration" }

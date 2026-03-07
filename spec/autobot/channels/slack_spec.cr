@@ -138,9 +138,10 @@ describe Autobot::Channels::SlackChannel do
       channel = build_slack_channel
       result = channel.test_parse_socket_event(event)
       result.should_not be_nil
-      data = result.not_nil!
-      data[:thread_ts].should eq("1111.1111")
-      data[:ts].should eq("1111.2222")
+      if data = result
+        data[:thread_ts].should eq("1111.1111")
+        data[:ts].should eq("1111.2222")
+      end
     end
 
     it "sets thread_ts to ts when not in a thread" do
@@ -148,9 +149,10 @@ describe Autobot::Channels::SlackChannel do
       channel = build_slack_channel
       result = channel.test_parse_socket_event(event)
       result.should_not be_nil
-      data = result.not_nil!
-      data[:thread_ts].should eq("1111.2222")
-      data[:ts].should eq("1111.2222")
+      if data = result
+        data[:thread_ts].should eq("1111.2222")
+        data[:ts].should eq("1111.2222")
+      end
     end
 
     it "returns nil for subtype events" do
@@ -164,7 +166,9 @@ describe Autobot::Channels::SlackChannel do
       channel = build_slack_channel
       result = channel.test_parse_socket_event(event)
       result.should_not be_nil
-      result.not_nil![:event_type].should eq("app_mention")
+      if data = result
+        data[:event_type].should eq("app_mention")
+      end
     end
   end
 end

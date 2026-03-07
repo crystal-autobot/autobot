@@ -21,21 +21,73 @@ module SetupHelperSpecHelper
 end
 
 describe Autobot::CLI::SetupHelper do
+  describe ".register_builtin_plugins" do
+    it "registers all builtin plugins by default" do
+      Autobot::Plugins::Loader.clear_pending
+      config = SetupHelperSpecHelper.create_test_config
+
+      Autobot::CLI::SetupHelper.register_builtin_plugins(config)
+
+      names = Autobot::Plugins::Loader.pending.map(&.name)
+      names.should contain("sqlite")
+      names.should contain("github")
+      names.should contain("weather")
+    ensure
+      Autobot::Plugins::Loader.clear_pending
+    end
+
+    it "skips disabled plugins" do
+      Autobot::Plugins::Loader.clear_pending
+      yaml = <<-YAML
+      plugins:
+        sqlite:
+          enabled: false
+        github:
+          enabled: false
+      providers:
+        anthropic:
+          api_key: "sk-test"
+      tools:
+        sandbox: "none"
+      YAML
+      config = Autobot::Config::Config.from_yaml(yaml)
+
+      Autobot::CLI::SetupHelper.register_builtin_plugins(config)
+
+      names = Autobot::Plugins::Loader.pending.map(&.name)
+      names.should_not contain("sqlite")
+      names.should_not contain("github")
+      names.should contain("weather")
+    ensure
+      Autobot::Plugins::Loader.clear_pending
+    end
+
+    it "registers all when plugins config is absent" do
+      Autobot::Plugins::Loader.clear_pending
+      config = Autobot::Config::Config.from_yaml("--- {}")
+
+      Autobot::CLI::SetupHelper.register_builtin_plugins(config)
+
+      Autobot::Plugins::Loader.pending.size.should eq(3)
+    ensure
+      Autobot::Plugins::Loader.clear_pending
+    end
+  end
+
   describe ".setup_tools" do
     it "creates tool registry with built-in tools" do
       config = SetupHelperSpecHelper.create_test_config
 
-      tool_registry, plugin_registry = Autobot::CLI::SetupHelper.setup_tools(config)
+      tool_registry, _mcp_clients = Autobot::CLI::SetupHelper.setup_tools(config)
 
       tool_registry.should_not be_nil
       tool_registry.size.should be > 0
-      plugin_registry.should_not be_nil
     end
 
     it "registers expected tools" do
       config = SetupHelperSpecHelper.create_test_config
 
-      tool_registry, _plugin_registry = Autobot::CLI::SetupHelper.setup_tools(config)
+      tool_registry, _mcp_clients = Autobot::CLI::SetupHelper.setup_tools(config)
 
       # Should have file tools
       tool_registry.get("read_file").should_not be_nil

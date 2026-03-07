@@ -55,6 +55,21 @@ describe Autobot::CLI::ConfigGenerator do
       result.should contain("model: \"anthropic/claude-sonnet-4-5\"")
     end
 
+    it "includes plugins section" do
+      config = Autobot::CLI::InteractiveSetup::Configuration.new(
+        provider: "anthropic",
+        api_key: "sk-ant-test"
+      )
+
+      result = Autobot::CLI::ConfigGenerator.generate_config(config)
+
+      result.should contain("plugins:")
+      result.should contain("sqlite:")
+      result.should contain("github:")
+      result.should contain("weather:")
+      result.should contain("enabled: true")
+    end
+
     it "includes channel configuration when channels are enabled" do
       config = Autobot::CLI::InteractiveSetup::Configuration.new(
         provider: "openai",

@@ -57,16 +57,8 @@ module Autobot
           end
 
           # Plugins
-          plugin_registry = Plugins::Registry.new
           tool_registry = Tools::Registry.new
-          executor = Tools::SandboxExecutor.new(nil)
-          context = Plugins::PluginContext.new(
-            config: config,
-            tool_registry: tool_registry,
-            workspace: config.workspace_path,
-            sandbox_executor: executor
-          )
-          Plugins::Loader.load_all(plugin_registry, context)
+          plugin_registry = SetupHelper.load_plugins(config, tool_registry)
           if plugin_registry.size > 0
             puts "\nPlugins: #{plugin_registry.size}"
             plugin_registry.all_metadata.each do |meta|
