@@ -117,7 +117,7 @@ Configure sandboxing in `config.yml`:
 ```yaml
 tools:
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
-  docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
+  docker_image: "python:3.14-alpine"  # optional, overrides Dockerfile.sandbox
 ```
 
 **Options:**
@@ -127,7 +127,39 @@ tools:
   - `bubblewrap` - Force bubblewrap (Linux only)
   - `docker` - Force Docker (all platforms)
   - `none` - Disable sandboxing (UNSAFE - tests only)
-- `docker_image` — Docker image to use for sandbox containers (default: `alpine:latest`). Set this when your commands need runtimes not available in Alpine (e.g. Python, Node.js). Only applies when sandbox is `docker` or `auto` resolves to Docker.
+- `docker_image` — Docker image to use for sandbox containers. Overrides `Dockerfile.sandbox` when set. Only applies when sandbox is `docker` or `auto` resolves to Docker.
+
+### Custom sandbox image (Dockerfile.sandbox)
+
+When using Docker sandbox, the default `alpine:latest` image only includes basic shell tools. To add runtimes your bot needs (Python, SQLite, GitHub CLI, etc.), create a `Dockerfile.sandbox` in your bot folder:
+
+```dockerfile
+# Dockerfile.sandbox
+FROM alpine:latest
+
+RUN apk add --no-cache \
+    python3 \
+    curl \
+    sqlite \
+    git \
+    github-cli
+```
+
+Autobot automatically builds and caches this as `autobot-sandbox` on first run. To rebuild after changes:
+
+```bash
+docker build -t autobot-sandbox -f Dockerfile.sandbox .
+```
+
+**Priority order:**
+
+1. `tools.docker_image` in config.yml (explicit override)
+2. `Dockerfile.sandbox` in bot folder (auto-built)
+3. `alpine:latest` (default fallback)
+
+**Note:** `autobot new` generates a default `Dockerfile.sandbox` with common tools. Edit it to match your needs.
+
+**Note:** This only applies to Docker sandbox. With bubblewrap, host-installed tools are available automatically.
 
 ## Security Properties
 

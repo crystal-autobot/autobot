@@ -84,6 +84,8 @@ module Autobot
 
         File.write("config.yml", config_content)
         File.chmod("config.yml", 0o600)
+
+        File.write(Tools::Sandbox::SANDBOX_DOCKERFILE, DOCKERFILE_TEMPLATE)
       end
 
       # Creates workspace directory structure
@@ -158,6 +160,20 @@ module Autobot
 
         File.write(".gitignore", gitignore_content)
       end
+
+      DOCKERFILE_TEMPLATE = <<-DOCKERFILE
+      # Sandbox image for autobot Docker execution.
+      # Customize this file to add tools your bot needs.
+      # Rebuild with: docker build -t autobot-sandbox -f Dockerfile.sandbox .
+      FROM alpine:latest
+
+      RUN apk add --no-cache \\
+          python3 \\
+          curl \\
+          sqlite \\
+          git \\
+          github-cli
+      DOCKERFILE
 
       # Prints success message with next steps
       private def self.print_success_message(name : String, interactive : Bool)

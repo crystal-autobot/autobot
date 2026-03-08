@@ -57,9 +57,6 @@ module Autobot
         tool_registry, mcp_clients = SetupHelper.setup_tools(config)
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
-        if img = config.tools.try(&.docker_image)
-          Tools::Sandbox.docker_image = img
-        end
         log_sandbox_info(sandbox_config)
 
         {tool_registry, mcp_clients}

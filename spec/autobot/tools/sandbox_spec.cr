@@ -40,4 +40,37 @@ describe Autobot::Tools::Sandbox do
       Autobot::Tools::Sandbox.docker_image = nil
     end
   end
+
+  describe ".resolve_sandbox_image" do
+    it "does nothing when explicit docker_image is set" do
+      tmp = TestHelper.tmp_dir
+      File.write(tmp / "Dockerfile.sandbox", "FROM alpine:latest")
+
+      Autobot::Tools::Sandbox.docker_image = "custom:image"
+      Autobot::Tools::Sandbox.resolve_sandbox_image(tmp)
+      Autobot::Tools::Sandbox.docker_image.should eq("custom:image")
+    ensure
+      Autobot::Tools::Sandbox.docker_image = nil
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "does nothing when no Dockerfile.sandbox exists" do
+      tmp = TestHelper.tmp_dir
+      Autobot::Tools::Sandbox.resolve_sandbox_image(tmp)
+      Autobot::Tools::Sandbox.docker_image.should be_nil
+    ensure
+      Autobot::Tools::Sandbox.docker_image = nil
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "constants" do
+    it "has sandbox dockerfile name" do
+      Autobot::Tools::Sandbox::SANDBOX_DOCKERFILE.should eq("Dockerfile.sandbox")
+    end
+
+    it "has sandbox image tag" do
+      Autobot::Tools::Sandbox::SANDBOX_IMAGE_TAG.should eq("autobot-sandbox")
+    end
+  end
 end
