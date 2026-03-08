@@ -18,10 +18,11 @@ Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://cr
 - **💬 Chat Channels** — Telegram, Slack, WhatsApp, Zulip with allowlists and custom slash commands
 - **👁️ Vision** — Send photos via Telegram and get AI-powered image analysis
 - **🎤 Voice** — Voice messages auto-transcribed via Whisper (Groq/OpenAI)
-- **🔒 Kernel Sandbox** — Docker/bubblewrap OS-level isolation, not regex path checks
+- **🔒 Kernel Sandbox** — Docker/bubblewrap OS-level isolation with custom `Dockerfile.sandbox`
 - **🧠 Memory** — JSONL sessions with consolidation and persistent long-term memory
 - **⏰ Cron** — Cron expressions, intervals, one-time triggers, per-owner isolation
-- **🔧 Extensible** — Plugins, bash auto-discovery, markdown skills, subagents
+- **🔌 Plugins** — Builtin SQLite, GitHub, Weather; opt-out via config
+- **🔧 Extensible** — MCP servers, bash auto-discovery, markdown skills, subagents
 - **📊 Observable** — Token tracking, credential sanitization, audit trails
 - **🏃 Multi-Bot** — Isolated directories per bot, run dozens on one machine
 
@@ -79,17 +80,18 @@ This creates an `optimus/` directory with everything you need:
 
 ```
 optimus/
-├── .env              # API keys (add yours here)
-├── .gitignore        # Excludes secrets, sessions, logs
-├── config.yml        # Configuration (references .env vars)
-├── sessions/         # Conversation history
-├── logs/             # Application logs
-└── workspace/        # Sandboxed LLM workspace
-    ├── AGENTS.md     # Agent instructions
-    ├── SOUL.md       # Personality definition
-    ├── USER.md       # User preferences
-    ├── memory/       # Long-term memory
-    └── skills/       # Custom skills
+├── .env                  # API keys (add yours here)
+├── .gitignore            # Excludes secrets, sessions, logs
+├── config.yml            # Configuration (references .env vars)
+├── Dockerfile.sandbox    # Custom sandbox image (python3, sqlite3, etc.)
+├── sessions/             # Conversation history
+├── logs/                 # Application logs
+└── workspace/            # Sandboxed LLM workspace
+    ├── AGENTS.md         # Agent instructions
+    ├── SOUL.md           # Personality definition
+    ├── USER.md           # User preferences
+    ├── memory/           # Long-term memory
+    └── skills/           # Custom skills
 ```
 
 ### 3. Configure
@@ -108,14 +110,14 @@ The generated `config.yml` references these via `${ENV_VAR}` — no secrets in c
 # Validate configuration
 autobot doctor
 
-# Interactive mode
+# Start the bot (all channels)
+autobot gateway
+
+# Interactive terminal mode
 autobot agent
 
 # Single command
 autobot agent -m "Summarize this project"
-
-# Gateway (all channels)
-autobot gateway
 ```
 
 Autobot automatically detects and logs the sandbox method on startup — Docker on macOS/production, bubblewrap on Linux.
