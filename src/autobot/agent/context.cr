@@ -219,7 +219,7 @@ module Autobot::Agent
         #{build_security_policy(workspace_path)}
         Rules:
         - Use relative paths for workspace files
-        - Reply with text for conversations; use 'message' tool only for chat channels
+        - Reply with text; the response is delivered to the user automatically
         - Use `cron` for delayed tasks (never `exec sleep`)
         - Batch independent tool calls in a single response to reduce round-trips
         - Use simple Markdown: **bold**, `code`, _italic_, bullet lists
