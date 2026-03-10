@@ -53,6 +53,7 @@ module Autobot
       getter finish_reason : String
       getter usage : TokenUsage
       getter reasoning_content : String?
+      getter native_parts : Array(JSON::Any)?
 
       def initialize(
         @content = nil,
@@ -60,6 +61,7 @@ module Autobot
         @finish_reason = "stop",
         @usage = TokenUsage.new,
         @reasoning_content = nil,
+        @native_parts = nil,
       )
       end
 

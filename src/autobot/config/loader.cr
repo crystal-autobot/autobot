@@ -153,6 +153,7 @@ module Autobot::Config
       # Expand environment variables in format ${VAR} or $VAR
       expanded = expand_env_vars(content)
       config = Config.from_yaml(expanded)
+      config.config_path = path.expand
       config.validate! if validate
       config
     rescue ex : YAML::ParseException
