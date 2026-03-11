@@ -138,7 +138,10 @@ describe Autobot::Tools::WebFetchTool do
     it "fetches HTTPS URLs with proper SNI" do
       tool = Autobot::Tools::WebFetchTool.new
 
-      result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
+      result = tool.execute({
+        "url"           => JSON::Any.new("https://example.com"),
+        "allowInsecure" => JSON::Any.new(true),
+      } of String => JSON::Any)
       result.success?.should be_true
       result.content.should contain("[https://example.com]")
       result.content.should contain("Example Domain")
@@ -159,7 +162,10 @@ describe Autobot::Tools::WebFetchTool do
     it "extracts text from HTML" do
       tool = Autobot::Tools::WebFetchTool.new
 
-      result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
+      result = tool.execute({
+        "url"           => JSON::Any.new("https://example.com"),
+        "allowInsecure" => JSON::Any.new(true),
+      } of String => JSON::Any)
       result.success?.should be_true
 
       result.content.should_not contain("<html")
@@ -171,8 +177,9 @@ describe Autobot::Tools::WebFetchTool do
       tool = Autobot::Tools::WebFetchTool.new
 
       result = tool.execute({
-        "url"      => JSON::Any.new("https://example.com"),
-        "maxChars" => JSON::Any.new(100_i64),
+        "url"           => JSON::Any.new("https://example.com"),
+        "maxChars"      => JSON::Any.new(100_i64),
+        "allowInsecure" => JSON::Any.new(true),
       } of String => JSON::Any)
       result.success?.should be_true
       result.content.should contain("truncated to 100 chars")
