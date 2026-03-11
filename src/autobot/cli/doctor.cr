@@ -75,7 +75,7 @@ module Autobot
         errors = check_security_settings(config, errors)
 
         # Workspace
-        errors = check_workspace(config, config_file, errors)
+        errors, warnings = check_workspace(config, config_file, errors, warnings)
 
         # Channels
         warnings = check_channels(config, warnings)
@@ -224,7 +224,7 @@ module Autobot
         errors
       end
 
-      def self.check_workspace(config : Config::Config, config_file : Path, errors : Int32) : Int32
+      def self.check_workspace(config : Config::Config, config_file : Path, errors : Int32, warnings : Int32) : Tuple(Int32, Int32)
         workspace = config.workspace_path
 
         if Dir.exists?(workspace)
@@ -234,13 +234,14 @@ module Autobot
           hint("It will be created on first run")
         end
 
-        # Check if workspace is home directory (critical security risk)
+        # Check if workspace is home directory (security risk)
         home = Path.home.to_s
         workspace_real = File.realpath(workspace.to_s) rescue workspace.to_s
         if workspace_real == home
-          report(Status::Fail, "Workspace is set to home directory")
-          hint("This exposes ALL your personal files to the LLM. Use a dedicated subfolder instead.")
-          errors += 1
+          report(Status::Warn, "Workspace is set to home directory")
+          hint("This exposes secrets (like .env) and shell config (like .bashrc).")
+          hint("Best practice: use a dedicated subfolder (e.g., ./workspace) even for dedicated bot users.")
+          warnings += 1
         end
 
         # Check if .env is inside workspace (security risk)
@@ -255,7 +256,7 @@ module Autobot
           end
         end
 
-        errors
+        {errors, warnings}
       end
 
       def self.check_channels(config : Config::Config, warnings : Int32) : Int32
