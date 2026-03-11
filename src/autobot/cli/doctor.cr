@@ -234,16 +234,24 @@ module Autobot
           hint("It will be created on first run")
         end
 
+        # Check if workspace is home directory (critical security risk)
+        home = Path.home.to_s
+        workspace_real = File.realpath(workspace.to_s) rescue workspace.to_s
+        if workspace_real == home
+          report(Status::Fail, "Workspace is set to home directory")
+          hint("This exposes ALL your personal files to the LLM. Use a dedicated subfolder instead.")
+          errors += 1
+        end
+
         # Check if .env is inside workspace (security risk)
         env_path = config_file.parent / ".env"
         if File.exists?(env_path.to_s)
           env_real = File.realpath(env_path.to_s)
-          workspace_real = File.realpath(workspace.to_s) rescue workspace.to_s
 
           if env_real.starts_with?(workspace_real)
             report(Status::Fail, ".env file is inside workspace directory")
             hint("Move .env outside workspace to prevent exposing secrets to the LLM")
-            return errors + 1
+            errors += 1
           end
         end
 
