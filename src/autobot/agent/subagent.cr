@@ -37,6 +37,8 @@ module Autobot
       @model : String?
       @brave_api_key : String?
       @exec_timeout : Int32
+      @exec_deny_patterns : Array(Regex)
+      @exec_allow_patterns : Array(Regex)
       @sandbox_config : String
       @running_tasks : Hash(String, Bool) = {} of String => Bool
 
@@ -47,6 +49,8 @@ module Autobot
         @model : String? = nil,
         @brave_api_key : String? = nil,
         @exec_timeout : Int32 = 60,
+        @exec_deny_patterns : Array(Regex) = Tools::ExecTool::DEFAULT_DENY_PATTERNS,
+        @exec_allow_patterns : Array(Regex) = [] of Regex,
         @sandbox_config : String = "auto",
       )
         @context = Context::Builder.new(@workspace)
@@ -92,6 +96,8 @@ module Autobot
           tools = Tools.create_subagent_registry(
             workspace: @workspace,
             exec_timeout: @exec_timeout,
+            exec_deny_patterns: @exec_deny_patterns,
+            exec_allow_patterns: @exec_allow_patterns,
             sandbox_config: @sandbox_config,
             brave_api_key: @brave_api_key,
           )
