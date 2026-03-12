@@ -20,6 +20,9 @@ module Autobot
       USER_AGENT            = "Autobot/#{VERSION}"
       ANTHROPIC_API_VERSION = "2023-06-01"
 
+      MAX_RETRIES          = 3
+      INITIAL_RETRY_DELAY = 2.seconds
+
       getter model : String
       getter extra_headers : Hash(String, String)
 
@@ -602,21 +605,55 @@ module Autobot
         host = uri.host
         raise "Invalid URL: missing host in '#{url}'" unless host
 
-        client = HTTP::Client.new(host, port: uri.port, tls: tls)
+        path = uri.request_target
+        last_response : HTTP::Client::Response? = nil
+        retry_delay = INITIAL_RETRY_DELAY
+
+        (0..MAX_RETRIES).each do |attempt|
+          begin
+            response = do_http_post(host, uri.port, tls, path, headers, body)
+            last_response = response
+
+            if response.success?
+              Log.debug { "Response #{response.status_code} (#{response.body.size} bytes)" }
+              return response
+            end
+
+            # Retry on rate limits (429) or server errors (5xx)
+            should_retry = response.status_code == 429 || (response.status_code >= 500 && response.status_code <= 599)
+
+            if should_retry && attempt < MAX_RETRIES
+              Log.warn { "LLM request failed with #{response.status_code}. Retrying in #{retry_delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
+              sleep(retry_delay)
+              retry_delay *= 2
+              next
+            end
+
+            Log.debug { "Response #{response.status_code}: #{response.body}" }
+            return response
+          rescue ex : IO::TimeoutError | Socket::Error
+            if attempt < MAX_RETRIES
+              Log.warn { "LLM request failed: #{ex.message}. Retrying in #{retry_delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
+              sleep(retry_delay)
+              retry_delay *= 2
+            else
+              raise ex
+            end
+          end
+        end
+
+        last_response || raise "HTTP request failed without response"
+      end
+
+      private def do_http_post(host, port, tls, path, headers, body) : HTTP::Client::Response
+        client = HTTP::Client.new(host, port: port, tls: tls)
         client.connect_timeout = CONNECT_TIMEOUT
         client.read_timeout = READ_TIMEOUT
-
-        path = uri.request_target
-        response = client.post(path, headers: headers, body: body)
-
-        if response.success?
-          Log.debug { "Response #{response.status_code} (#{response.body.size} bytes)" }
-        else
-          Log.debug { "Response #{response.status_code}: #{response.body}" }
+        begin
+          client.post(path, headers: headers, body: body)
+        ensure
+          client.close
         end
-        response
-      ensure
-        client.try(&.close)
       end
     end
   end
