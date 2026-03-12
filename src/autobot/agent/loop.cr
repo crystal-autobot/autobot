@@ -66,6 +66,7 @@ module Autobot::Agent
       brave_api_key : String? = nil,
       exec_timeout : Int32 = 60,
       sandbox_config : String = "auto",
+      rate_limiter : Tools::RateLimiter? = nil,
     )
       @model = model || @provider.default_model
       sandboxed = sandbox_config.downcase != "none"
@@ -86,7 +87,7 @@ module Autobot::Agent
         sessions: @sessions
       )
 
-      register_optional_tools(brave_api_key, exec_timeout, sandbox_config)
+      register_optional_tools(brave_api_key, exec_timeout, sandbox_config, rate_limiter)
       cache_tool_references
     end
 
@@ -281,7 +282,12 @@ module Autobot::Agent
       PROMPT
     end
 
-    private def register_optional_tools(brave_api_key : String?, exec_timeout : Int32, sandbox_config : String) : Nil
+    private def register_optional_tools(
+      brave_api_key : String?,
+      exec_timeout : Int32,
+      sandbox_config : String,
+      rate_limiter : Tools::RateLimiter?,
+    ) : Nil
       subagents = SubagentManager.new(
         provider: @provider,
         workspace: @workspace,
@@ -289,7 +295,8 @@ module Autobot::Agent
         model: @model,
         brave_api_key: brave_api_key,
         exec_timeout: exec_timeout,
-        sandbox_config: sandbox_config
+        sandbox_config: sandbox_config,
+        rate_limiter: rate_limiter
       )
       @tools.register(Tools::SpawnTool.new(subagents))
 

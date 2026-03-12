@@ -38,6 +38,7 @@ module Autobot
       @brave_api_key : String?
       @exec_timeout : Int32
       @sandbox_config : String
+      @rate_limiter : Tools::RateLimiter?
       @running_tasks : Hash(String, Bool) = {} of String => Bool
 
       def initialize(
@@ -48,6 +49,7 @@ module Autobot
         @brave_api_key : String? = nil,
         @exec_timeout : Int32 = 60,
         @sandbox_config : String = "auto",
+        @rate_limiter : Tools::RateLimiter? = nil,
       )
         @context = Context::Builder.new(@workspace)
       end
@@ -94,6 +96,7 @@ module Autobot
             exec_timeout: @exec_timeout,
             sandbox_config: @sandbox_config,
             brave_api_key: @brave_api_key,
+            rate_limiter: @rate_limiter,
           )
 
           executor = ToolExecutor.new(
