@@ -142,6 +142,8 @@ module Autobot
       )
         sandbox_config = config.tools.try(&.sandbox) || "auto"
         rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
+        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
+        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || [] of Regex
 
         Autobot::Agent::Loop.new(
           bus: bus,
@@ -155,6 +157,8 @@ module Autobot
           cron_service: cron_service,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
+          exec_deny_patterns: deny_patterns,
+          exec_allow_patterns: allow_patterns,
           sandbox_config: sandbox_config,
           rate_limiter: rate_limiter
         )

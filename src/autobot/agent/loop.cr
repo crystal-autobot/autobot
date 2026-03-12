@@ -65,6 +65,8 @@ module Autobot::Agent
       @cron_service : Cron::Service? = nil,
       brave_api_key : String? = nil,
       exec_timeout : Int32 = 60,
+      exec_deny_patterns : Array(Regex) = Tools::ExecTool::DEFAULT_DENY_PATTERNS,
+      exec_allow_patterns : Array(Regex) = [] of Regex,
       sandbox_config : String = "auto",
       rate_limiter : Tools::RateLimiter? = nil,
     )
@@ -87,7 +89,14 @@ module Autobot::Agent
         sessions: @sessions
       )
 
-      register_optional_tools(brave_api_key, exec_timeout, sandbox_config, rate_limiter)
+      register_optional_tools(
+        brave_api_key, 
+        exec_timeout, 
+        exec_deny_patterns, 
+        exec_allow_patterns, 
+        sandbox_config, 
+        rate_limiter
+      )
       cache_tool_references
     end
 
@@ -285,6 +294,8 @@ module Autobot::Agent
     private def register_optional_tools(
       brave_api_key : String?,
       exec_timeout : Int32,
+      exec_deny_patterns : Array(Regex),
+      exec_allow_patterns : Array(Regex),
       sandbox_config : String,
       rate_limiter : Tools::RateLimiter?,
     ) : Nil
@@ -295,6 +306,8 @@ module Autobot::Agent
         model: @model,
         brave_api_key: brave_api_key,
         exec_timeout: exec_timeout,
+        exec_deny_patterns: exec_deny_patterns,
+        exec_allow_patterns: exec_allow_patterns,
         sandbox_config: sandbox_config,
         rate_limiter: rate_limiter
       )

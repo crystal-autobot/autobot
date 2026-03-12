@@ -90,6 +90,10 @@ tools:
   docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
   exec:
     timeout: 60
+    allow_patterns: # Optional regex allowlist
+      - "^ssh .*$"
+    deny_patterns:  # Optional regex denylist (extends built-in)
+      - "^rm -rf /.*$"
   rate_limit:
     global:
       max_calls: 100
@@ -102,7 +106,6 @@ tools:
     search:
       api_key: ""
       max_results: 5
-```
   image:
     enabled: true              # default: true
     # provider: openai         # optional override (openai or gemini)
@@ -241,6 +244,13 @@ tools:
       max_results: 5
   exec:
     timeout: 60
+    allow_patterns: []
+    deny_patterns: []
+  rate_limit:
+    global:
+      max_calls: 100
+      window_seconds: 60
+    per_tool: {}
   image:
     enabled: true
     # provider: openai       # optional override (openai or gemini)

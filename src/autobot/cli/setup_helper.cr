@@ -71,10 +71,14 @@ module Autobot
         Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
 
         rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
+        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
+        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || [] of Regex
 
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
+          exec_deny_patterns: deny_patterns,
+          exec_allow_patterns: allow_patterns,
           sandbox_config: sandbox_config,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           skills_dirs: [
@@ -160,7 +164,7 @@ module Autobot
         {nil, nil}
       end
 
-      IMAGE_CAPABLE_PROVIDERS = {"openai", "gemini"}
+      IMAGE_CAPABLE_PROVIDERS = {"openai", "gemini", "kimi"}
 
       BUILTIN_PLUGINS = {
         "sqlite"  => -> { Plugins::Builtin::SQLitePlugin.new.as(Plugins::Plugin) },
