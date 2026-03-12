@@ -4,6 +4,7 @@ require "../../spec_helper"
 class TestableHttpProvider < Autobot::Providers::HttpProvider
   getter last_api_model : String?
   getter last_api_body : JSON::Any?
+  getter last_headers : HTTP::Headers?
 
   def test_strip_provider_prefix(model : String) : String
     strip_provider_prefix(model)
@@ -35,6 +36,7 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
   end
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
+    @last_headers = headers
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
     @last_api_body = parsed
@@ -438,6 +440,24 @@ describe Autobot::Providers::HttpProvider do
       arr[1]["type"].as_s.should eq("image")
       arr[1]["source"]["media_type"].as_s.should eq("image/png")
       arr[1]["source"]["data"].as_s.should eq("cG5nZGF0YQ==")
+    end
+  end
+
+  describe "User-Agent handling" do
+    messages = [{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}]
+
+    it "sends default User-Agent for standard providers" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "openai/gpt-4")
+      provider.chat(messages)
+      headers = provider.last_headers.not_nil!
+      headers["User-Agent"].should contain("Autobot")
+    end
+
+    it "sends specific User-Agent for Kimi" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "kimi/kimi-for-coding")
+      provider.chat(messages)
+      headers = provider.last_headers.not_nil!
+      headers["User-Agent"].should eq("KimiCLI/0.77")
     end
   end
 end
