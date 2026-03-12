@@ -115,8 +115,16 @@ module Autobot
       ),
 
       ProviderSpec.new(
+        name: "kimi",
+        keywords: ["kimi"],
+        display_name: "Kimi Code",
+        api_url: "https://api.kimi.com/coding/v1/chat/completions",
+        detect_by_key_prefix: "sk-kimi-",
+      ),
+
+      ProviderSpec.new(
         name: "moonshot",
-        keywords: ["moonshot", "kimi"],
+        keywords: ["moonshot"],
         display_name: "Moonshot",
         api_url: "https://api.moonshot.ai/v1/chat/completions",
         model_overrides: {
