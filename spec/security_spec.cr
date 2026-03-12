@@ -183,6 +183,34 @@ describe "Security Tests" do
         fail "Expected rate limit error"
       end
     end
+
+    it "loads limits from configuration" do
+      yaml = <<-YAML
+      tools:
+        rate_limit:
+          global:
+            max_calls: 50
+            window_seconds: 30
+          per_tool:
+            exec:
+              max_calls: 5
+              window_seconds: 60
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      limiter = Autobot::Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
+
+      # Verify per-tool limit
+      5.times do
+        limiter.check_limit("exec", "session").should be_nil
+        limiter.record_call("exec", "session")
+      end
+      error = limiter.check_limit("exec", "session")
+      error.should_not be_nil
+      if e = error
+        e.should contain("max 5 calls")
+      end
+    end
   end
 
   describe "Log sanitization" do
@@ -237,7 +265,10 @@ describe "Security Tests" do
     it "fetches HTTPS URLs without SSL errors" do
       tool = Autobot::Tools::WebFetchTool.new
 
-      result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
+      result = tool.execute({
+        "url"           => JSON::Any.new("https://example.com"),
+        "allowInsecure" => JSON::Any.new(true),
+      } of String => JSON::Any)
       result.success?.should be_true
       result.content.should contain("[https://example.com]")
       result.content.should contain("Example Domain")
