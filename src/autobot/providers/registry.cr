@@ -29,6 +29,9 @@ module Autobot
       getter? use_max_completion_tokens : Bool
       getter max_tokens_legacy_patterns : Array(String)
 
+      # Specific User-Agent required by some providers (e.g. Kimi)
+      getter user_agent : String?
+
       # Whether the provider supports the "system" role in messages
       getter? supports_system_role : Bool
 
@@ -48,6 +51,7 @@ module Autobot
         @model_overrides = {} of String => Hash(String, JSON::Any),
         @use_max_completion_tokens = false,
         @max_tokens_legacy_patterns = [] of String,
+        @user_agent = nil,
         @supports_system_role = true,
       )
         @display_name = @name.capitalize if @display_name.empty?
@@ -120,6 +124,7 @@ module Autobot
         display_name: "Kimi Code",
         api_url: "https://api.kimi.com/coding/v1/chat/completions",
         detect_by_key_prefix: "sk-kimi-",
+        user_agent: "KimiCLI/0.77",
       ),
 
       ProviderSpec.new(
