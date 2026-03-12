@@ -610,12 +610,8 @@ module Autobot
         retry_delay = INITIAL_RETRY_DELAY
 
         (0..MAX_RETRIES).each do |attempt|
-          client = HTTP::Client.new(host, port: uri.port, tls: tls)
-          client.connect_timeout = CONNECT_TIMEOUT
-          client.read_timeout = READ_TIMEOUT
-
           begin
-            response = client.post(path, headers: headers, body: body)
+            response = do_http_post(host, uri.port, tls, path, headers, body)
             last_response = response
 
             if response.success?
@@ -643,12 +639,21 @@ module Autobot
             else
               raise ex
             end
-          ensure
-            client.close
           end
         end
 
         last_response || raise "HTTP request failed without response"
+      end
+
+      private def do_http_post(host, port, tls, path, headers, body) : HTTP::Client::Response
+        client = HTTP::Client.new(host, port: port, tls: tls)
+        client.connect_timeout = CONNECT_TIMEOUT
+        client.read_timeout = READ_TIMEOUT
+        begin
+          client.post(path, headers: headers, body: body)
+        ensure
+          client.close
+        end
       end
     end
   end
