@@ -76,7 +76,7 @@ module Autobot
 
         headers = HTTP::Headers{
           "Content-Type" => "application/json",
-          "User-Agent"   => USER_AGENT,
+          "User-Agent"   => resolve_user_agent(model, spec),
         }
         apply_auth_headers(headers, spec)
 
@@ -148,7 +148,7 @@ module Autobot
 
         headers = HTTP::Headers{
           "Content-Type"      => "application/json",
-          "User-Agent"        => USER_AGENT,
+          "User-Agent"        => resolve_user_agent(model, spec),
           "anthropic-version" => ANTHROPIC_API_VERSION,
         }
         apply_auth_headers(headers, spec)
@@ -462,6 +462,18 @@ module Autobot
         end
 
         model
+      end
+
+      private def resolve_user_agent(model : String, spec : ProviderSpec?) : String
+        agent = if gw = @gateway
+                  gw.user_agent
+                elsif s = spec
+                  s.user_agent
+                else
+                  nil
+                end
+
+        agent || USER_AGENT
       end
 
       # Determines the correct token limit parameter name for the model.

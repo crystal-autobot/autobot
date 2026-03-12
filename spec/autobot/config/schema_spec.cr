@@ -27,6 +27,17 @@ describe Autobot::Config::Config do
       config.providers.try(&.anthropic.try(&.api_key)).should eq("test-key")
     end
 
+    it "parses Kimi configuration" do
+      yaml = <<-YAML
+      providers:
+        kimi:
+          api_key: "kimi-key"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      config.providers.try(&.kimi.try(&.api_key)).should eq("kimi-key")
+    end
+
     it "parses channel configuration" do
       yaml = <<-YAML
       channels:
@@ -207,6 +218,19 @@ describe Autobot::Config::Config do
       provider_config, provider_name = config.match_provider("anthropic/claude-3")
       provider_config.should_not be_nil
       provider_name.should eq("anthropic")
+    end
+
+    it "matches Kimi provider by model name" do
+      yaml = <<-YAML
+      providers:
+        kimi:
+          api_key: "kimi-key"
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      provider_config, provider_name = config.match_provider("kimi/kimi-for-coding")
+      provider_config.should_not be_nil
+      provider_name.should eq("kimi")
     end
 
     it "falls back to first provider with API key" do

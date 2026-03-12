@@ -198,6 +198,7 @@ module Autobot::Config
     property deepseek : ProviderConfig?
     property groq : ProviderConfig?
     property gemini : ProviderConfig?
+    property kimi : ProviderConfig?
     property vllm : ProviderConfig?
     property duckai : ProviderConfig?
     property bedrock : BedrockProviderConfig?
@@ -369,13 +370,13 @@ module Autobot::Config
       return {nil, nil} if model_str.starts_with?("bedrock/")
 
       if p = providers
-        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
           if provider && provider.api_key != "" && model_str.includes?({{ provider_name }})
             return {provider, {{ provider_name }}}
           end
         {% end %}
-        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
           if provider && provider.api_key != ""
             return {provider, {{ provider_name }}}
@@ -400,7 +401,7 @@ module Autobot::Config
     def provider_by_name(name : String) : ProviderConfig?
       return nil unless p = providers
       normalized = name.downcase
-      {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
+      {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
         if normalized == {{ provider_name }}
           provider = p.{{ provider_name.id }}
           return provider if provider && !provider.api_key.empty?
@@ -417,7 +418,7 @@ module Autobot::Config
     def validate! : Nil
       has_provider = false
       if p = providers
-        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
           has_provider ||= (provider && provider.api_key != "")
         {% end %}
