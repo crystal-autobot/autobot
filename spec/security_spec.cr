@@ -183,6 +183,30 @@ describe "Security Tests" do
         fail "Expected rate limit error"
       end
     end
+
+    it "loads limits from configuration" do
+      yaml = <<-YAML
+      tools:
+        rate_limit:
+          global:
+            max_calls: 50
+            window_seconds: 30
+          per_tool:
+            exec:
+              max_calls: 5
+              window_seconds: 60
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      limiter = Autobot::Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
+
+      # Verify per-tool limit
+      5.times do
+        limiter.check_limit("exec", "session").should be_nil
+        limiter.record_call("exec", "session")
+      end
+      limiter.check_limit("exec", "session").not_nil!.should contain("max 5 calls")
+    end
   end
 
   describe "Log sanitization" do

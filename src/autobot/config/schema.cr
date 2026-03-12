@@ -235,6 +235,26 @@ module Autobot::Config
   class ExecToolConfig
     include YAML::Serializable
     property timeout : Int32 = 60
+    property allow_patterns : Array(String) = [] of String
+    property deny_patterns : Array(String) = [] of String
+
+    def initialize
+    end
+  end
+
+  class ToolRateLimitConfig
+    include YAML::Serializable
+    property max_calls : Int32
+    property window_seconds : Int32 = 60
+
+    def initialize(@max_calls, @window_seconds = 60)
+    end
+  end
+
+  class RateLimitConfig
+    include YAML::Serializable
+    property global : ToolRateLimitConfig?
+    property per_tool : Hash(String, ToolRateLimitConfig)?
 
     def initialize
     end
@@ -258,6 +278,7 @@ module Autobot::Config
     property image : ImageConfig?
     property sandbox : String = "auto" # "auto", "bubblewrap", "docker", "none"
     property docker_image : String? = nil
+    property rate_limit : RateLimitConfig?
 
     def initialize
     end
