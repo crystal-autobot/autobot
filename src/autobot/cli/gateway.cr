@@ -142,8 +142,8 @@ module Autobot
       )
         sandbox_config = config.tools.try(&.sandbox) || "auto"
         rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
-        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
-        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || [] of Regex
+        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |pattern| Regex.new(pattern, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
+        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |pattern| Regex.new(pattern, Regex::Options::IGNORE_CASE) }) || [] of Regex
 
         Autobot::Agent::Loop.new(
           bus: bus,

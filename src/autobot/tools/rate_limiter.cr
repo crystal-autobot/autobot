@@ -62,12 +62,12 @@ module Autobot
         global : Limit? = nil
 
         if config
-          config.per_tool.try(&.each do |name, c|
-            per_tool[name] = Limit.new(max_calls: c.max_calls, window_seconds: c.window_seconds)
+          config.per_tool.try(&.each do |name, limit_config|
+            per_tool[name] = Limit.new(max_calls: limit_config.max_calls, window_seconds: limit_config.window_seconds)
           end)
 
-          config.global.try do |c|
-            global = Limit.new(max_calls: c.max_calls, window_seconds: c.window_seconds)
+          config.global.try do |limit_config|
+            global = Limit.new(max_calls: limit_config.max_calls, window_seconds: limit_config.window_seconds)
           end
         end
 

@@ -90,11 +90,11 @@ module Autobot::Agent
       )
 
       register_optional_tools(
-        brave_api_key, 
-        exec_timeout, 
-        exec_deny_patterns, 
-        exec_allow_patterns, 
-        sandbox_config, 
+        brave_api_key,
+        exec_timeout,
+        exec_deny_patterns,
+        exec_allow_patterns,
+        sandbox_config,
         rate_limiter
       )
       cache_tool_references

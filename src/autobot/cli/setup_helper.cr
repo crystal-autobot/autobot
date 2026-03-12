@@ -71,8 +71,8 @@ module Autobot
         Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
 
         rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
-        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
-        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || [] of Regex
+        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |pattern| Regex.new(pattern, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
+        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |pattern| Regex.new(pattern, Regex::Options::IGNORE_CASE) }) || [] of Regex
 
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
