@@ -70,6 +70,8 @@ module Autobot
         end
         Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
 
+        rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
+
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
@@ -78,7 +80,8 @@ module Autobot
           skills_dirs: [
             (config.workspace_path / "skills").to_s,
             (Config::Loader.skills_dir).to_s,
-          ]
+          ],
+          rate_limiter: rate_limiter
         )
 
         register_image_tool(config, tool_registry)
