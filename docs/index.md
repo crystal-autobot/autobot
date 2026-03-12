@@ -20,7 +20,7 @@ Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://cr
 
 ## Features
 
-- **Multi-Provider LLM** — Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, AWS Bedrock, vLLM
+- **Multi-Provider LLM** — Anthropic, OpenAI, DeepSeek, Groq, Gemini, Kimi, OpenRouter, AWS Bedrock, vLLM
 - **Chat Channels** — Telegram, Slack, WhatsApp with allowlists and custom slash commands
 - **Vision** — Send photos via Telegram and get AI-powered image analysis
 - **Voice** — Voice messages auto-transcribed via Whisper (Groq/OpenAI)
@@ -62,6 +62,7 @@ Autobot works with all major LLM providers — pick the one that fits your needs
 | [DeepSeek](deepseek.md) | Low-cost, strong reasoning |
 | [Groq](groq.md) | Ultra-fast inference, free tier |
 | [Google Gemini](gemini.md) | Gemini Pro and Flash |
+| [Kimi Code](kimi.md) | Optimized for coding |
 | [OpenRouter](openrouter.md) | Hundreds of models, one API key |
 | [AWS Bedrock](bedrock.md) | Enterprise, IAM-based access |
 | [vLLM / Local](vllm.md) | Full privacy, self-hosted |
