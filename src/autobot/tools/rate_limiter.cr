@@ -47,13 +47,31 @@ module Autobot
         @trackers = {} of String => CallTracker
         @mutex = Mutex.new
 
-        # Default limits for high-risk tools
+        # Default limits for high-risk tools if not already provided
         @per_tool_limits["exec"] ||= Limit.new(max_calls: 10, window_seconds: 60)
         @per_tool_limits["web_fetch"] ||= Limit.new(max_calls: 20, window_seconds: 60)
         @per_tool_limits["web_search"] ||= Limit.new(max_calls: 10, window_seconds: 60)
 
-        # Default global limit: 100 calls per minute
+        # Default global limit: 100 calls per minute if not provided
         @global_limit ||= Limit.new(max_calls: 100, window_seconds: 60)
+      end
+
+      # Factory method to create from config
+      def self.from_config(config : Config::RateLimitConfig?) : RateLimiter
+        per_tool = {} of String => Limit
+        global : Limit? = nil
+
+        if config
+          config.per_tool.try(&.each do |name, limit_config|
+            per_tool[name] = Limit.new(max_calls: limit_config.max_calls, window_seconds: limit_config.window_seconds)
+          end)
+
+          config.global.try do |limit_config|
+            global = Limit.new(max_calls: limit_config.max_calls, window_seconds: limit_config.window_seconds)
+          end
+        end
+
+        new(per_tool_limits: per_tool, global_limit: global)
       end
 
       # Check if a tool call is allowed

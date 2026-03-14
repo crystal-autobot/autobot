@@ -10,6 +10,14 @@ module Autobot
     MAX_REDIRECTS   = 5
     DEFAULT_TIMEOUT = 10.seconds
 
+    # Common CA bundle locations on Linux
+    CA_BUNDLE_PATHS = [
+      "/etc/pki/tls/certs/ca-bundle.crt",   # Fedora/RHEL/CentOS
+      "/etc/ssl/certs/ca-certificates.crt", # Debian/Ubuntu/Arch
+      "/etc/ssl/ca-bundle.pem",             # OpenSUSE
+      "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+    ]
+
     # Search the web using Brave Search API.
     class WebSearchTool < Tool
       Log = ::Log.for(self)
@@ -116,8 +124,9 @@ module Autobot
       def parameters : ToolSchema
         ToolSchema.new(
           properties: {
-            "url"      => PropertySchema.new(type: "string", description: "URL to fetch"),
-            "maxChars" => PropertySchema.new(type: "integer", description: "Max content chars to return", minimum: 100_i64),
+            "url"           => PropertySchema.new(type: "string", description: "URL to fetch"),
+            "maxChars"      => PropertySchema.new(type: "integer", description: "Max content chars to return", minimum: 100_i64),
+            "allowInsecure" => PropertySchema.new(type: "boolean", description: "Allow insecure SSL connections (use for broken certificate chains)"),
           },
           required: ["url"]
         )
@@ -126,6 +135,7 @@ module Autobot
       def execute(params : Hash(String, JSON::Any)) : ToolResult
         url_str = params["url"].as_s
         max_chars = params["maxChars"]?.try(&.as_i) || @max_chars
+        allow_insecure = params["allowInsecure"]?.try(&.as_bool) || false
 
         if error = validate_url(url_str)
           return ToolResult.access_denied("URL validation failed: #{error}")
@@ -134,7 +144,7 @@ module Autobot
         Log.info { "Fetching: #{url_str}" }
 
         uri = URI.parse(url_str)
-        response = fetch_with_redirects(uri)
+        response = fetch_with_redirects(uri, allow_insecure: allow_insecure)
 
         content_type = response.headers["Content-Type"]? || ""
         body = response.body
@@ -262,7 +272,7 @@ module Autobot
         ip.starts_with?("169.254.") || ip.starts_with?("fe80:")
       end
 
-      private def fetch_with_redirects(uri : URI, redirects = 0) : HTTP::Client::Response
+      private def fetch_with_redirects(uri : URI, redirects = 0, allow_insecure = false) : HTTP::Client::Response
         if redirects > MAX_REDIRECTS
           raise "Too many redirects (max #{MAX_REDIRECTS})"
         end
@@ -279,7 +289,8 @@ module Autobot
           # HTTPS: connect via hostname for proper SNI/cert validation.
           # DNS rebinding is mitigated by TLS — a rebind target won't have
           # a valid certificate for the original hostname.
-          client = HTTP::Client.new(hostname, uri.port, tls: true)
+          tls_context = create_tls_context(allow_insecure)
+          client = HTTP::Client.new(hostname, uri.port, tls: tls_context)
         else
           # HTTP: connect to validated IP to prevent DNS rebinding.
           headers["Host"] = hostname
@@ -302,13 +313,28 @@ module Autobot
               raise "Redirect blocked: #{error}"
             end
 
-            return fetch_with_redirects(new_uri, redirects + 1)
+            return fetch_with_redirects(new_uri, redirects + 1, allow_insecure)
           end
 
           response
         ensure
           client.close
         end
+      end
+
+      private def create_tls_context(allow_insecure : Bool) : OpenSSL::SSL::Context::Client
+        context = OpenSSL::SSL::Context::Client.new
+        if allow_insecure
+          context.verify_mode = OpenSSL::SSL::VerifyMode::NONE
+        else
+          ca_path = CA_BUNDLE_PATHS.find { |path| File.exists?(path) }
+          if ca_path
+            context.ca_certificates = ca_path
+          else
+            Log.warn { "No system CA bundle found, SSL verification may fail" }
+          end
+        end
+        context
       end
 
       private def validate_redirect_uri(uri : URI) : String?
