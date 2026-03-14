@@ -759,4 +759,57 @@ describe Autobot::CLI::Doctor do
       Autobot::CLI::Doctor.pluralize("warning", 0).should eq("0 warnings")
     end
   end
+
+  describe ".check_workspace" do
+    it "passes for a safe subfolder workspace" do
+      tmp = TestHelper.tmp_dir
+      workspace = tmp / "workspace"
+      Dir.mkdir_p(workspace)
+      config = make_config("agents:\n  defaults:\n    workspace: #{workspace}")
+
+      with_doctor_io do |io|
+        errors, warnings = Autobot::CLI::Doctor.check_workspace(config, tmp / "config.yml", 0, 0)
+
+        errors.should eq(0)
+        warnings.should eq(0)
+        io.to_s.should contain("✓ Workspace exists")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "warns when workspace is set to home directory" do
+      home = Path.home
+      config = make_config("agents:\n  defaults:\n    workspace: #{home}")
+
+      with_doctor_io do |io|
+        errors, warnings = Autobot::CLI::Doctor.check_workspace(config, Path["/tmp/config.yml"], 0, 0)
+
+        errors.should eq(0)
+        warnings.should eq(1)
+        io.to_s.should contain("! Workspace is set to home directory")
+        io.to_s.should contain("exposes secrets")
+      end
+    end
+
+    it "fails when .env is inside workspace" do
+      tmp = TestHelper.tmp_dir
+      workspace = tmp / "data"
+      Dir.mkdir_p(workspace)
+      env_file = workspace / ".env"
+      File.write(env_file, "KEY=VALUE")
+
+      config = make_config("agents:\n  defaults:\n    workspace: #{workspace}")
+
+      with_doctor_io do |io|
+        # config_file is in the same dir as .env for this test
+        errors, _warnings = Autobot::CLI::Doctor.check_workspace(config, workspace / "config.yml", 0, 0)
+
+        errors.should eq(1)
+        io.to_s.should contain("✗ .env file is inside workspace directory")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
 end

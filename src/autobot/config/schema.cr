@@ -198,6 +198,7 @@ module Autobot::Config
     property deepseek : ProviderConfig?
     property groq : ProviderConfig?
     property gemini : ProviderConfig?
+    property kimi : ProviderConfig?
     property vllm : ProviderConfig?
     property duckai : ProviderConfig?
     property bedrock : BedrockProviderConfig?
@@ -235,6 +236,26 @@ module Autobot::Config
   class ExecToolConfig
     include YAML::Serializable
     property timeout : Int32 = 60
+    property allow_patterns : Array(String) = [] of String
+    property deny_patterns : Array(String) = [] of String
+
+    def initialize
+    end
+  end
+
+  class ToolRateLimitConfig
+    include YAML::Serializable
+    property max_calls : Int32
+    property window_seconds : Int32 = 60
+
+    def initialize(@max_calls, @window_seconds = 60)
+    end
+  end
+
+  class RateLimitConfig
+    include YAML::Serializable
+    property global : ToolRateLimitConfig?
+    property per_tool : Hash(String, ToolRateLimitConfig)?
 
     def initialize
     end
@@ -258,6 +279,7 @@ module Autobot::Config
     property image : ImageConfig?
     property sandbox : String = "auto" # "auto", "bubblewrap", "docker", "none"
     property docker_image : String? = nil
+    property rate_limit : RateLimitConfig?
 
     def initialize
     end
@@ -369,13 +391,13 @@ module Autobot::Config
       return {nil, nil} if model_str.starts_with?("bedrock/")
 
       if p = providers
-        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
           if provider && provider.api_key != "" && model_str.includes?({{ provider_name }})
             return {provider, {{ provider_name }}}
           end
         {% end %}
-        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
           if provider && provider.api_key != ""
             return {provider, {{ provider_name }}}
@@ -400,7 +422,7 @@ module Autobot::Config
     def provider_by_name(name : String) : ProviderConfig?
       return nil unless p = providers
       normalized = name.downcase
-      {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
+      {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
         if normalized == {{ provider_name }}
           provider = p.{{ provider_name.id }}
           return provider if provider && !provider.api_key.empty?
@@ -417,7 +439,7 @@ module Autobot::Config
     def validate! : Nil
       has_provider = false
       if p = providers
-        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini vllm duckai] %}
+        {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
           has_provider ||= (provider && provider.api_key != "")
         {% end %}

@@ -120,6 +120,7 @@ module Autobot
         when "deepseek"   then "DEEPSEEK_API_KEY"
         when "groq"       then "GROQ_API_KEY"
         when "gemini"     then "GEMINI_API_KEY"
+        when "kimi"       then "KIMI_API_KEY"
         when "openrouter" then "OPENROUTER_API_KEY"
         else
           "#{provider.upcase}_API_KEY"
@@ -134,6 +135,7 @@ module Autobot
         when "deepseek"   then "deepseek/deepseek-chat"
         when "groq"       then "groq/mixtral-8x7b-32768"
         when "gemini"     then "gemini/gemini-pro"
+        when "kimi"       then "kimi/kimi-for-coding"
         when "openrouter" then "openrouter/auto"
         else
           "#{provider}/default"
