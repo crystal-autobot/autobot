@@ -11,6 +11,7 @@ Autobot supports multiple LLM providers out of the box. Configure at least one p
 | [DeepSeek](deepseek.md) | Direct | — | DeepSeek-V3, R1 with reasoning traces |
 | [Groq](groq.md) | Direct | Whisper (preferred) | Ultra-fast inference on LPU hardware |
 | [Google Gemini](gemini.md) | Direct | — | Gemini Pro, Flash models |
+| [Kimi Code](kimi.md) | Direct | — | Optimized for coding tasks |
 | [OpenRouter](openrouter.md) | Gateway | — | Hundreds of models, single API key |
 | [AWS Bedrock](bedrock.md) | Cloud | — | Claude, Nova via AWS SigV4 auth |
 | [DuckAI](duckai.md) | Free | — | Free models via duck.ai proxy (rate limited) |
@@ -44,6 +45,7 @@ model: "openai/gpt-5-mini"
 model: "deepseek/deepseek-chat"
 model: "groq/llama-3.3-70b-versatile"
 model: "gemini/gemini-2.5-flash"
+model: "kimi/kimi-for-coding"
 model: "openrouter/anthropic/claude-sonnet-4-5"
 model: "bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
 model: "duckai/gpt-4o-mini"
