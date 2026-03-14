@@ -32,8 +32,14 @@ describe Autobot::Providers do
       spec.try(&.name).should eq("gemini")
     end
 
-    it "matches Moonshot by 'kimi'" do
-      spec = Autobot::Providers.find_by_model("kimi-k2.5")
+    it "matches Kimi Code by 'kimi'" do
+      spec = Autobot::Providers.find_by_model("kimi-for-coding")
+      spec.should_not be_nil
+      spec.try(&.name).should eq("kimi")
+    end
+
+    it "matches Moonshot by its keyword" do
+      spec = Autobot::Providers.find_by_model("moonshot-v1-8k")
       spec.should_not be_nil
       spec.try(&.name).should eq("moonshot")
     end
@@ -63,6 +69,12 @@ describe Autobot::Providers do
       spec.should_not be_nil
       spec.try(&.name).should eq("openrouter")
       spec.try(&.gateway?).should be_true
+    end
+
+    it "detects Kimi by API key prefix" do
+      spec = Autobot::Providers.find_gateway(api_key: "sk-kimi-abc123")
+      spec.should_not be_nil
+      spec.try(&.name).should eq("kimi")
     end
 
     it "detects AiHubMix by api_base keyword" do

@@ -4,6 +4,12 @@ require "../../spec_helper"
 class TestableHttpProvider < Autobot::Providers::HttpProvider
   getter last_api_model : String?
   getter last_api_body : JSON::Any?
+  getter last_headers : HTTP::Headers?
+  property call_count = 0
+  property responses = [] of HTTP::Client::Response
+
+  # Set retry delay to 0 for instant tests
+  INITIAL_RETRY_DELAY = 0.seconds
 
   def test_strip_provider_prefix(model : String) : String
     strip_provider_prefix(model)
@@ -34,12 +40,19 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
     max_tokens_param_name(model, spec)
   end
 
-  private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
+  private def do_http_post(host, port, tls, path, headers, body) : HTTP::Client::Response
+    @call_count += 1
+    @last_headers = headers
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
     @last_api_body = parsed
-    # Return a minimal valid response based on the URL
-    if url.includes?("/messages")
+
+    if !@responses.empty?
+      return @responses.shift
+    end
+
+    # Return a minimal valid response based on the path
+    if path.includes?("/messages")
       HTTP::Client::Response.new(200, body: %({"type":"message","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}}))
     else
       HTTP::Client::Response.new(200, body: %({"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}))
@@ -194,8 +207,10 @@ describe Autobot::Providers::HttpProvider do
       response = provider.test_parse_compatible_response(body)
       response.finish_reason.should eq("error")
       response.content.should_not be_nil
-      response.content.to_s.should contain("API error:")
-      response.content.to_s.should contain("500")
+      if c = response.content
+        c.should contain("API error:")
+        c.should contain("500")
+      end
     end
 
     it "parses successful response normally" do
@@ -438,6 +453,79 @@ describe Autobot::Providers::HttpProvider do
       arr[1]["type"].as_s.should eq("image")
       arr[1]["source"]["media_type"].as_s.should eq("image/png")
       arr[1]["source"]["data"].as_s.should eq("cG5nZGF0YQ==")
+    end
+  end
+
+  describe "User-Agent handling" do
+    messages = [{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}]
+
+    it "sends default User-Agent for standard providers" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "openai/gpt-4")
+      provider.chat(messages)
+      headers = provider.last_headers
+      headers.should_not be_nil
+      if h = headers
+        h["User-Agent"].should contain("Autobot")
+      end
+    end
+
+    it "sends specific User-Agent for Kimi" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "kimi/kimi-for-coding")
+      provider.chat(messages)
+      headers = provider.last_headers
+      headers.should_not be_nil
+      if h = headers
+        h["User-Agent"].should eq("KimiCLI/0.77")
+      end
+    end
+  end
+
+  describe "retry logic" do
+    messages = [{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}]
+
+    it "retries on 429 Rate Limit" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "gpt-4")
+      provider.responses = [
+        HTTP::Client::Response.new(429, body: %({"error":{"message":"Rate limit reached"}})),
+        HTTP::Client::Response.new(200, body: %({"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})),
+      ]
+
+      response = provider.chat(messages)
+      response.content.should eq("ok")
+      provider.call_count.should eq(2)
+    end
+
+    it "retries on 5xx Server Error" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "gpt-4")
+      provider.responses = [
+        HTTP::Client::Response.new(503, body: %({"error":{"message":"Service Unavailable"}})),
+        HTTP::Client::Response.new(500, body: %({"error":{"message":"Internal Server Error"}})),
+        HTTP::Client::Response.new(200, body: %({"choices":[{"message":{"content":"success"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})),
+      ]
+
+      response = provider.chat(messages)
+      response.content.should eq("success")
+      provider.call_count.should eq(3)
+    end
+
+    it "eventually fails after max retries" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "gpt-4")
+      # 4 calls total: initial + 3 retries
+      provider.responses = [
+        HTTP::Client::Response.new(429, body: %({"error":{"message":"Final Err"}})),
+        HTTP::Client::Response.new(429, body: %({"error":{"message":"Final Err"}})),
+        HTTP::Client::Response.new(429, body: %({"error":{"message":"Final Err"}})),
+        HTTP::Client::Response.new(429, body: %({"error":{"message":"Final Err"}})),
+      ]
+
+      response = provider.chat(messages)
+      response.finish_reason.should eq("error")
+      content = response.content
+      content.should_not be_nil
+      if c = content
+        c.should contain("Final Err")
+      end
+      provider.call_count.should eq(4)
     end
   end
 end
