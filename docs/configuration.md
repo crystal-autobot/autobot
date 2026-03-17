@@ -94,19 +94,10 @@ tools:
       - "^ssh .*$"
     deny_patterns:  # Optional regex denylist (extends built-in)
       - "^rm -rf /.*$"
-  rate_limit:
-    global:
-      max_calls: 100
-      window_seconds: 60
-    per_tool:
-      exec:
-        max_calls: 20
-        window_seconds: 60
   web:
     search:
       api_key: ""
       max_results: 5
-```
   image:
     enabled: true              # default: true
     # provider: openai         # optional override (openai or gemini)
@@ -115,6 +106,15 @@ tools:
 ```
 
 When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.
+
+### Safety Guard Overrides
+
+Customize command filtering for the `exec` tool:
+
+- **`allow_patterns`**: Regex patterns that explicitly allow commands (overrides built-in denials)
+- **`deny_patterns`**: Additional regex patterns to block (extends built-in safety guards)
+
+Patterns are case-insensitive and matched against the beginning of commands. Use with caution — `allow_patterns` bypasses security protections.
 
 ## MCP (Model Context Protocol)
 
