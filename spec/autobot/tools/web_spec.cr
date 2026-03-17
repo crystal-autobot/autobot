@@ -1,35 +1,6 @@
 require "../../spec_helper"
 require "../../../src/autobot/tools/web"
 
-class WebFetchToolWithMockCerts < Autobot::Tools::WebFetchTool
-  # Expose for testing
-  def test_create_tls_context(allow_insecure : Bool)
-    create_tls_context(allow_insecure)
-  end
-
-  def self.mock_paths=(paths : Array(String))
-    # We use a constant in the real code, so we'll have to re-define or
-    # use a class variable for this mock.
-    @@mock_paths = paths
-  end
-
-  private def create_tls_context(allow_insecure : Bool) : OpenSSL::SSL::Context::Client
-    context = OpenSSL::SSL::Context::Client.new
-    if allow_insecure
-      context.verify_mode = OpenSSL::SSL::VerifyMode::NONE
-    else
-      # Use our mock paths instead of CA_BUNDLE_PATHS
-      ca_path = @@mock_paths.find { |path| File.exists?(path) }
-      if ca_path
-        context.ca_certificates = ca_path
-      end
-    end
-    context
-  end
-
-  @@mock_paths = [] of String
-end
-
 describe Autobot::Tools::WebSearchTool do
   describe "#name" do
     it "returns web_search" do
@@ -164,13 +135,10 @@ describe Autobot::Tools::WebFetchTool do
   end
 
   describe "HTTPS fetching" do
-    it "fetches HTTPS URLs with proper SNI" do
+    it "fetches HTTPS URLs with proper SSL verification" do
       tool = Autobot::Tools::WebFetchTool.new
 
-      result = tool.execute({
-        "url"           => JSON::Any.new("https://example.com"),
-        "allowInsecure" => JSON::Any.new(true),
-      } of String => JSON::Any)
+      result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
       result.success?.should be_true
       result.content.should contain("[https://example.com]")
       result.content.should contain("Example Domain")
@@ -191,10 +159,7 @@ describe Autobot::Tools::WebFetchTool do
     it "extracts text from HTML" do
       tool = Autobot::Tools::WebFetchTool.new
 
-      result = tool.execute({
-        "url"           => JSON::Any.new("https://example.com"),
-        "allowInsecure" => JSON::Any.new(true),
-      } of String => JSON::Any)
+      result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
       result.success?.should be_true
 
       result.content.should_not contain("<html")
@@ -206,9 +171,8 @@ describe Autobot::Tools::WebFetchTool do
       tool = Autobot::Tools::WebFetchTool.new
 
       result = tool.execute({
-        "url"           => JSON::Any.new("https://example.com"),
-        "maxChars"      => JSON::Any.new(100_i64),
-        "allowInsecure" => JSON::Any.new(true),
+        "url"      => JSON::Any.new("https://example.com"),
+        "maxChars" => JSON::Any.new(100_i64),
       } of String => JSON::Any)
       result.success?.should be_true
       result.content.should contain("truncated to 100 chars")
@@ -219,40 +183,8 @@ describe Autobot::Tools::WebFetchTool do
     it "follows HTTP redirects" do
       tool = Autobot::Tools::WebFetchTool.new
 
-      # httpbin.org redirects to https
       result = tool.execute({"url" => JSON::Any.new("http://example.com")} of String => JSON::Any)
       result.success?.should be_true
-    end
-  end
-
-  describe "CA bundle logic" do
-    it "picks the first existing path" do
-      tmp = TestHelper.tmp_dir
-      path1 = (tmp / "cert1.pem").to_s
-      path2 = (tmp / "cert2.pem").to_s
-
-      # Use a real certificate from the system bundle to avoid OpenSSL parse errors
-      system_bundle = Autobot::Tools::CA_BUNDLE_PATHS.find { |path| File.exists?(path) }
-      if system_bundle
-        File.write(path2, File.read(system_bundle))
-      else
-        File.write(path2, "DUMMY")
-      end
-
-      WebFetchToolWithMockCerts.mock_paths = [path1, path2]
-      tool = WebFetchToolWithMockCerts.new
-
-      # Should not raise
-      ctx = tool.test_create_tls_context(allow_insecure: false)
-      ctx.verify_mode.should eq(OpenSSL::SSL::VerifyMode::PEER)
-    ensure
-      FileUtils.rm_rf(tmp) if tmp
-    end
-
-    it "respects allowInsecure" do
-      tool = WebFetchToolWithMockCerts.new
-      ctx = tool.test_create_tls_context(allow_insecure: true)
-      ctx.verify_mode.should eq(OpenSSL::SSL::VerifyMode::NONE)
     end
   end
 end

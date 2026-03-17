@@ -265,10 +265,7 @@ describe "Security Tests" do
     it "fetches HTTPS URLs without SSL errors" do
       tool = Autobot::Tools::WebFetchTool.new
 
-      result = tool.execute({
-        "url"           => JSON::Any.new("https://example.com"),
-        "allowInsecure" => JSON::Any.new(true),
-      } of String => JSON::Any)
+      result = tool.execute({"url" => JSON::Any.new("https://example.com")} of String => JSON::Any)
       result.success?.should be_true
       result.content.should contain("[https://example.com]")
       result.content.should contain("Example Domain")
