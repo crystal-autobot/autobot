@@ -205,7 +205,11 @@ describe "Security Tests" do
         limiter.check_limit("exec", "session").should be_nil
         limiter.record_call("exec", "session")
       end
-      limiter.check_limit("exec", "session").not_nil!.should contain("max 5 calls")
+      if error = limiter.check_limit("exec", "session")
+        error.should contain("max 5 calls")
+      else
+        fail("Expected rate limit error")
+      end
     end
   end
 
