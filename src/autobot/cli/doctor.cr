@@ -75,7 +75,7 @@ module Autobot
         errors = check_security_settings(config, errors)
 
         # Workspace
-        errors, warnings = check_workspace(config, config_file, errors, warnings)
+        errors = check_workspace(config, config_file, errors)
 
         # Channels
         warnings = check_channels(config, warnings)
@@ -224,7 +224,7 @@ module Autobot
         errors
       end
 
-      def self.check_workspace(config : Config::Config, config_file : Path, errors : Int32, warnings : Int32) : Tuple(Int32, Int32)
+      def self.check_workspace(config : Config::Config, config_file : Path, errors : Int32) : Int32
         workspace = config.workspace_path
 
         if Dir.exists?(workspace)
@@ -234,29 +234,20 @@ module Autobot
           hint("It will be created on first run")
         end
 
-        # Check if workspace is home directory (security risk)
-        home = Path.home.to_s
-        workspace_real = File.realpath(workspace.to_s) rescue workspace.to_s
-        if workspace_real == home
-          report(Status::Warn, "Workspace is set to home directory")
-          hint("This exposes secrets (like .env) and shell config (like .bashrc).")
-          hint("Best practice: use a dedicated subfolder (e.g., ./workspace) even for dedicated bot users.")
-          warnings += 1
-        end
-
         # Check if .env is inside workspace (security risk)
         env_path = config_file.parent / ".env"
         if File.exists?(env_path.to_s)
           env_real = File.realpath(env_path.to_s)
+          workspace_real = File.realpath(workspace.to_s) rescue workspace.to_s
 
           if env_real.starts_with?(workspace_real)
             report(Status::Fail, ".env file is inside workspace directory")
             hint("Move .env outside workspace to prevent exposing secrets to the LLM")
-            errors += 1
+            return errors + 1
           end
         end
 
-        {errors, warnings}
+        errors
       end
 
       def self.check_channels(config : Config::Config, warnings : Int32) : Int32
