@@ -70,8 +70,8 @@ module Autobot
         end
         Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
 
-        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
-        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |p| Regex.new(p, Regex::Options::IGNORE_CASE) }) || [] of Regex
+        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |pat| Regex.new(pat, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
+        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |pat| Regex.new(pat, Regex::Options::IGNORE_CASE) }) || [] of Regex
 
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
