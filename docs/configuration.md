@@ -102,7 +102,6 @@ tools:
     search:
       api_key: ""
       max_results: 5
-```
   image:
     enabled: true              # default: true
     # provider: openai         # optional override (openai or gemini)
@@ -111,6 +110,19 @@ tools:
 ```
 
 When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.
+
+### Rate Limiting
+
+Configure rate limits to prevent abuse and manage API costs:
+
+- **`global`**: Applies across all tools combined
+- **`per_tool`**: Tool-specific limits (e.g., `exec`, `web_search`)
+
+Each limit specifies:
+- **`max_calls`**: Maximum calls allowed in the window
+- **`window_seconds`**: Time window for counting calls
+
+When a limit is exceeded, the tool returns an error message that the LLM can see and respond to (e.g., "Rate limit exceeded for exec: max 20 calls per 60s").
 
 ## MCP (Model Context Protocol)
 
