@@ -449,15 +449,21 @@ describe Autobot::Providers::HttpProvider do
     it "sends default User-Agent for standard providers" do
       provider = TestableHttpProvider.new(api_key: "key", model: "openai/gpt-4")
       provider.chat(messages)
-      headers = provider.last_headers.not_nil!
-      headers["User-Agent"].should contain("Autobot")
+      if headers = provider.last_headers
+        headers["User-Agent"].should contain("Autobot")
+      else
+        fail("Expected headers to not be nil")
+      end
     end
 
     it "sends specific User-Agent for Kimi" do
       provider = TestableHttpProvider.new(api_key: "key", model: "kimi/kimi-for-coding")
       provider.chat(messages)
-      headers = provider.last_headers.not_nil!
-      headers["User-Agent"].should eq("KimiCLI/0.77")
+      if headers = provider.last_headers
+        headers["User-Agent"].should eq("KimiCLI/0.77")
+      else
+        fail("Expected headers to not be nil")
+      end
     end
   end
 end
