@@ -35,6 +35,25 @@ module Autobot
         end
       end
 
+      # Load exec tool patterns from configuration.
+      # User deny_patterns are merged with defaults (appended, not replaced).
+      # Returns {deny_patterns, allow_patterns}.
+      def self.load_exec_patterns(config : Config::Config) : {Array(Regex), Array(Regex)}
+        user_deny = config.tools.try(&.exec.try(&.deny_patterns)) || [] of String
+
+        # Start with defaults and append user patterns
+        deny_patterns = Tools::ExecTool::DEFAULT_DENY_PATTERNS.dup
+        user_deny.each do |pat|
+          deny_patterns << Regex.new(pat, Regex::Options::IGNORE_CASE)
+        end
+
+        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |pat|
+          Regex.new(pat, Regex::Options::IGNORE_CASE)
+        }) || [] of Regex
+
+        {deny_patterns, allow_patterns}
+      end
+
       # Creates the appropriate provider based on configuration.
       def self.create_provider(config : Config::Config) : Providers::Provider
         if bedrock = config.match_bedrock
@@ -70,8 +89,7 @@ module Autobot
         end
         Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
 
-        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |pat| Regex.new(pat, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
-        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |pat| Regex.new(pat, Regex::Options::IGNORE_CASE) }) || [] of Regex
+        deny_patterns, allow_patterns = load_exec_patterns(config)
 
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,

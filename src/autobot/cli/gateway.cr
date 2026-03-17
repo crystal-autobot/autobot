@@ -141,8 +141,7 @@ module Autobot
         cron_service : Cron::Service,
       )
         sandbox_config = config.tools.try(&.sandbox) || "auto"
-        deny_patterns = config.tools.try(&.exec.try(&.deny_patterns)).try(&.map { |pat| Regex.new(pat, Regex::Options::IGNORE_CASE) }) || Tools::ExecTool::DEFAULT_DENY_PATTERNS
-        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |pat| Regex.new(pat, Regex::Options::IGNORE_CASE) }) || [] of Regex
+        deny_patterns, allow_patterns = SetupHelper.load_exec_patterns(config)
 
         Autobot::Agent::Loop.new(
           bus: bus,

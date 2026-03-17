@@ -82,6 +82,7 @@ channels:
     api_key: ""
     allow_from: []
 ```
+
 ## Tools
 
 ```yaml

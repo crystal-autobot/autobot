@@ -150,5 +150,30 @@ describe Autobot::Tools::ExecTool do
       result.access_denied?.should be_true
       result.content.should contain("dangerous pattern detected")
     end
+
+    it "preserves default deny patterns when only allow_patterns configured" do
+      # Configure only allow_patterns, no deny_patterns - defaults should still apply
+      tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
+        sandbox_config: "none",
+        allow_patterns: [/^echo safe$/i]
+        # deny_patterns not specified - should use defaults
+      )
+
+      # Verify default patterns still work (fork bomb should be blocked)
+      result = tool.execute({"command" => JSON::Any.new(":(){ :|:& };:")})
+      result.access_denied?.should be_true
+      result.content.should contain("Command blocked")
+
+      # rm -rf should also be blocked by defaults
+      result = tool.execute({"command" => JSON::Any.new("rm -rf /")})
+      result.access_denied?.should be_true
+      result.content.should contain("Command blocked")
+
+      # sudo should be blocked by defaults
+      result = tool.execute({"command" => JSON::Any.new("sudo ls /root")})
+      result.access_denied?.should be_true
+      result.content.should contain("Command blocked")
+    end
   end
 end
