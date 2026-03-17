@@ -19,27 +19,21 @@ metadata:
    - Inherit from `HttpProvider` or implement `Provider` interface
 
 2. **Register provider**:
-   - Add to `src/autobot/providers/registry.cr`
-   - Update provider loading logic
+   - Add a new `ProviderSpec` to the `PROVIDERS` list in `src/autobot/providers/registry.cr`.
+   - Ensure keywords and API URL are correctly specified.
 
 3. **Add configuration schema**:
-   - Update `src/autobot/config/schema.cr` with provider config
-   - Add API key and optional settings
+   - Update `src/autobot/config/schema.cr` with provider config if needed.
+   - Most HTTP providers work automatically if they follow OpenAI compatibility.
 
 4. **Create tests**:
    - `spec/autobot/providers/<name>_provider_spec.cr`
-   - Test provider registration
-   - Test configuration validation
-   - Test API integration (mocked)
+   - Test provider registration in `registry_spec.cr`.
+   - Test API integration (mocked).
 
 5. **Add documentation**:
-   - `docs/<name>.md` - Provider setup guide
-   - Update `docs/providers.md` - Add to provider comparison
-   - Update `docs/index.md` - Add to provider list
-
-6. **Update CLI setup**:
-   - Modify `src/autobot/cli/interactive_setup.cr` for provider selection
-   - Update `src/autobot/cli/config_generator.cr` for provider templates
+   - `docs/<name>.md` - Provider setup guide.
+   - Update `docs/providers.md` - Add to provider comparison.
 
 ### Provider Implementation Template
 
@@ -48,46 +42,42 @@ metadata:
 module Autobot
   module Providers
     class <Name>Provider < HttpProvider
-      def initialize(api_key : String, model : String = "default-model")
-        super(api_key: api_key, model: model)
-        @base_uri = URI.parse("https://api.provider.com/v1")
+      def initialize(
+        api_key : String,
+        api_base : String? = nil,
+        model : String = "default-model",
+        extra_headers = {} of String => String,
+        provider_name : String? = nil
+      )
+        super(api_key, api_base, model, extra_headers, provider_name)
       end
 
-      def name : String
-        "<name>"
-      end
-
-      def display_name : String
-        "<Display Name>"
-      end
-
-      def chat(messages : Array(Hash(String, JSON::Any)), **options) : ChatResponse
-        # Implement API call
-        response = post("/chat/completions", build_payload(messages, options))
-        parse_response(response)
-      end
-
-      private def build_payload(messages, options)
-        {
-          model: @model,
-          messages: messages,
-          max_tokens: options[:max_tokens]?,
-          temperature: options[:temperature]?,
-        }.compact
-      end
-
-      private def parse_response(response : HTTP::Client::Response) : ChatResponse
-        # Parse JSON and return ChatResponse
-        body = JSON.parse(response.body)
-        ChatResponse.new(
-          content: body["choices"][0]["message"]["content"].as_s,
-          finish_reason: body["choices"][0]["finish_reason"].as_s? || "stop",
-          tokens_used: body["usage"]["total_tokens"].as_i?
-        )
+      def chat(
+        messages : Array(Hash(String, JSON::Any)),
+        tools : Array(Hash(String, JSON::Any))? = nil,
+        model : String? = nil,
+        max_tokens : Int32 = DEFAULT_MAX_TOKENS,
+        temperature : Float64 = DEFAULT_TEMPERATURE
+      ) : Response
+        # Implement custom logic or call super for OpenAI-compatible
+        super
       end
     end
   end
 end
+```
+
+### ProviderSpec Registration
+
+Add to `PROVIDERS` in `src/autobot/providers/registry.cr`:
+
+```crystal
+ProviderSpec.new(
+  name: "<name>",
+  keywords: ["<keyword1>", "<keyword2>"],
+  display_name: "<Display Name>",
+  api_url: "https://api.<provider>.com/v1/chat/completions",
+)
 ```
 
 ### Testing Checklist

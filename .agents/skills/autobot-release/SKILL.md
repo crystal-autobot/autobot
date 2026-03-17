@@ -34,25 +34,20 @@ Update version in:
 
 ### Changelog
 
-Use Keep a Changelog format (RST):
+Use Keep a Changelog format (Markdown):
 
-```rst
-Changelog
-=========
+```markdown
+# Changelog
 
-[1.2.3] - 2026-03-17
---------------------
+## [1.2.3] - 2026-03-17
 
-Added
-^^^^^
+### Added
 - New feature description
 
-Fixed
-^^^^^
+### Fixed
 - Bug fix description
 
-Changed
-^^^^^^^
+### Changed
 - Change description
 ```
 
@@ -68,13 +63,13 @@ Sections:
 
 ```bash
 # 1. Update changelog
-vim CHANGELOG.rst
+vim CHANGELOG.md
 
 # 2. Update version in shard.yml
 vim shard.yml
 
 # 3. Commit version bump
-git add CHANGELOG.rst shard.yml
+git add CHANGELOG.md shard.yml
 git commit -m "chore(release): bump version to 1.2.3"
 
 # 4. Create signed tag (requires GPG key)
@@ -111,7 +106,7 @@ Create release via GitHub CLI:
 ```bash
 gh release create v1.2.3 \
   --title "Release v1.2.3" \
-  --notes-file CHANGELOG.rst \
+  --notes-file CHANGELOG.md \
   --verify-tag
 ```
 

@@ -14,9 +14,11 @@ metadata:
 
 ### AAA Pattern
 
-Structure all tests with Arrange-Act-Assert:
+Structure all tests with Arrange-Act-Assert and require the spec helper:
 
 ```crystal
+require "../spec_helper"
+
 describe "MyFeature" do
   it "does something expected" do
     # Arrange

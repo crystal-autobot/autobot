@@ -17,13 +17,10 @@ Always run these checks before committing:
 # 1. Format code
 crystal tool format
 
-# 2. Run linter
-./bin/ameba
+# 2. Run linter and tests via Makefile
+make test
 
-# 3. Run tests
-crystal spec
-
-# 4. Build release (if applicable)
+# 3. Build release (if applicable)
 make release
 ```
 

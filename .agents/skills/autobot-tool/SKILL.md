@@ -20,8 +20,8 @@ metadata:
    - Implement `Tool` interface
 
 2. **Register tool**:
-   - Add to `src/autobot/tools/tools.cr` registry
-   - Export in tools module
+   - Add to `src/autobot/tools/registry.cr`
+   - Include in the `create_registry` method if globally available.
 
 3. **Add configuration** (if configurable):
    - Update `src/autobot/config/schema.cr`
