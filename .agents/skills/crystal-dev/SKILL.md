@@ -71,6 +71,17 @@ end
 - `docs/` - Documentation (RST format preferred)
 - `bin/ameba` - Linter binary
 
+### Related Files
+
+**Configuration:**
+- `shard.yml` - Dependencies and project metadata
+- `Makefile` - Build automation
+- `.ameba.yml` - Linter configuration
+
+**Style Reference:**
+- `src/autobot/providers/http_provider.cr` - Example of well-formatted Crystal code
+- `src/autobot/tools/exec.cr` - Complex tool with proper error handling
+
 ## When to Use
 
 Use this skill when:
@@ -79,3 +90,5 @@ Use this skill when:
 - Creating new specs
 - Preparing code for review
 - Setting up development environment
+
+**Related Skills:** `autobot-test`, `autobot-provider`, `autobot-tool`

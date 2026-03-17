@@ -129,6 +129,21 @@ Or for specific models:
 Co-authored-by: Gemini <renich+gemini@woralelandia.com>
 ```
 
+### Related Files
+
+**Version and Changelog:**
+- `shard.yml` - Version field (line 2)
+- `CHANGELOG.md` - Release history
+- `src/autobot/version.cr` - Auto-generated from shard.yml
+
+**CI/CD:**
+- `.github/workflows/ci.yml` - GitHub Actions workflow
+- `Makefile` - Build and release targets
+
+**Examples:**
+- Look at recent tags: `git log --oneline --tags | head -10`
+- View previous releases on GitHub for format examples
+
 ## When to Use
 
 Use this skill when:
@@ -137,3 +152,5 @@ Use this skill when:
 - Writing changelogs
 - Bumping version numbers
 - Publishing to GitHub
+
+**Related Skills:** `crystal-dev`

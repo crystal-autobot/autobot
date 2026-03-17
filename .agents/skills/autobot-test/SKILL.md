@@ -205,6 +205,20 @@ Test these scenarios:
 - [ ] Edge cases (empty strings, max values, etc.)
 - [ ] Security constraints (private IPs, path traversal, etc.)
 
+### Related Files and Examples
+
+**Test Infrastructure:**
+- `spec/spec_helper.cr` - Test setup and helpers
+- `spec/support/test_helper.cr` - Test utilities
+
+**Example Tests:**
+- `spec/autobot/tools/exec_spec.cr` - Tool testing patterns
+- `spec/autobot/providers/http_provider_spec.cr` - Provider mocking
+- `spec/autobot/config/schema_spec.cr` - Configuration tests
+
+**Mock Patterns:**
+- `spec/support/mock_provider.cr` - HTTP provider mocking
+
 ## When to Use
 
 Use this skill when:
@@ -213,3 +227,5 @@ Use this skill when:
 - Refactoring test code
 - Setting up test infrastructure
 - Reviewing test coverage
+
+**Related Skills:** `crystal-dev`, `autobot-tool`, `autobot-provider`

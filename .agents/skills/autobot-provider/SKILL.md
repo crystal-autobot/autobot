@@ -45,11 +45,12 @@ module Autobot
       def initialize(
         api_key : String,
         api_base : String? = nil,
-        model : String = "default-model",
-        extra_headers = {} of String => String,
+        @model : String = "default-model",
+        @extra_headers = {} of String => String,
         provider_name : String? = nil
       )
-        super(api_key, api_base, model, extra_headers, provider_name)
+        super(api_key, api_base)
+        @gateway = Providers.find_gateway(provider_name, api_key, api_base)
       end
 
       def chat(
@@ -59,13 +60,34 @@ module Autobot
         max_tokens : Int32 = DEFAULT_MAX_TOKENS,
         temperature : Float64 = DEFAULT_TEMPERATURE
       ) : Response
-        # Implement custom logic or call super for OpenAI-compatible
+        # Implement API-specific logic here
+        # Or call super for OpenAI-compatible APIs
         super
+      end
+
+      def default_model : String
+        @model
       end
     end
   end
 end
 ```
+
+### Alternative: Non-HTTP Provider
+
+For providers with non-standard APIs (like AWS Bedrock), inherit directly from `Provider`:
+
+```crystal
+class BedrockProvider < Provider
+  # Implement abstract methods directly
+  # See src/autobot/providers/bedrock_provider.cr for full example
+end
+```
+
+**See Also:**
+- `src/autobot/providers/http_provider.cr` - Base HTTP implementation
+- `src/autobot/providers/bedrock_provider.cr` - Non-HTTP provider example
+- `src/autobot/providers/anthropic_provider.cr` - OpenAI-compatible with custom headers
 
 ### ProviderSpec Registration
 
@@ -98,6 +120,24 @@ Each provider doc must include:
 - Special features (if any)
 - Example configuration
 
+### Related Files and Examples
+
+**Base Classes:**
+- `src/autobot/providers/provider.cr` - Abstract Provider interface
+- `src/autobot/providers/http_provider.cr` - HTTP-based provider base
+
+**Working Examples:**
+- `src/autobot/providers/anthropic_provider.cr` - OpenAI-compatible with custom headers
+- `src/autobot/providers/bedrock_provider.cr` - Direct Provider implementation (AWS)
+- `src/autobot/providers/groq_provider.cr` - Simple HTTP provider
+
+**Registration:**
+- `src/autobot/providers/registry.cr` - ProviderSpec definitions
+
+**Tests:**
+- `spec/autobot/providers/http_provider_spec.cr` - Testing patterns
+- `spec/autobot/providers/registry_spec.cr` - Registration tests
+
 ## When to Use
 
 Use this skill when:
@@ -105,3 +145,5 @@ Use this skill when:
 - Integrating a new AI provider API
 - Testing provider implementations
 - Updating provider documentation
+
+**Related Skills:** `crystal-dev`, `autobot-test`

@@ -20,8 +20,9 @@ metadata:
    - Implement `Tool` interface
 
 2. **Register tool**:
-   - Add to `src/autobot/tools/registry.cr`
-   - Include in the `create_registry` method if globally available.
+   - Tools are registered at runtime in the agent loop or CLI gateway
+   - See `src/autobot/cli/gateway.cr` for examples of tool registration
+   - Tools are instantiated and added to the registry
 
 3. **Add configuration** (if configurable):
    - Update `src/autobot/config/schema.cr`
@@ -157,6 +158,25 @@ Tools should respect rate limits:
 - [ ] Error messages are clear and actionable
 - [ ] ToolResult types used correctly (success/error/access_denied)
 
+### Related Files and Examples
+
+**Base Classes:**
+- `src/autobot/tools/base.cr` - Tool abstract class and ToolSchema
+- `src/autobot/tools/result.cr` - ToolResult definition
+
+**Working Examples:**
+- `src/autobot/tools/exec.cr` - Command execution (complex validation)
+- `src/autobot/tools/web.cr` - HTTP fetching (URL validation example)
+- `src/autobot/tools/filesystem.cr` - File operations
+
+**Registration:**
+- `src/autobot/tools/registry.cr` - Tool registry
+- `src/autobot/cli/gateway.cr` - Tool instantiation examples
+
+**Tests:**
+- `spec/autobot/tools/exec_spec.cr` - Exec tool tests
+- `spec/autobot/tools/web_spec.cr` - Web tool tests
+
 ## When to Use
 
 Use this skill when:
@@ -164,3 +184,5 @@ Use this skill when:
 - Adding MCP tool wrappers
 - Implementing external service integrations
 - Adding utility tools (file operations, web requests, etc.)
+
+**Related Skills:** `crystal-dev`, `autobot-test`
