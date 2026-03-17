@@ -492,7 +492,11 @@ describe Autobot::Providers::HttpProvider do
 
       response = provider.chat(messages)
       response.finish_reason.should eq("error")
-      response.content.not_nil!.should contain("Final Err")
+      if content = response.content
+        content.should contain("Final Err")
+      else
+        fail("Expected content to not be nil")
+      end
       provider.call_count.should eq(4)
     end
   end

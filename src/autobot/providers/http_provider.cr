@@ -20,7 +20,7 @@ module Autobot
       USER_AGENT            = "Autobot/#{VERSION}"
       ANTHROPIC_API_VERSION = "2023-06-01"
 
-      MAX_RETRIES          = 3
+      MAX_RETRIES         = 3
       INITIAL_RETRY_DELAY = 2.seconds
 
       getter model : String
