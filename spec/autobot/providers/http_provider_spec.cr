@@ -7,9 +7,6 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
   property call_count = 0
   property responses = [] of HTTP::Client::Response
 
-  # Set retry delay to 0 for instant tests
-  INITIAL_RETRY_DELAY = 0.seconds
-
   def test_strip_provider_prefix(model : String) : String
     strip_provider_prefix(model)
   end
@@ -39,15 +36,17 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
     max_tokens_param_name(model, spec)
   end
 
-  private def do_http_post(host, port, tls, path, headers, body) : HTTP::Client::Response
+  private def initial_retry_delay : Time::Span
+    0.seconds
+  end
+
+  private def do_http_post(client : HTTP::Client, path : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     @call_count += 1
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
     @last_api_body = parsed
 
-    if !@responses.empty?
-      return @responses.shift
-    end
+    return @responses.shift unless @responses.empty?
 
     # Return a minimal valid response based on the path
     if path.includes?("/messages")
