@@ -20,6 +20,12 @@ module Autobot
       USER_AGENT            = "Autobot/#{VERSION}"
       ANTHROPIC_API_VERSION = "2023-06-01"
 
+      MAX_RETRIES         = 3
+      INITIAL_RETRY_DELAY = 2.seconds
+      RATE_LIMIT_STATUS   = 429
+      SERVER_ERROR_MIN    = 500
+      SERVER_ERROR_MAX    = 599
+
       getter model : String
       getter extra_headers : Hash(String, String)
 
@@ -602,21 +608,65 @@ module Autobot
         host = uri.host
         raise "Invalid URL: missing host in '#{url}'" unless host
 
-        client = HTTP::Client.new(host, port: uri.port, tls: tls)
-        client.connect_timeout = CONNECT_TIMEOUT
-        client.read_timeout = READ_TIMEOUT
-
         path = uri.request_target
-        response = client.post(path, headers: headers, body: body)
+        retry_delay = initial_retry_delay
+        client = build_http_client(host, uri.port, tls)
 
-        if response.success?
-          Log.debug { "Response #{response.status_code} (#{response.body.size} bytes)" }
-        else
-          Log.debug { "Response #{response.status_code}: #{response.body}" }
+        (0..MAX_RETRIES).each do |attempt|
+          begin
+            response = do_http_post(client, path, headers, body)
+
+            if response.success?
+              Log.debug { "Response #{response.status_code} (#{response.body.size} bytes)" }
+              return response
+            end
+
+            if retryable_status?(response.status_code) && attempt < MAX_RETRIES
+              Log.warn { "LLM request failed with #{response.status_code}. Retrying in #{retry_delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
+              retry_delay = sleep_with_backoff(retry_delay)
+              next
+            end
+
+            Log.debug { "Response #{response.status_code}: #{response.body}" }
+            return response
+          rescue ex : IO::TimeoutError | Socket::Error
+            client.close
+            raise ex unless attempt < MAX_RETRIES
+
+            Log.warn { "LLM request failed: #{ex.message}. Retrying in #{retry_delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
+            retry_delay = sleep_with_backoff(retry_delay)
+            client = build_http_client(host, uri.port, tls)
+          end
         end
-        response
+
+        raise "HTTP request failed: max retries exhausted"
       ensure
         client.try(&.close)
+      end
+
+      private def build_http_client(host : String, port : Int32?, tls : Bool) : HTTP::Client
+        client = HTTP::Client.new(host, port: port, tls: tls)
+        client.connect_timeout = CONNECT_TIMEOUT
+        client.read_timeout = READ_TIMEOUT
+        client
+      end
+
+      private def do_http_post(client : HTTP::Client, path : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
+        client.post(path, headers: headers, body: body)
+      end
+
+      private def initial_retry_delay : Time::Span
+        INITIAL_RETRY_DELAY
+      end
+
+      private def retryable_status?(status_code : Int32) : Bool
+        status_code == RATE_LIMIT_STATUS ||
+          (status_code >= SERVER_ERROR_MIN && status_code <= SERVER_ERROR_MAX)
+      end
+
+      private def sleep_with_backoff(delay : Time::Span) : Time::Span
+        sleep(delay)
+        delay * 2
       end
     end
   end
