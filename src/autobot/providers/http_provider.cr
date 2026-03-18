@@ -79,7 +79,7 @@ module Autobot
 
         headers = HTTP::Headers{
           "Content-Type" => "application/json",
-          "User-Agent"   => USER_AGENT,
+          "User-Agent"   => resolve_user_agent(model, spec),
         }
         apply_auth_headers(headers, spec)
 
@@ -151,7 +151,7 @@ module Autobot
 
         headers = HTTP::Headers{
           "Content-Type"      => "application/json",
-          "User-Agent"        => USER_AGENT,
+          "User-Agent"        => resolve_user_agent(model, spec),
           "anthropic-version" => ANTHROPIC_API_VERSION,
         }
         apply_auth_headers(headers, spec)
@@ -467,6 +467,18 @@ module Autobot
         model
       end
 
+      private def resolve_user_agent(model : String, spec : ProviderSpec?) : String
+        agent = if gw = @gateway
+                  gw.user_agent
+                elsif s = spec
+                  s.user_agent
+                else
+                  nil
+                end
+
+        agent || USER_AGENT
+      end
+
       # Determines the correct token limit parameter name for the model.
       # Newer OpenAI models (GPT-5+, o-series) require `max_completion_tokens`,
       # while legacy models (GPT-4, GPT-3.5) still use `max_tokens`.
@@ -622,7 +634,7 @@ module Autobot
             end
 
             if retryable_status?(response.status_code) && attempt < MAX_RETRIES
-              Log.warn { "LLM request failed with #{response.status_code}. Retrying in #{retry_delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
+              log_retry(attempt, "HTTP #{response.status_code}", retry_delay)
               retry_delay = sleep_with_backoff(retry_delay)
               next
             end
@@ -633,7 +645,7 @@ module Autobot
             client.close
             raise ex unless attempt < MAX_RETRIES
 
-            Log.warn { "LLM request failed: #{ex.message}. Retrying in #{retry_delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
+            log_retry(attempt, ex.message || "unknown error", retry_delay)
             retry_delay = sleep_with_backoff(retry_delay)
             client = build_http_client(host, uri.port, tls)
           end
@@ -662,6 +674,10 @@ module Autobot
       private def retryable_status?(status_code : Int32) : Bool
         status_code == RATE_LIMIT_STATUS ||
           (status_code >= SERVER_ERROR_MIN && status_code <= SERVER_ERROR_MAX)
+      end
+
+      private def log_retry(attempt : Int32, reason : String, delay : Time::Span) : Nil
+        Log.warn { "LLM request failed: #{reason}. Retrying in #{delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
       end
 
       private def sleep_with_backoff(delay : Time::Span) : Time::Span

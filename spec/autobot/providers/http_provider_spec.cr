@@ -6,6 +6,7 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
   getter last_api_body : JSON::Any?
   property call_count = 0
   property responses = [] of HTTP::Client::Response
+  getter last_headers : HTTP::Headers?
 
   def test_strip_provider_prefix(model : String) : String
     strip_provider_prefix(model)
@@ -42,6 +43,7 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
 
   private def do_http_post(client : HTTP::Client, path : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     @call_count += 1
+    @last_headers = headers
     parsed = JSON.parse(body)
     @last_api_model = parsed["model"]?.try(&.as_s?)
     @last_api_body = parsed
@@ -497,6 +499,30 @@ describe Autobot::Providers::HttpProvider do
         fail("Expected content to not be nil")
       end
       provider.call_count.should eq(4)
+    end
+  end
+
+  describe "User-Agent handling" do
+    messages = [{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}]
+
+    it "sends default User-Agent for standard providers" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "openai/gpt-4")
+      provider.chat(messages)
+      if headers = provider.last_headers
+        headers["User-Agent"].should contain("Autobot")
+      else
+        fail("Expected headers to not be nil")
+      end
+    end
+
+    it "sends specific User-Agent for Kimi" do
+      provider = TestableHttpProvider.new(api_key: "key", model: "kimi/kimi-for-coding")
+      provider.chat(messages)
+      if headers = provider.last_headers
+        headers["User-Agent"].should eq("KimiCLI/0.77")
+      else
+        fail("Expected headers to not be nil")
+      end
     end
   end
 end

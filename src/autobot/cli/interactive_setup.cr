@@ -11,6 +11,7 @@ module Autobot
         "deepseek"   => "DeepSeek",
         "groq"       => "Groq",
         "gemini"     => "Google Gemini",
+        "kimi"       => "Kimi Code",
         "openrouter" => "OpenRouter",
         "bedrock"    => "AWS Bedrock",
       }

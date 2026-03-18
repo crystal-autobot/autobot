@@ -118,4 +118,62 @@ describe Autobot::Tools::ExecTool do
       tool.sandbox_type.should_not be_nil
     end
   end
+
+  describe "custom safety patterns" do
+    it "allows commands matching allow_patterns even if dangerous" do
+      # Note: rm -rf is in DEFAULT_DENY_PATTERNS
+      tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
+        sandbox_config: "none",
+        allow_patterns: [/^rm -rf \/tmp\/safe.*$/i]
+      )
+
+      # Matches allowlist
+      result = tool.execute({"command" => JSON::Any.new("rm -rf /tmp/safe_dir")})
+      # It might still fail if dir doesn't exist, but it shouldn't be blocked by guard
+      result.content.should_not contain("Command blocked by safety guard")
+
+      # Does not match allowlist
+      result = tool.execute({"command" => JSON::Any.new("rm -rf /")})
+      result.access_denied?.should be_true
+      result.content.should contain("Command blocked by safety guard")
+    end
+
+    it "blocks commands matching custom deny_patterns" do
+      tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
+        sandbox_config: "none",
+        deny_patterns: [/custom_dangerous/i]
+      )
+
+      result = tool.execute({"command" => JSON::Any.new("echo custom_dangerous")})
+      result.access_denied?.should be_true
+      result.content.should contain("dangerous pattern detected")
+    end
+
+    it "preserves default deny patterns when only allow_patterns configured" do
+      # Configure only allow_patterns, no deny_patterns - defaults should still apply
+      tool = Autobot::Tools::ExecTool.new(
+        executor: create_test_executor,
+        sandbox_config: "none",
+        allow_patterns: [/^echo safe$/i]
+        # deny_patterns not specified - should use defaults
+      )
+
+      # Verify default patterns still work (fork bomb should be blocked)
+      result = tool.execute({"command" => JSON::Any.new(":(){ :|:& };:")})
+      result.access_denied?.should be_true
+      result.content.should contain("Command blocked")
+
+      # rm -rf should also be blocked by defaults
+      result = tool.execute({"command" => JSON::Any.new("rm -rf /")})
+      result.access_denied?.should be_true
+      result.content.should contain("Command blocked")
+
+      # sudo should be blocked by defaults
+      result = tool.execute({"command" => JSON::Any.new("sudo ls /root")})
+      result.access_denied?.should be_true
+      result.content.should contain("Command blocked")
+    end
+  end
 end
