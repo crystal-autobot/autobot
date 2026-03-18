@@ -12,9 +12,9 @@ module Autobot::Tools
     @session_key : String
     @sandbox_executor : SandboxExecutor?
 
-    def initialize(@session_key : String = "default")
+    def initialize(@session_key : String = "default", rate_limiter : RateLimiter? = nil)
       @tools = {} of String => Tool
-      @rate_limiter = RateLimiter.new
+      @rate_limiter = rate_limiter || RateLimiter.new
       @sandbox_executor = nil
     end
 

@@ -78,8 +78,8 @@ module Autobot
       end
 
       # Sets up tool registry with built-in tools and MCP servers.
-      # Returns {tool_registry, mcp_clients}. Plugins are loaded separately
-      # via `load_plugins` to avoid blocking startup.
+      # Returns {tool_registry, mcp_clients, rate_limiter}. Plugins are loaded
+      # separately via `load_plugins` to avoid blocking startup.
       def self.setup_tools(config : Config::Config)
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
@@ -89,6 +89,7 @@ module Autobot
         Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
 
         deny_patterns, allow_patterns = load_exec_patterns(config)
+        rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
 
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
@@ -100,7 +101,8 @@ module Autobot
           skills_dirs: [
             (config.workspace_path / "skills").to_s,
             (Config::Loader.skills_dir).to_s,
-          ]
+          ],
+          rate_limiter: rate_limiter
         )
 
         register_image_tool(config, tool_registry)
@@ -108,7 +110,7 @@ module Autobot
         # MCP servers (started in background, tools register as they connect)
         mcp_clients = Mcp.setup(config, tool_registry)
 
-        {tool_registry, mcp_clients}
+        {tool_registry, mcp_clients, rate_limiter}
       end
 
       # Load and start plugins. Call after gateway is ready to avoid

@@ -622,7 +622,7 @@ module Autobot
             end
 
             if retryable_status?(response.status_code) && attempt < MAX_RETRIES
-              Log.warn { "LLM request failed with #{response.status_code}. Retrying in #{retry_delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
+              log_retry(attempt, "HTTP #{response.status_code}", retry_delay)
               retry_delay = sleep_with_backoff(retry_delay)
               next
             end
@@ -633,7 +633,7 @@ module Autobot
             client.close
             raise ex unless attempt < MAX_RETRIES
 
-            Log.warn { "LLM request failed: #{ex.message}. Retrying in #{retry_delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
+            log_retry(attempt, ex.message || "unknown error", retry_delay)
             retry_delay = sleep_with_backoff(retry_delay)
             client = build_http_client(host, uri.port, tls)
           end
@@ -662,6 +662,10 @@ module Autobot
       private def retryable_status?(status_code : Int32) : Bool
         status_code == RATE_LIMIT_STATUS ||
           (status_code >= SERVER_ERROR_MIN && status_code <= SERVER_ERROR_MAX)
+      end
+
+      private def log_retry(attempt : Int32, reason : String, delay : Time::Span) : Nil
+        Log.warn { "LLM request failed: #{reason}. Retrying in #{delay} (attempt #{attempt + 1}/#{MAX_RETRIES})..." }
       end
 
       private def sleep_with_backoff(delay : Time::Span) : Time::Span

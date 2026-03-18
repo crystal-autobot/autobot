@@ -29,8 +29,9 @@ module Autobot
       brave_api_key : String? = nil,
       web_fetch_max_chars : Int32 = WebFetchTool::DEFAULT_MAX_CHARS,
       skills_dirs : Array(String) = [] of String,
+      rate_limiter : RateLimiter? = nil,
     ) : Registry
-      registry = Registry.new
+      registry = Registry.new(rate_limiter: rate_limiter)
 
       # Determine sandbox configuration
       sandboxed = sandbox_config.downcase != "none"
@@ -70,8 +71,9 @@ module Autobot
       exec_allow_patterns : Array(Regex) = [] of Regex,
       sandbox_config : String = "auto",
       brave_api_key : String? = nil,
+      rate_limiter : RateLimiter? = nil,
     ) : Registry
-      registry = Registry.new
+      registry = Registry.new(rate_limiter: rate_limiter)
 
       executor = SandboxExecutor.new(workspace)
 
