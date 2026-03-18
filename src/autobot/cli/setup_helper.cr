@@ -35,6 +35,24 @@ module Autobot
         end
       end
 
+      # Load exec tool patterns from configuration.
+      # User deny_patterns are merged with defaults (appended, not replaced).
+      # Returns {deny_patterns, allow_patterns}.
+      def self.load_exec_patterns(config : Config::Config) : {Array(Regex), Array(Regex)}
+        user_deny = config.tools.try(&.exec.try(&.deny_patterns)) || [] of String
+
+        # Start with defaults and append user patterns
+        deny_patterns = Tools::ExecTool::DEFAULT_DENY_PATTERNS.dup
+        user_deny.each do |pat|
+          deny_patterns << Regex.new(pat, Regex::Options::IGNORE_CASE)
+        end
+
+        user_allow = config.tools.try(&.exec.try(&.allow_patterns)) || [] of String
+        allow_patterns = user_allow.map { |pat| Regex.new(pat, Regex::Options::IGNORE_CASE) }
+
+        {deny_patterns, allow_patterns}
+      end
+
       # Creates the appropriate provider based on configuration.
       def self.create_provider(config : Config::Config) : Providers::Provider
         if bedrock = config.match_bedrock
@@ -60,8 +78,8 @@ module Autobot
       end
 
       # Sets up tool registry with built-in tools and MCP servers.
-      # Returns {tool_registry, mcp_clients}. Plugins are loaded separately
-      # via `load_plugins` to avoid blocking startup.
+      # Returns {tool_registry, mcp_clients, rate_limiter}. Plugins are loaded
+      # separately via `load_plugins` to avoid blocking startup.
       def self.setup_tools(config : Config::Config)
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
@@ -70,15 +88,21 @@ module Autobot
         end
         Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
 
+        deny_patterns, allow_patterns = load_exec_patterns(config)
+        rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
+
         tool_registry = Tools.create_registry(
           workspace: config.workspace_path,
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
+          exec_deny_patterns: deny_patterns,
+          exec_allow_patterns: allow_patterns,
           sandbox_config: sandbox_config,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           skills_dirs: [
             (config.workspace_path / "skills").to_s,
             (Config::Loader.skills_dir).to_s,
-          ]
+          ],
+          rate_limiter: rate_limiter
         )
 
         register_image_tool(config, tool_registry)
@@ -86,7 +110,7 @@ module Autobot
         # MCP servers (started in background, tools register as they connect)
         mcp_clients = Mcp.setup(config, tool_registry)
 
-        {tool_registry, mcp_clients}
+        {tool_registry, mcp_clients, rate_limiter}
       end
 
       # Load and start plugins. Call after gateway is ready to avoid

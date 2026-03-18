@@ -91,6 +91,18 @@ tools:
   docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
   exec:
     timeout: 60
+    allow_patterns: # Optional regex allowlist
+      - "^ssh .*$"
+    deny_patterns:  # Optional regex denylist (extends built-in)
+      - "^rm -rf /.*$"
+  rate_limit:
+    global:
+      max_calls: 100
+      window_seconds: 60
+    per_tool:
+      exec:
+        max_calls: 20
+        window_seconds: 60
   web:
     search:
       api_key: ""
@@ -103,6 +115,28 @@ tools:
 ```
 
 When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.
+
+### Safety Guard Overrides
+
+Customize command filtering for the `exec` tool:
+
+- **`allow_patterns`**: Regex patterns that explicitly allow commands (overrides built-in denials)
+- **`deny_patterns`**: Additional regex patterns to block (extends built-in safety guards)
+
+Patterns are case-insensitive and matched against the full command string. Use with caution — `allow_patterns` bypasses security protections.
+
+### Rate Limiting
+
+Configure rate limits to prevent abuse and manage API costs:
+
+- **`global`**: Applies across all tools combined
+- **`per_tool`**: Tool-specific limits (e.g., `exec`, `web_search`)
+
+Each limit specifies:
+- **`max_calls`**: Maximum calls allowed in the window
+- **`window_seconds`**: Time window for counting calls
+
+When a limit is exceeded, the tool returns an error message that the LLM can see and respond to (e.g., "Rate limit exceeded for exec: max 20 calls per 60s").
 
 ## MCP (Model Context Protocol)
 

@@ -35,25 +35,47 @@ module Autobot
         end
       end
 
+      DEFAULT_SESSION_LIMIT = Limit.new(max_calls: 30, window_seconds: 60)
+
       @trackers : Hash(String, CallTracker)
       @mutex : Mutex
       @per_tool_limits : Hash(String, Limit)
       @global_limit : Limit?
+      @session_limit : Limit
 
       def initialize(
         @per_tool_limits = {} of String => Limit,
         @global_limit : Limit? = nil,
+        @session_limit : Limit = DEFAULT_SESSION_LIMIT,
       )
         @trackers = {} of String => CallTracker
         @mutex = Mutex.new
 
-        # Default limits for high-risk tools
+        # Default limits for high-risk tools if not already provided
         @per_tool_limits["exec"] ||= Limit.new(max_calls: 10, window_seconds: 60)
         @per_tool_limits["web_fetch"] ||= Limit.new(max_calls: 20, window_seconds: 60)
         @per_tool_limits["web_search"] ||= Limit.new(max_calls: 10, window_seconds: 60)
 
-        # Default global limit: 100 calls per minute
+        # Default global limit: 100 calls per minute if not provided
         @global_limit ||= Limit.new(max_calls: 100, window_seconds: 60)
+      end
+
+      # Factory method to create from config
+      def self.from_config(config : Config::RateLimitConfig?) : RateLimiter
+        per_tool = {} of String => Limit
+        global : Limit? = nil
+
+        if config
+          config.per_tool.try(&.each do |name, cfg|
+            per_tool[name] = Limit.new(max_calls: cfg.max_calls, window_seconds: cfg.window_seconds)
+          end)
+
+          config.global.try do |cfg|
+            global = Limit.new(max_calls: cfg.max_calls, window_seconds: cfg.window_seconds)
+          end
+        end
+
+        new(per_tool_limits: per_tool, global_limit: global)
       end
 
       # Check if a tool call is allowed
@@ -71,8 +93,7 @@ module Autobot
           end
 
           # Check per-session limit for this tool
-          session_limit = Limit.new(max_calls: 30, window_seconds: 60)
-          if error = check_specific_limit("session:#{session_key}:#{tool_name}", session_limit, now)
+          if error = check_specific_limit("session:#{session_key}:#{tool_name}", @session_limit, now)
             Log.warn { "Session rate limit exceeded for #{session_key}" }
             return error
           end
@@ -117,9 +138,14 @@ module Autobot
       private def check_specific_limit(key : String, limit : Limit, now : Time) : String?
         tracker = @trackers[key] ||= CallTracker.new
 
-        # Remove expired calls
+        # Remove expired calls and evict empty trackers
         cutoff = now - limit.window_seconds.seconds
         tracker.cleanup(cutoff)
+
+        if tracker.count == 0
+          @trackers.delete(key)
+          return nil
+        end
 
         # Check if limit exceeded
         if tracker.count >= limit.max_calls
