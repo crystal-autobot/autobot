@@ -19,7 +19,7 @@ module Autobot
         bus = Bus::MessageBus.new
         session_manager = Session::Manager.new(config.workspace_path)
 
-        tool_registry, mcp_clients = setup_tools(config)
+        tool_registry, mcp_clients, rate_limiter = setup_tools(config)
         provider = create_provider(config)
 
         elapsed_ms = started_at.elapsed.total_milliseconds.to_i
@@ -29,7 +29,7 @@ module Autobot
         plugin_registry = SetupHelper.load_plugins(config, tool_registry)
         cron_service = setup_cron(config, bus)
         channel_manager = setup_channels(config, bus, session_manager, cron_service)
-        agent_loop = create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service)
+        agent_loop = create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service, rate_limiter)
 
         # Handle shutdown signals
         shutdown = -> do
@@ -54,12 +54,12 @@ module Autobot
       end
 
       private def self.setup_tools(config : Config::Config)
-        tool_registry, mcp_clients = SetupHelper.setup_tools(config)
+        tool_registry, mcp_clients, rate_limiter = SetupHelper.setup_tools(config)
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
         log_sandbox_info(sandbox_config)
 
-        {tool_registry, mcp_clients}
+        {tool_registry, mcp_clients, rate_limiter}
       end
 
       private def self.setup_cron(config : Config::Config, bus : Bus::MessageBus) : Cron::Service
@@ -139,9 +139,9 @@ module Autobot
         tool_registry : Tools::Registry,
         session_manager : Session::Manager,
         cron_service : Cron::Service,
+        rate_limiter : Tools::RateLimiter? = nil,
       )
         sandbox_config = config.tools.try(&.sandbox) || "auto"
-        rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
 
         Autobot::Agent::Loop.new(
           bus: bus,

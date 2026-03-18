@@ -60,8 +60,8 @@ module Autobot
       end
 
       # Sets up tool registry with built-in tools and MCP servers.
-      # Returns {tool_registry, mcp_clients}. Plugins are loaded separately
-      # via `load_plugins` to avoid blocking startup.
+      # Returns {tool_registry, mcp_clients, rate_limiter}. Plugins are loaded
+      # separately via `load_plugins` to avoid blocking startup.
       def self.setup_tools(config : Config::Config)
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
@@ -89,7 +89,7 @@ module Autobot
         # MCP servers (started in background, tools register as they connect)
         mcp_clients = Mcp.setup(config, tool_registry)
 
-        {tool_registry, mcp_clients}
+        {tool_registry, mcp_clients, rate_limiter}
       end
 
       # Load and start plugins. Call after gateway is ready to avoid

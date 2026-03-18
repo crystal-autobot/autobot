@@ -35,14 +35,18 @@ module Autobot
         end
       end
 
+      DEFAULT_SESSION_LIMIT = Limit.new(max_calls: 30, window_seconds: 60)
+
       @trackers : Hash(String, CallTracker)
       @mutex : Mutex
       @per_tool_limits : Hash(String, Limit)
       @global_limit : Limit?
+      @session_limit : Limit
 
       def initialize(
         @per_tool_limits = {} of String => Limit,
         @global_limit : Limit? = nil,
+        @session_limit : Limit = DEFAULT_SESSION_LIMIT,
       )
         @trackers = {} of String => CallTracker
         @mutex = Mutex.new
@@ -89,8 +93,7 @@ module Autobot
           end
 
           # Check per-session limit for this tool
-          session_limit = Limit.new(max_calls: 30, window_seconds: 60)
-          if error = check_specific_limit("session:#{session_key}:#{tool_name}", session_limit, now)
+          if error = check_specific_limit("session:#{session_key}:#{tool_name}", @session_limit, now)
             Log.warn { "Session rate limit exceeded for #{session_key}" }
             return error
           end
@@ -135,9 +138,14 @@ module Autobot
       private def check_specific_limit(key : String, limit : Limit, now : Time) : String?
         tracker = @trackers[key] ||= CallTracker.new
 
-        # Remove expired calls
+        # Remove expired calls and evict empty trackers
         cutoff = now - limit.window_seconds.seconds
         tracker.cleanup(cutoff)
+
+        if tracker.count == 0
+          @trackers.delete(key)
+          return nil
+        end
 
         # Check if limit exceeded
         if tracker.count >= limit.max_calls
