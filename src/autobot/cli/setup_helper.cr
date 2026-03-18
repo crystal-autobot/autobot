@@ -47,9 +47,8 @@ module Autobot
           deny_patterns << Regex.new(pat, Regex::Options::IGNORE_CASE)
         end
 
-        allow_patterns = config.tools.try(&.exec.try(&.allow_patterns)).try(&.map { |pat|
-          Regex.new(pat, Regex::Options::IGNORE_CASE)
-        }) || [] of Regex
+        user_allow = config.tools.try(&.exec.try(&.allow_patterns)) || [] of String
+        allow_patterns = user_allow.map { |pat| Regex.new(pat, Regex::Options::IGNORE_CASE) }
 
         {deny_patterns, allow_patterns}
       end

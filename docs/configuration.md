@@ -115,7 +115,7 @@ Customize command filtering for the `exec` tool:
 - **`allow_patterns`**: Regex patterns that explicitly allow commands (overrides built-in denials)
 - **`deny_patterns`**: Additional regex patterns to block (extends built-in safety guards)
 
-Patterns are case-insensitive and matched against the beginning of commands. Use with caution — `allow_patterns` bypasses security protections.
+Patterns are case-insensitive and matched against the full command string. Use with caution — `allow_patterns` bypasses security protections.
 
 ## MCP (Model Context Protocol)
 

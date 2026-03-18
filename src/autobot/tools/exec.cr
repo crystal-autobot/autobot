@@ -254,12 +254,11 @@ module Autobot
 
       private def guard_command(command : String) : String?
         cmd = command.strip
+        has_allowlist = !@allow_patterns.empty?
 
         # 1. Check allowlist first (explicitly allowed overrides denylist)
-        unless @allow_patterns.empty?
-          if @allow_patterns.any?(&.matches?(cmd))
-            return nil
-          end
+        if has_allowlist && @allow_patterns.any?(&.matches?(cmd))
+          return nil
         end
 
         # 2. Check denylist
@@ -270,7 +269,7 @@ module Autobot
         end
 
         # 3. If an allowlist exists but didn't match, block it
-        unless @allow_patterns.empty?
+        if has_allowlist
           return "Error: Command blocked by safety guard (not in allowlist)"
         end
 
