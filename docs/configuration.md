@@ -91,6 +91,10 @@ tools:
   docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
   exec:
     timeout: 60
+    allow_patterns: # Optional regex allowlist
+      - "^ssh .*$"
+    deny_patterns:  # Optional regex denylist (extends built-in)
+      - "^rm -rf /.*$"
   web:
     search:
       api_key: ""
@@ -103,6 +107,15 @@ tools:
 ```
 
 When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.
+
+### Safety Guard Overrides
+
+Customize command filtering for the `exec` tool:
+
+- **`allow_patterns`**: Regex patterns that explicitly allow commands (overrides built-in denials)
+- **`deny_patterns`**: Additional regex patterns to block (extends built-in safety guards)
+
+Patterns are case-insensitive and matched against the full command string. Use with caution — `allow_patterns` bypasses security protections.
 
 ## MCP (Model Context Protocol)
 

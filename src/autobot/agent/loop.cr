@@ -65,6 +65,8 @@ module Autobot::Agent
       @cron_service : Cron::Service? = nil,
       brave_api_key : String? = nil,
       exec_timeout : Int32 = 60,
+      exec_deny_patterns : Array(Regex) = Tools::ExecTool::DEFAULT_DENY_PATTERNS,
+      exec_allow_patterns : Array(Regex) = [] of Regex,
       sandbox_config : String = "auto",
     )
       @model = model || @provider.default_model
@@ -86,7 +88,7 @@ module Autobot::Agent
         sessions: @sessions
       )
 
-      register_optional_tools(brave_api_key, exec_timeout, sandbox_config)
+      register_optional_tools(brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns, sandbox_config)
       cache_tool_references
     end
 
@@ -281,7 +283,13 @@ module Autobot::Agent
       PROMPT
     end
 
-    private def register_optional_tools(brave_api_key : String?, exec_timeout : Int32, sandbox_config : String) : Nil
+    private def register_optional_tools(
+      brave_api_key : String?,
+      exec_timeout : Int32,
+      exec_deny_patterns : Array(Regex),
+      exec_allow_patterns : Array(Regex),
+      sandbox_config : String,
+    ) : Nil
       subagents = SubagentManager.new(
         provider: @provider,
         workspace: @workspace,
@@ -289,6 +297,8 @@ module Autobot::Agent
         model: @model,
         brave_api_key: brave_api_key,
         exec_timeout: exec_timeout,
+        exec_deny_patterns: exec_deny_patterns,
+        exec_allow_patterns: exec_allow_patterns,
         sandbox_config: sandbox_config
       )
       @tools.register(Tools::SpawnTool.new(subagents))

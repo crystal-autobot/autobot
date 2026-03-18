@@ -141,6 +141,7 @@ module Autobot
         cron_service : Cron::Service,
       )
         sandbox_config = config.tools.try(&.sandbox) || "auto"
+        deny_patterns, allow_patterns = SetupHelper.load_exec_patterns(config)
 
         Autobot::Agent::Loop.new(
           bus: bus,
@@ -154,6 +155,8 @@ module Autobot
           cron_service: cron_service,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
+          exec_deny_patterns: deny_patterns,
+          exec_allow_patterns: allow_patterns,
           sandbox_config: sandbox_config
         )
       end
