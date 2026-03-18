@@ -235,6 +235,8 @@ module Autobot::Config
   class ExecToolConfig
     include YAML::Serializable
     property timeout : Int32 = 60
+    property allow_patterns : Array(String) = [] of String
+    property deny_patterns : Array(String) = [] of String
 
     def initialize
     end

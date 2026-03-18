@@ -254,17 +254,23 @@ module Autobot
 
       private def guard_command(command : String) : String?
         cmd = command.strip
+        has_allowlist = !@allow_patterns.empty?
 
+        # 1. Check allowlist first (explicitly allowed overrides denylist)
+        if has_allowlist && @allow_patterns.any?(&.matches?(cmd))
+          return nil
+        end
+
+        # 2. Check denylist
         @deny_patterns.each do |pattern|
           if pattern.matches?(cmd)
             return "Error: Command blocked by safety guard (dangerous pattern detected)"
           end
         end
 
-        unless @allow_patterns.empty?
-          unless @allow_patterns.any?(&.matches?(cmd))
-            return "Error: Command blocked by safety guard (not in allowlist)"
-          end
+        # 3. If an allowlist exists but didn't match, block it
+        if has_allowlist
+          return "Error: Command blocked by safety guard (not in allowlist)"
         end
 
         nil

@@ -24,6 +24,7 @@ module Autobot
       workspace : Path? = nil,
       exec_timeout : Int32 = ExecTool::DEFAULT_TIMEOUT,
       exec_deny_patterns : Array(Regex) = ExecTool::DEFAULT_DENY_PATTERNS,
+      exec_allow_patterns : Array(Regex) = [] of Regex,
       sandbox_config : String = "auto",
       brave_api_key : String? = nil,
       web_fetch_max_chars : Int32 = WebFetchTool::DEFAULT_MAX_CHARS,
@@ -49,7 +50,7 @@ module Autobot
       # Register tools
       register_filesystem_tools(registry, executor)
       register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
-        sandbox_config, workspace)
+        exec_allow_patterns, sandbox_config, workspace)
       register_web_tools(registry, executor, brave_api_key, web_fetch_max_chars)
       register_bash_tools(registry, executor, skills_dirs)
 
@@ -66,6 +67,8 @@ module Autobot
     def self.create_subagent_registry(
       workspace : Path,
       exec_timeout : Int32 = ExecTool::DEFAULT_TIMEOUT,
+      exec_deny_patterns : Array(Regex) = ExecTool::DEFAULT_DENY_PATTERNS,
+      exec_allow_patterns : Array(Regex) = [] of Regex,
       sandbox_config : String = "auto",
       brave_api_key : String? = nil,
       rate_limiter : RateLimiter? = nil,
@@ -75,8 +78,8 @@ module Autobot
       executor = SandboxExecutor.new(workspace)
 
       register_filesystem_tools(registry, executor)
-      register_exec_tool(registry, executor, exec_timeout, ExecTool::DEFAULT_DENY_PATTERNS,
-        sandbox_config, workspace)
+      register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
+        exec_allow_patterns, sandbox_config, workspace)
 
       registry.register(WebSearchTool.new(api_key: brave_api_key))
       registry.register(WebFetchTool.new)
@@ -114,6 +117,7 @@ module Autobot
       executor : SandboxExecutor,
       timeout : Int32,
       deny_patterns : Array(Regex),
+      allow_patterns : Array(Regex),
       sandbox_config : String,
       workspace : Path?,
     )
@@ -122,6 +126,7 @@ module Autobot
         timeout: timeout,
         working_dir: workspace.try(&.to_s),
         deny_patterns: deny_patterns,
+        allow_patterns: allow_patterns,
         sandbox_config: sandbox_config,
       ))
     end
