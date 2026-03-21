@@ -64,6 +64,72 @@ describe Autobot::Tools::Sandbox do
     end
   end
 
+  describe ".forward_env_vars" do
+    it "forwards only variables listed in sandbox_env" do
+      ENV["AUTOBOT_TEST_VAR_A"] = "hello"
+      ENV["AUTOBOT_TEST_VAR_B"] = "world"
+      Autobot::Tools::Sandbox.sandbox_env = ["AUTOBOT_TEST_VAR_A"]
+
+      args = [] of String
+      Autobot::Tools::Sandbox.forward_env_vars(args)
+
+      args.should eq(["--env", "AUTOBOT_TEST_VAR_A=hello"])
+    ensure
+      ENV.delete("AUTOBOT_TEST_VAR_A")
+      ENV.delete("AUTOBOT_TEST_VAR_B")
+      Autobot::Tools::Sandbox.sandbox_env = [] of String
+    end
+
+    it "skips variables not set in environment" do
+      Autobot::Tools::Sandbox.sandbox_env = ["AUTOBOT_TEST_MISSING"]
+
+      args = [] of String
+      Autobot::Tools::Sandbox.forward_env_vars(args)
+
+      args.should be_empty
+    ensure
+      Autobot::Tools::Sandbox.sandbox_env = [] of String
+    end
+
+    it "forwards nothing when sandbox_env is empty" do
+      ENV["AUTOBOT_TEST_VAR"] = "value"
+      Autobot::Tools::Sandbox.sandbox_env = [] of String
+
+      args = [] of String
+      Autobot::Tools::Sandbox.forward_env_vars(args)
+
+      args.should be_empty
+    ensure
+      ENV.delete("AUTOBOT_TEST_VAR")
+    end
+
+    it "handles values with special characters" do
+      ENV["AUTOBOT_TEST_SPECIAL"] = "http://example.com:8080/path?q=1&r=2"
+      Autobot::Tools::Sandbox.sandbox_env = ["AUTOBOT_TEST_SPECIAL"]
+
+      args = [] of String
+      Autobot::Tools::Sandbox.forward_env_vars(args)
+
+      args.should eq(["--env", "AUTOBOT_TEST_SPECIAL=http://example.com:8080/path?q=1&r=2"])
+    ensure
+      ENV.delete("AUTOBOT_TEST_SPECIAL")
+      Autobot::Tools::Sandbox.sandbox_env = [] of String
+    end
+
+    it "appends to existing args without clearing them" do
+      ENV["AUTOBOT_TEST_VAR"] = "val"
+      Autobot::Tools::Sandbox.sandbox_env = ["AUTOBOT_TEST_VAR"]
+
+      args = ["run", "--rm"]
+      Autobot::Tools::Sandbox.forward_env_vars(args)
+
+      args.should eq(["run", "--rm", "--env", "AUTOBOT_TEST_VAR=val"])
+    ensure
+      ENV.delete("AUTOBOT_TEST_VAR")
+      Autobot::Tools::Sandbox.sandbox_env = [] of String
+    end
+  end
+
   describe "constants" do
     it "has sandbox dockerfile name" do
       Autobot::Tools::Sandbox::SANDBOX_DOCKERFILE.should eq("Dockerfile.sandbox")
