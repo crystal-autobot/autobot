@@ -220,6 +220,7 @@ module Autobot::Agent
         Rules:
         - Use relative paths for workspace files
         - Reply with text; the response is delivered to the user automatically
+        - To send images or files, use the `message` tool with `file_path`
         - Use `cron` for delayed tasks (never `exec sleep`)
         - Batch independent tool calls in a single response to reduce round-trips
         - Use simple Markdown: **bold**, `code`, _italic_, bullet lists

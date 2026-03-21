@@ -33,9 +33,6 @@ module Autobot::Agent
 
     HEARTBEAT_INTERVAL = 1.second
 
-    # Tools excluded from regular conversation turns.
-    CONVERSATION_EXCLUDED_TOOLS = ["message"]
-
     # Tools excluded from background turns (cron jobs, subagent work).
     BACKGROUND_EXCLUDED_TOOLS = ["spawn"]
 
@@ -171,10 +168,15 @@ module Autobot::Agent
         tool_names: @tools.tool_names
       )
 
-      result = @executor.execute(messages, @tools, session_key: session.key, exclude_tools: CONVERSATION_EXCLUDED_TOOLS)
+      @message_tool.try(&.clear_last_sent)
+      result = @executor.execute(messages, @tools, session_key: session.key)
       final_content = result.content || FALLBACK_RESPONSE
 
       save_to_session(session, msg.content, final_content, result.tools_used)
+
+      # Skip automatic text response if the message tool already sent during this turn
+      return nil if @message_tool.try(&.last_sent_content)
+
       build_response(msg.channel, msg.chat_id, final_content, msg.metadata)
     end
 
