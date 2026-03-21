@@ -278,6 +278,7 @@ module Autobot::Config
     property exec : ExecToolConfig?
     property image : ImageConfig?
     property sandbox : String = "auto" # "auto", "bubblewrap", "docker", "none"
+    property sandbox_env : Array(String) = [] of String
     property docker_image : String? = nil
     property rate_limit : RateLimitConfig?
 

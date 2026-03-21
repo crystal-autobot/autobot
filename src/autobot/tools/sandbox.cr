@@ -36,6 +36,10 @@ module Autobot
       # Custom Docker image (set from config at startup)
       class_property docker_image : String? = nil
 
+      # Env var names to forward into Docker containers (set from config at startup).
+      # Only listed variables are forwarded — empty by default for security.
+      class_property sandbox_env : Array(String) = [] of String
+
       # Cached result of detect_type (avoids redundant subprocess calls)
       @@cached_type : Type? = nil
 
@@ -172,11 +176,22 @@ module Autobot
           "--network", "bridge",
           "--memory", DOCKER_MEMORY_LIMIT,
           "--cpus", DOCKER_CPU_LIMIT,
-          image,
         ]
+        forward_env_vars(args)
+        args << image
         args.concat(cmd_args)
 
         run_sandboxed_command("docker", args, timeout, max_output_size)
+      end
+
+      # Forward explicitly allowed environment variables to Docker container.
+      # Only variables listed in `sandbox_env` config are forwarded.
+      def self.forward_env_vars(args : Array(String)) : Nil
+        @@sandbox_env.each do |key|
+          if value = ENV[key]?
+            args.push("--env", "#{key}=#{value}")
+          end
+        end
       end
 
       # Resolve the Docker image to use, checking for a Dockerfile.sandbox

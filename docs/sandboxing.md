@@ -118,6 +118,9 @@ Configure sandboxing in `config.yml`:
 tools:
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
   docker_image: "python:3.14-alpine"  # optional, overrides Dockerfile.sandbox
+  sandbox_env:   # env vars to forward into Docker sandbox (default: none)
+    - HA_URL
+    - MQTT_HOST
 ```
 
 **Options:**
@@ -128,6 +131,7 @@ tools:
   - `docker` - Force Docker (all platforms)
   - `none` - Disable sandboxing (UNSAFE - tests only)
 - `docker_image` — Docker image to use for sandbox containers. Overrides `Dockerfile.sandbox` when set. Only applies when sandbox is `docker` or `auto` resolves to Docker.
+- `sandbox_env` — List of environment variable names to forward into Docker containers. Only listed variables are forwarded — empty by default for security. Useful when sandbox scripts need access to specific env vars (e.g. `HA_URL`, `MQTT_HOST`).
 
 ### Custom sandbox image (Dockerfile.sandbox)
 
