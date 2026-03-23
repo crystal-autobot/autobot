@@ -6,7 +6,6 @@ tags:
   - spec
   - quality
 metadata:
-  author: renich
   scope: development
 ---
 
@@ -209,15 +208,11 @@ Test these scenarios:
 
 **Test Infrastructure:**
 - `spec/spec_helper.cr` - Test setup and helpers
-- `spec/support/test_helper.cr` - Test utilities
 
 **Example Tests:**
 - `spec/autobot/tools/exec_spec.cr` - Tool testing patterns
 - `spec/autobot/providers/http_provider_spec.cr` - Provider mocking
 - `spec/autobot/config/schema_spec.cr` - Configuration tests
-
-**Mock Patterns:**
-- `spec/support/mock_provider.cr` - HTTP provider mocking
 
 ## When to Use
 

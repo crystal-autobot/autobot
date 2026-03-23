@@ -6,7 +6,6 @@ tags:
   - llm
   - integration
 metadata:
-  author: renich
   scope: feature-development
 ---
 
@@ -47,7 +46,7 @@ module Autobot
         api_base : String? = nil,
         @model : String = "default-model",
         @extra_headers = {} of String => String,
-        provider_name : String? = nil
+        provider_name : String? = nil,
       )
         super(api_key, api_base)
         @gateway = Providers.find_gateway(provider_name, api_key, api_base)
@@ -58,7 +57,7 @@ module Autobot
         tools : Array(Hash(String, JSON::Any))? = nil,
         model : String? = nil,
         max_tokens : Int32 = DEFAULT_MAX_TOKENS,
-        temperature : Float64 = DEFAULT_TEMPERATURE
+        temperature : Float64 = DEFAULT_TEMPERATURE,
       ) : Response
         # Implement API-specific logic here
         # Or call super for OpenAI-compatible APIs
@@ -87,7 +86,6 @@ end
 **See Also:**
 - `src/autobot/providers/http_provider.cr` - Base HTTP implementation
 - `src/autobot/providers/bedrock_provider.cr` - Non-HTTP provider example
-- `src/autobot/providers/anthropic_provider.cr` - OpenAI-compatible with custom headers
 
 ### ProviderSpec Registration
 
@@ -127,9 +125,7 @@ Each provider doc must include:
 - `src/autobot/providers/http_provider.cr` - HTTP-based provider base
 
 **Working Examples:**
-- `src/autobot/providers/anthropic_provider.cr` - OpenAI-compatible with custom headers
 - `src/autobot/providers/bedrock_provider.cr` - Direct Provider implementation (AWS)
-- `src/autobot/providers/groq_provider.cr` - Simple HTTP provider
 
 **Registration:**
 - `src/autobot/providers/registry.cr` - ProviderSpec definitions

@@ -1,4 +1,3 @@
----
 name: autobot-tool
 description: Create new tools for Autobot agent with proper schema and safety
 tags:
@@ -6,7 +5,6 @@ tags:
   - mcp
   - integration
 metadata:
-  author: renich
   scope: feature-development
 ---
 
@@ -20,9 +18,8 @@ metadata:
    - Implement `Tool` interface
 
 2. **Register tool**:
-   - Tools are registered at runtime in the agent loop or CLI gateway
-   - See `src/autobot/cli/gateway.cr` for examples of tool registration
-   - Tools are instantiated and added to the registry
+   - Tools are registered in `src/autobot/tools/registry.cr` or `src/autobot/cli/gateway.cr`.
+   - Add new tool instance to the registry.
 
 3. **Add configuration** (if configurable):
    - Update `src/autobot/config/schema.cr`
@@ -33,9 +30,6 @@ metadata:
    - Test all tool functionality
    - Test error handling
    - Test safety guards
-
-5. **Add documentation** (if user-facing):
-   - Update relevant docs in `docs/`
 
 ### Tool Implementation Template
 
@@ -78,12 +72,7 @@ module Autobot
       def execute(params : Hash(String, JSON::Any)) : ToolResult
         # Extract parameters
         param1 = params["param1"].as_s
-        param2 = params["param2"]?.try(&.as_i) || default_value
-
-        # Validate inputs
-        if error = validate_input(param1)
-          return ToolResult.error(error)
-        end
+        param2 = params["param2"]?.try(&.as_i) || 0
 
         # Execute tool logic
         begin
@@ -92,11 +81,6 @@ module Autobot
         rescue ex
           ToolResult.error("Tool execution failed: #{ex.message}")
         end
-      end
-
-      private def validate_input(param1 : String) : String?
-        # Return error message if invalid, nil if valid
-        nil
       end
 
       private def perform_action(param1, param2)
@@ -116,48 +100,6 @@ end
 - Check command safety (for exec-like tools)
 - Validate numeric ranges
 
-**Example URL validation:**
-```crystal
-private def validate_url(url_str : String) : String?
-  uri = URI.parse(url_str)
-  
-  # Check scheme
-  unless uri.scheme.in?("http", "https")
-    return "Only HTTP/HTTPS URLs allowed"
-  end
-
-  # Check for private IPs
-  if uri.host
-    begin
-      ip = IPAddress.parse(uri.host)
-      if ip.private? || ip.loopback?
-        return "Private IP addresses not allowed"
-      end
-    rescue
-      # Not an IP, proceed
-    end
-  end
-
-  nil
-end
-```
-
-### Rate Limiting
-
-Tools should respect rate limits:
-- Implement in `check_limit` if tool makes external calls
-- Configure limits in `config.yml`
-- Return user-friendly error messages when rate limited
-
-### Testing Requirements
-
-- [ ] Tool executes successfully with valid params
-- [ ] Tool handles invalid params gracefully
-- [ ] Tool enforces safety constraints
-- [ ] Tool respects rate limits
-- [ ] Error messages are clear and actionable
-- [ ] ToolResult types used correctly (success/error/access_denied)
-
 ### Related Files and Examples
 
 **Base Classes:**
@@ -165,13 +107,15 @@ Tools should respect rate limits:
 - `src/autobot/tools/result.cr` - ToolResult definition
 
 **Working Examples:**
-- `src/autobot/tools/exec.cr` - Command execution (complex validation)
-- `src/autobot/tools/web.cr` - HTTP fetching (URL validation example)
+- `src/autobot/tools/exec.cr` - Command execution
+- `src/autobot/tools/bash_tool.cr` - Shell execution
+- `src/autobot/tools/web.cr` - HTTP fetching
 - `src/autobot/tools/filesystem.cr` - File operations
+- `src/autobot/tools/cron_tool.cr` - Scheduling
 
 **Registration:**
 - `src/autobot/tools/registry.cr` - Tool registry
-- `src/autobot/cli/gateway.cr` - Tool instantiation examples
+- `src/autobot/cli/gateway.cr` - Tool instantiation
 
 **Tests:**
 - `spec/autobot/tools/exec_spec.cr` - Exec tool tests
@@ -183,6 +127,5 @@ Use this skill when:
 - Creating a new tool for the agent
 - Adding MCP tool wrappers
 - Implementing external service integrations
-- Adding utility tools (file operations, web requests, etc.)
 
 **Related Skills:** `crystal-dev`, `autobot-test`

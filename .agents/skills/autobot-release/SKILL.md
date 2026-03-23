@@ -6,7 +6,6 @@ tags:
   - git
   - semver
 metadata:
-  author: renich
   scope: maintenance
 ---
 
@@ -32,50 +31,20 @@ Update version in:
 - `shard.yml` (Crystal standard)
 - Git tag
 
-### Changelog
-
-Use Keep a Changelog format (Markdown):
-
-```markdown
-# Changelog
-
-## [1.2.3] - 2026-03-17
-
-### Added
-- New feature description
-
-### Fixed
-- Bug fix description
-
-### Changed
-- Change description
-```
-
-Sections:
-- `Added` - New features
-- `Changed` - Changes to existing functionality
-- `Deprecated` - Soon-to-be removed features
-- `Removed` - Removed features
-- `Fixed` - Bug fixes
-- `Security` - Security improvements
-
 ### Git Commands
 
 ```bash
-# 1. Update changelog
-vim CHANGELOG.md
-
-# 2. Update version in shard.yml
+# 1. Update version in shard.yml
 vim shard.yml
 
-# 3. Commit version bump
-git add CHANGELOG.md shard.yml
+# 2. Commit version bump
+git add shard.yml
 git commit -m "chore(release): bump version to 1.2.3"
 
-# 4. Create signed tag (requires GPG key)
+# 3. Create signed tag (requires GPG key)
 git tag -s v1.2.3 -m "Release v1.2.3"
 
-# 5. Push with tags
+# 4. Push with tags
 git push origin main --follow-tags
 ```
 
@@ -106,7 +75,6 @@ Create release via GitHub CLI:
 ```bash
 gh release create v1.2.3 \
   --title "Release v1.2.3" \
-  --notes-file CHANGELOG.md \
   --verify-tag
 ```
 
@@ -114,7 +82,7 @@ Or manually:
 1. Go to GitHub Releases
 2. Click "Draft a new release"
 3. Choose the signed tag
-4. Copy relevant changelog section
+4. Add release notes
 5. Publish release
 
 ### Co-authored-by
@@ -131,9 +99,8 @@ Co-authored-by: Gemini <renich+gemini@woralelandia.com>
 
 ### Related Files
 
-**Version and Changelog:**
+**Version:**
 - `shard.yml` - Version field (line 2)
-- `CHANGELOG.md` - Release history
 - `src/autobot/version.cr` - Auto-generated from shard.yml
 
 **CI/CD:**
@@ -149,7 +116,6 @@ Co-authored-by: Gemini <renich+gemini@woralelandia.com>
 Use this skill when:
 - Preparing a new release
 - Creating version tags
-- Writing changelogs
 - Bumping version numbers
 - Publishing to GitHub
 

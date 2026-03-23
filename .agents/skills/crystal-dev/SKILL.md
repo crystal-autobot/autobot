@@ -1,44 +1,20 @@
----
 name: crystal-dev
 description: Crystal development workflow with Ameba linting and spec testing
 metadata:
-  author: renich
   scope: development
   language: crystal
 ---
 
 ## Crystal Development Standards
 
-### Code Quality Workflow
-
-Always run these checks before committing:
-
-```bash
-# 1. Format code
-crystal tool format
-
-# 2. Run linter and tests via Makefile
-make test
-
-# 3. Build release (if applicable)
-make release
-```
-
 ### Ameba Rules (Zero Tolerance)
 
+All code must pass `ameba` checks. Key rules enforced:
 - **No formatting warnings** - Code must be formatted with `crystal tool format`
 - **No cyclomatic complexity violations** - Keep methods simple (max complexity: 10)
 - **No style violations** - Follow Crystal style guide
 - **No naming violations** - Use proper naming conventions
 - **No not_nil! usage** - Avoid unsafe nil handling
-
-### Testing Standards
-
-- **AAA Pattern**: Arrange, Act, Assert
-- Test edge cases and error conditions
-- Use descriptive test names
-- Keep tests fast and independent
-- Run `crystal spec` before any commit
 
 ### Common Fixes
 
@@ -51,7 +27,7 @@ result.content.not_nil!.should contain("text")
 if content = result.content
   content.should contain("text")
 else
-  fail("Expected content")
+  fail("Expected content to not be nil")
 end
 ```
 
@@ -67,8 +43,8 @@ end
 ### Project Structure
 
 - `src/autobot/` - Source code
-- `spec/` - Test files (mirror src structure)
-- `docs/` - Documentation (RST format preferred)
+- `spec/` - Test files (mirror `src/` structure)
+- `docs/` - Documentation (Markdown for README/docs)
 - `bin/ameba` - Linter binary
 
 ### Related Files
