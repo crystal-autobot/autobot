@@ -89,6 +89,9 @@ channels:
 tools:
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
   docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
+  sandbox_env:   # env vars to forward into Docker sandbox (default: none)
+    - HA_URL
+    - MQTT_HOST
   exec:
     timeout: 60
     allow_patterns: # Optional regex allowlist
@@ -261,6 +264,9 @@ channels:
 tools:
   sandbox: auto  # auto | bubblewrap | docker | none
   docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
+  sandbox_env:  # env vars to forward into Docker sandbox (default: none)
+    - HA_URL
+    - MQTT_HOST
   web:
     search:
       api_key: "BRAVE_API_KEY"

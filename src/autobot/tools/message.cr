@@ -107,6 +107,12 @@ module Autobot
 
         callback.call(msg)
         @last_sent_content = content
+
+        if media
+          Log.info { "Message sent to #{channel}:#{chat_id} with attachment" }
+        else
+          Log.info { "Message sent to #{channel}:#{chat_id}" }
+        end
         ToolResult.success("Message sent to #{channel}:#{chat_id}")
       rescue ex
         ToolResult.error("Error sending message: #{ex.message}")

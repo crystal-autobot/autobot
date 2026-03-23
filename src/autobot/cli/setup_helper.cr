@@ -86,6 +86,7 @@ module Autobot
         if img = config.tools.try(&.docker_image)
           Tools::Sandbox.docker_image = img
         end
+        Tools::Sandbox.sandbox_env = config.tools.try(&.sandbox_env) || [] of String
         Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
 
         deny_patterns, allow_patterns = load_exec_patterns(config)
