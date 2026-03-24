@@ -84,20 +84,6 @@ Or manually:
 4. Add release notes
 5. Publish release
 
-### Related Files
-
-**Version:**
-- `shard.yml` - Version field (line 2)
-- `src/autobot/version.cr` - Auto-generated from shard.yml
-
-**CI/CD:**
-- `.github/workflows/ci.yml` - GitHub Actions workflow
-- `Makefile` - Build and release targets
-
-**Examples:**
-- Look at recent tags: `git log --oneline --tags | head -10`
-- View previous releases on GitHub for format examples
-
 ## When to Use
 
 Use this skill when:

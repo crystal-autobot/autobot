@@ -101,27 +101,6 @@ end
 - Check command safety (for exec-like tools)
 - Validate numeric ranges
 
-### Related Files and Examples
-
-**Base Classes:**
-- `src/autobot/tools/base.cr` - Tool abstract class and ToolSchema
-- `src/autobot/tools/result.cr` - ToolResult definition
-
-**Working Examples:**
-- `src/autobot/tools/exec.cr` - Command execution
-- `src/autobot/tools/bash_tool.cr` - Shell execution
-- `src/autobot/tools/web.cr` - HTTP fetching
-- `src/autobot/tools/filesystem.cr` - File operations
-- `src/autobot/tools/cron_tool.cr` - Scheduling
-
-**Registration:**
-- `src/autobot/tools/registry.cr` - Tool registry
-- `src/autobot/cli/gateway.cr` - Tool instantiation
-
-**Tests:**
-- `spec/autobot/tools/exec_spec.cr` - Exec tool tests
-- `spec/autobot/tools/web_spec.cr` - Web tool tests
-
 ## When to Use
 
 Use this skill when:

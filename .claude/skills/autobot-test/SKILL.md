@@ -200,16 +200,6 @@ Test these scenarios:
 - [ ] Edge cases (empty strings, max values, etc.)
 - [ ] Security constraints (private IPs, path traversal, etc.)
 
-### Related Files and Examples
-
-**Test Infrastructure:**
-- `spec/spec_helper.cr` - Test setup and helpers
-
-**Example Tests:**
-- `spec/autobot/tools/exec_spec.cr` - Tool testing patterns
-- `spec/autobot/providers/http_provider_spec.cr` - Provider mocking
-- `spec/autobot/config/schema_spec.cr` - Configuration tests
-
 ## When to Use
 
 Use this skill when:

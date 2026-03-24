@@ -83,10 +83,6 @@ class BedrockProvider < Provider
 end
 ```
 
-**See Also:**
-- `src/autobot/providers/http_provider.cr` - Base HTTP implementation
-- `src/autobot/providers/bedrock_provider.cr` - Non-HTTP provider example
-
 ### ProviderSpec Registration
 
 Add to `PROVIDERS` in `src/autobot/providers/registry.cr`:
@@ -117,22 +113,6 @@ Each provider doc must include:
 - Rate limits and pricing notes
 - Special features (if any)
 - Example configuration
-
-### Related Files and Examples
-
-**Base Classes:**
-- `src/autobot/providers/provider.cr` - Abstract Provider interface
-- `src/autobot/providers/http_provider.cr` - HTTP-based provider base
-
-**Working Examples:**
-- `src/autobot/providers/bedrock_provider.cr` - Direct Provider implementation (AWS)
-
-**Registration:**
-- `src/autobot/providers/registry.cr` - ProviderSpec definitions
-
-**Tests:**
-- `spec/autobot/providers/http_provider_spec.cr` - Testing patterns
-- `spec/autobot/providers/registry_spec.cr` - Registration tests
 
 ## When to Use
 
