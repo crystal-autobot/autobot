@@ -109,8 +109,12 @@ autobot agent -m "Hello!"
 autobot gateway
 ```
 
+!!! tip "Want a head start?"
+    Try a [blueprint](blueprints.md) — a ready-to-use template with personality, skills, and integrations pre-configured.
+
 ## Next
 
+- [Blueprints](blueprints.md)
 - [Configuration](configuration.md)
 - [Security](security.md)
 - [Deployment](deployment.md)

@@ -83,3 +83,4 @@ autobot agent
 ```
 
 [Full Quick Start Guide](quickstart.md){ .md-button .md-button--primary }
+[Browse Blueprints](blueprints.md){ .md-button }

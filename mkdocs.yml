@@ -56,6 +56,7 @@ nav:
   - Home: index.md
   - Getting Started:
       - Quick Start: quickstart.md
+      - Blueprints: blueprints.md
       - Configuration: configuration.md
   - Providers:
       - Overview: providers.md
