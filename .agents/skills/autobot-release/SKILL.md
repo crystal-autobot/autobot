@@ -35,7 +35,6 @@ Update version in:
 
 ```bash
 # 1. Update version in shard.yml
-vim shard.yml
 
 # 2. Commit version bump
 git add shard.yml
@@ -85,18 +84,6 @@ Or manually:
 4. Add release notes
 5. Publish release
 
-### Co-authored-by
-
-Add to commits when working with AI:
-```
-Co-authored-by: Assistant <renich+assistant@evalinux.com>
-```
-
-Or for specific models:
-```
-Co-authored-by: Gemini <renich+gemini@woralelandia.com>
-```
-
 ### Related Files
 
 **Version:**
@@ -119,4 +106,4 @@ Use this skill when:
 - Bumping version numbers
 - Publishing to GitHub
 
-**Related Skills:** `crystal-dev`
+**Related Skills:** `autobot-test`

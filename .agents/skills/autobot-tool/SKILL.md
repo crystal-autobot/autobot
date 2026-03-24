@@ -1,3 +1,4 @@
+---
 name: autobot-tool
 description: Create new tools for Autobot agent with proper schema and safety
 tags:
@@ -128,4 +129,4 @@ Use this skill when:
 - Adding MCP tool wrappers
 - Implementing external service integrations
 
-**Related Skills:** `crystal-dev`, `autobot-test`
+**Related Skills:** `autobot-test`

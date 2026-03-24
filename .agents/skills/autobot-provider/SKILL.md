@@ -142,4 +142,4 @@ Use this skill when:
 - Testing provider implementations
 - Updating provider documentation
 
-**Related Skills:** `crystal-dev`, `autobot-test`
+**Related Skills:** `autobot-test`

@@ -129,7 +129,8 @@ end
 
 ### Avoiding not_nil!
 
-Use safe nil handling:
+Avoid `not_nil!` in tests. Use safe nil handling instead:
+
 ```crystal
 # Bad
 result.content.not_nil!.should contain("text")
@@ -140,11 +141,6 @@ if content = result.content
 else
   fail("Expected content to not be nil")
 end
-
-# Also good
-content = result.content
-content.should_not be_nil
-content.should contain("text") if content
 ```
 
 ### Shared Examples
@@ -223,4 +219,4 @@ Use this skill when:
 - Setting up test infrastructure
 - Reviewing test coverage
 
-**Related Skills:** `crystal-dev`, `autobot-tool`, `autobot-provider`
+**Related Skills:** `autobot-tool`, `autobot-provider`
