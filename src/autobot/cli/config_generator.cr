@@ -134,7 +134,7 @@ module Autobot
         when "openai"     then "openai/gpt-4"
         when "deepseek"   then "deepseek/deepseek-chat"
         when "groq"       then "groq/mixtral-8x7b-32768"
-        when "gemini"     then "gemini/gemini-pro"
+        when "gemini"     then "gemini/gemini-2.5-flash"
         when "kimi"       then "kimi/kimi-for-coding"
         when "openrouter" then "openrouter/auto"
         else
