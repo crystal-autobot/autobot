@@ -27,7 +27,7 @@ describe Autobot::Providers do
     end
 
     it "matches Gemini" do
-      spec = Autobot::Providers.find_by_model("gemini-pro")
+      spec = Autobot::Providers.find_by_model("gemini-2.5-flash")
       spec.should_not be_nil
       spec.try(&.name).should eq("gemini")
     end
