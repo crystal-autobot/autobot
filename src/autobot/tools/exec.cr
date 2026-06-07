@@ -185,12 +185,14 @@ module Autobot
 
         timed_out, status = wait_for_process(process, completed)
 
+        # Close read ends to break any blocking io.read in background fibers
+        # when daemon processes hold the write ends open
+        stdout_read.close unless stdout_read.closed?
+        stderr_read.close unless stderr_read.closed?
+
         # Collect limited outputs
         stdout_text = stdout_channel.receive
         stderr_text = stderr_channel.receive
-
-        stdout_read.close
-        stderr_read.close
 
         build_command_result(stdout_text, stderr_text, status, timed_out)
       end
@@ -212,7 +214,7 @@ module Autobot
 
         buffer.to_s
       rescue
-        ""
+        buffer.to_s
       end
 
       private def build_command_result(stdout_text : String, stderr_text : String, status : Process::Status?, timed_out : Bool) : String
