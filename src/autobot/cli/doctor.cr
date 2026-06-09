@@ -250,9 +250,16 @@ module Autobot
           env_real = File.realpath(env_path.to_s)
 
           if env_real.starts_with?(workspace_real)
-            report(Status::Fail, ".env file is inside workspace directory")
-            hint("Move .env outside workspace to prevent exposing secrets to the LLM")
-            errors += 1
+            sandbox_none = config.tools.try(&.sandbox).try(&.downcase) == "none"
+            if sandbox_none
+              report(Status::Warn, ".env file is inside workspace directory")
+              hint("Move .env outside workspace to prevent exposing secrets to the LLM")
+              warnings += 1
+            else
+              report(Status::Fail, ".env file is inside workspace directory")
+              hint("Move .env outside workspace to prevent exposing secrets to the LLM")
+              errors += 1
+            end
           end
         end
 
