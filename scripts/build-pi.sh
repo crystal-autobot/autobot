@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 # Build a static ARM64 Linux binary for Raspberry Pi (via Docker on macOS)
 #
 # Usage:
