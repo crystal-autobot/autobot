@@ -45,7 +45,7 @@ module Autobot
       end
 
       # Create centralized sandbox executor
-      executor = SandboxExecutor.new(workspace)
+      executor = SandboxExecutor.new(workspace, sandboxed)
 
       # Register tools
       register_filesystem_tools(registry, executor)
@@ -75,7 +75,8 @@ module Autobot
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter)
 
-      executor = SandboxExecutor.new(workspace)
+      sandboxed = sandbox_config.downcase != "none"
+      executor = SandboxExecutor.new(workspace, sandboxed)
 
       register_filesystem_tools(registry, executor)
       register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
