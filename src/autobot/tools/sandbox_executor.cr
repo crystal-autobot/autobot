@@ -110,17 +110,7 @@ module Autobot
 
       private def exec_program_via_sandbox_exec(program : String, args : Array(String), timeout : Int32, workspace : Path) : ToolResult
         status, stdout, stderr = Sandbox.exec_program(program, args, workspace, timeout)
-
-        parts = [] of String
-        parts << stdout unless stdout.empty?
-        parts << "STDERR:\n#{stderr}" unless stderr.empty?
-
-        if !status.success? && status.exit_code != Sandbox::TIMEOUT_EXIT_CODE
-          parts << "\nExit code: #{status.exit_code}"
-        end
-
-        data = parts.empty? ? "[no output]" : parts.join("\n")
-        ToolResult.success(data)
+        build_exec_result(status, stdout, stderr)
       end
 
       # Direct execution (tests and non-sandbox mode)
@@ -206,52 +196,8 @@ module Autobot
       end
 
       private def exec_program_direct(program : String, args : Array(String), timeout : Int32) : ToolResult
-        stdout_read, stdout_write = IO.pipe
-        stderr_read, stderr_write = IO.pipe
-
-        process = Process.new(
-          program, args,
-          output: stdout_write,
-          error: stderr_write
-        )
-
-        stdout_write.close
-        stderr_write.close
-
-        stdout_channel = Channel(String).new(1)
-        stderr_channel = Channel(String).new(1)
-
-        spawn { stdout_channel.send(stdout_read.gets_to_end) }
-        spawn { stderr_channel.send(stderr_read.gets_to_end) }
-
-        completed = Channel(Process::Status).new(1)
-        spawn do
-          status = process.wait
-          completed.send(status)
-        end
-
-        select
-        when completed.receive
-          # Process completed
-        when timeout(timeout.seconds)
-          process.signal(Signal::TERM)
-          sleep 0.5.seconds
-          process.signal(Signal::KILL) unless process.terminated?
-          process.wait
-        end
-
-        stdout_text = stdout_channel.receive
-        stderr_text = stderr_channel.receive
-
-        stdout_read.close
-        stderr_read.close
-
-        parts = [] of String
-        parts << stdout_text unless stdout_text.empty?
-        parts << "STDERR:\n#{stderr_text}" unless stderr_text.empty?
-
-        data = parts.empty? ? "[no output]" : parts.join("\n")
-        ToolResult.success(data)
+        status, stdout, stderr = Sandbox.capture_command(program, args, timeout)
+        build_exec_result(status, stdout, stderr)
       end
     end
   end
