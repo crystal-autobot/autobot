@@ -154,8 +154,6 @@ describe Autobot::Session::Manager do
 
     manager.delete("delete:me").should be_true
     manager.delete("delete:me").should be_false # Already deleted
-
-
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
