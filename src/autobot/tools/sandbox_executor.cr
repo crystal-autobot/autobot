@@ -207,11 +207,13 @@ module Autobot
           process.wait
         end
 
+        # Close read ends to break any blocking io.read in background fibers
+        # when daemon processes hold the write ends open
+        stdout_read.close unless stdout_read.closed?
+        stderr_read.close unless stderr_read.closed?
+
         stdout_text = stdout_channel.receive
         stderr_text = stderr_channel.receive
-
-        stdout_read.close
-        stderr_read.close
 
         parts = [] of String
         parts << stdout_text unless stdout_text.empty?
