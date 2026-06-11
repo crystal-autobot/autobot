@@ -1,7 +1,10 @@
+require "json"
+require "../src/autobot/version"
 require "../src/autobot/providers/provider"
 require "../src/autobot/providers/types"
 require "../src/autobot/providers/registry"
 require "../src/autobot/providers/http_provider"
+require "../src/autobot/providers/gemini_provider"
 require "../src/autobot/constants"
 
 api_key = ENV["GEMINI_API_KEY"]?
@@ -10,9 +13,9 @@ if !api_key || api_key.empty?
   exit 1
 end
 
-provider = Autobot::Providers::HttpProvider.new(
+provider = Autobot::Providers::GeminiProvider.new(
   api_key: api_key,
-  model: "gemini/gemini-2.5-flash"
+  model: "gemini-3.5-flash"
 )
 
 messages = [
@@ -26,16 +29,27 @@ messages = [
   }
 ]
 
-puts "Sending request via HttpProvider (OpenAI wrapper)..."
-start_time = Time.monotonic
-response = provider.chat(messages: messages)
-duration = Time.monotonic - start_time
+puts "--- First Request (Cache Miss/Creation) ---"
+start_time = Time.instant
+response1 = provider.chat(messages: messages)
+duration1 = Time.instant - start_time
 
-puts "Response received in #{duration.total_seconds.round(2)}s"
-puts "Content: #{response.content}"
+puts "Response received in #{duration1.total_seconds.round(2)}s"
 puts "Usage:"
-puts "  Prompt tokens: #{response.usage.prompt_tokens}"
-puts "  Completion tokens: #{response.usage.completion_tokens}"
-puts "  Total tokens: #{response.usage.total_tokens}"
-puts "  Cached creation tokens: #{response.usage.cache_creation_tokens}"
-puts "  Cached read tokens: #{response.usage.cache_read_tokens}"
+puts "  Prompt tokens: #{response1.usage.prompt_tokens}"
+puts "  Completion tokens: #{response1.usage.completion_tokens}"
+puts "  Total tokens: #{response1.usage.total_tokens}"
+puts "  Cached creation tokens: #{response1.usage.cache_creation_tokens}"
+puts "  Cached read tokens: #{response1.usage.cache_read_tokens}"
+puts "\n--- Second Request (Cache Hit) ---"
+start_time = Time.instant
+response2 = provider.chat(messages: messages)
+duration2 = Time.instant - start_time
+
+puts "Response received in #{duration2.total_seconds.round(2)}s"
+puts "Usage:"
+puts "  Prompt tokens: #{response2.usage.prompt_tokens}"
+puts "  Completion tokens: #{response2.usage.completion_tokens}"
+puts "  Total tokens: #{response2.usage.total_tokens}"
+puts "  Cached creation tokens: #{response2.usage.cache_creation_tokens}"
+puts "  Cached read tokens: #{response2.usage.cache_read_tokens}"
