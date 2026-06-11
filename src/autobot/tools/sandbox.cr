@@ -286,11 +286,11 @@ module Autobot
 
         status = wait_for_process(process, completed, timeout)
 
+        stdout_read.close unless stdout_read.closed?
+        stderr_read.close unless stderr_read.closed?
+
         stdout_text = stdout_channel.receive
         stderr_text = stderr_channel.receive
-
-        stdout_read.close
-        stderr_read.close
 
         {status, stdout_text, stderr_text}
       end
@@ -312,7 +312,7 @@ module Autobot
 
         buffer.to_s
       rescue
-        ""
+        buffer.to_s
       end
 
       private def self.wait_for_process(

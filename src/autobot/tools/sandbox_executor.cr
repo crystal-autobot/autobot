@@ -186,8 +186,27 @@ module Autobot
         stdout_channel = Channel(String).new(1)
         stderr_channel = Channel(String).new(1)
 
-        spawn { stdout_channel.send(stdout_read.gets_to_end) }
-        spawn { stderr_channel.send(stderr_read.gets_to_end) }
+        spawn do
+          io = IO::Memory.new
+          begin
+            IO.copy(stdout_read, io)
+          rescue ex : IO::Error
+            # stream closed
+          ensure
+            stdout_channel.send(io.to_s)
+          end
+        end
+
+        spawn do
+          io = IO::Memory.new
+          begin
+            IO.copy(stderr_read, io)
+          rescue ex : IO::Error
+            # stream closed
+          ensure
+            stderr_channel.send(io.to_s)
+          end
+        end
 
         completed = Channel(Process::Status).new(1)
         spawn do
@@ -205,11 +224,13 @@ module Autobot
           process.wait
         end
 
+        # Close read ends to break any blocking io.read in background fibers
+        # when daemon processes hold the write ends open
+        stdout_read.close unless stdout_read.closed?
+        stderr_read.close unless stderr_read.closed?
+
         stdout_text = stdout_channel.receive
         stderr_text = stderr_channel.receive
-
-        stdout_read.close
-        stderr_read.close
 
         parts = [] of String
         parts << stdout_text unless stdout_text.empty?
