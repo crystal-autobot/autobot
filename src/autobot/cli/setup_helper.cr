@@ -68,7 +68,6 @@ module Autobot
         else
           provider_config, provider_name = config.match_provider
           raise "No provider configured" unless provider_config
-
           if provider_name == "gemini"
             Providers::GeminiProvider.new(
               api_key: provider_config.api_key,

@@ -7,11 +7,12 @@ module Autobot
   module Providers
     # Google Gemini provider - https://ai.google.dev/gemini-api/docs
     # Supports both standard Google AI Studio (API Key) and Code Assist API (OAuth)
+    # Includes Context Caching support for large context payloads
     class GeminiProvider < Provider
       Log = ::Log.for(self)
 
       # Standard API for API Keys
-      AI_STUDIO_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
+      AI_STUDIO_BASE = "https://generativelanguage.googleapis.com/v1beta"
       # Code Assist API for OAuth
       CODE_ASSIST_BASE = "https://cloudcode-pa.googleapis.com/v1internal"
 
@@ -21,6 +22,10 @@ module Autobot
 
       # Client ID and Secret loaded from environment
 
+      CONNECT_TIMEOUT = 30.seconds
+      READ_TIMEOUT    = 300.seconds
+      USER_AGENT      = "Autobot/#{VERSION}"
+
       @client_id : String?
       @client_secret : String?
       @refresh_token : String?
@@ -28,6 +33,9 @@ module Autobot
       @token_expiry : Time?
       @token_mutex : Mutex = Mutex.new
       @project_id : String?
+
+      @cached_name : String? = nil
+      @cached_hash : UInt64 = 0_u64
 
       def initialize(
         api_key : String,
@@ -45,6 +53,10 @@ module Autobot
 
       def default_model : String
         @model
+      end
+
+      def supports_progressive_disclosure? : Bool
+        false
       end
 
       private def use_oauth? : Bool
@@ -108,13 +120,14 @@ module Autobot
       end
 
       private def build_headers : HTTP::Headers
-        token = get_access_token
         headers = HTTP::Headers{
-          "Content-Type"  => "application/json",
-          "Authorization" => "Bearer #{token}",
+          "Content-Type" => "application/json",
+          "User-Agent"   => USER_AGENT,
         }
 
         if use_oauth?
+          token = get_access_token
+          headers["Authorization"] = "Bearer #{token}"
           # Strict headers required by Code Assist API
           headers["User-Agent"] = "google-api-nodejs-client/9.15.1"
           headers["X-Goog-Api-Client"] = "gl-node/22.13.1"
@@ -173,42 +186,173 @@ module Autobot
         max_retries = 3
         base_delay = 2.0
 
-        effective_model = model || @model
-        # Strip provider prefix if present (e.g. "gemini/gemini-pro" -> "gemini-pro")
+        effective_model = (model || @model).sub(/^gemini\//, "")
         bare_model = effective_model.includes?("/") ? effective_model.split("/", 2).last : effective_model
+        model_path = "models/#{bare_model}"
 
         max_retries.times do |attempt|
-          if use_oauth?
-            headers = build_headers
-            project_id = ensure_project_id(headers)
-            url = "#{CODE_ASSIST_BASE}:generateContent"
-            body = build_code_assist_payload(messages, tools, bare_model, project_id)
-            is_native = true
-          elsif @api_base
-            headers = build_headers
-            url = "#{@api_base}/chat/completions"
-            body = build_openai_body(messages, tools, bare_model, max_tokens, temperature)
-            is_native = false
-          else
-            headers = HTTP::Headers{
-              "Content-Type"   => "application/json",
-              "x-goog-api-key" => @api_key,
-            }
-            url = "https://generativelanguage.googleapis.com/v1beta/models/#{bare_model}:generateContent"
-            body = build_native_payload(messages, tools, max_tokens, temperature)
-            is_native = true
+          headers = build_headers
+
+          begin
+            if use_oauth?
+              project_id = ensure_project_id(headers)
+              url = "#{CODE_ASSIST_BASE}:generateContent"
+              body = build_code_assist_payload(messages, tools, bare_model, project_id)
+              response = HTTP::Client.post(url, headers: headers, body: body)
+              if response.success?
+                return parse_native_response(response.body)
+              end
+              handle_error_response(response, attempt, max_retries, base_delay)
+            else
+              # Use AI Studio native generateContent endpoint supporting caching
+              response = do_generate_content_with_cache_check(model_path, messages, tools, max_tokens, temperature)
+              return response
+            end
+          rescue ex
+            if attempt == max_retries - 1
+              raise ex
+            end
+            delay = base_delay * (2 ** attempt) + (rand * 0.5)
+            Log.warn { "Error during chat call: #{ex.message}, retrying in #{delay.round(2)}s (attempt #{attempt + 1}/#{max_retries})" }
+            sleep delay.seconds
           end
-
-          response = HTTP::Client.post(url, headers: headers, body: body)
-
-          if response.success?
-            return is_native ? parse_native_response(response.body) : parse_openai_response(response.body)
-          end
-
-          handle_error_response(response, attempt, max_retries, base_delay)
         end
 
         raise "Max retries exceeded"
+      end
+
+      private def do_generate_content_with_cache_check(
+        model_path : String,
+        messages : Array(Hash(String, JSON::Any)),
+        tools : Array(Hash(String, JSON::Any))?,
+        max_tokens : Int32,
+        temperature : Float64,
+      ) : Response
+        system_text = extract_system_prompt_text(messages)
+        user_history = reject_system_messages(messages)
+        contents = map_messages_to_native(user_history)
+        gemini_tools = map_tools_to_native(tools)
+
+        cache_content_str = system_text + (tools ? tools.to_json : "")
+        current_hash = cache_content_str.hash
+
+        if @cached_hash != current_hash
+          @cached_name = nil
+        end
+
+        if name = @cached_name
+          response = do_generate_content_cached(model_path, name, contents, max_tokens, temperature)
+          unless response.error? && (response.content || "").includes?("404")
+            return response
+          end
+          Log.warn { "Cache #{name} expired or not found, recreating..." }
+          @cached_name = nil
+        end
+
+        if cache_content_str.size > 8000
+          @cached_name = create_cache(model_path, system_text, gemini_tools)
+          if name = @cached_name
+            @cached_hash = current_hash
+            return do_generate_content_cached(model_path, name, contents, max_tokens, temperature)
+          end
+        end
+
+        do_generate_content_native(model_path, system_text, gemini_tools, contents, max_tokens, temperature)
+      end
+
+      private def create_cache(model_path : String, system_text : String, tools : Array(JSON::Any)?) : String?
+        api_base = @api_base || AI_STUDIO_BASE
+        url = "#{api_base}/cachedContents?key=#{@api_key}"
+
+        body = {
+          "model" => JSON::Any.new(model_path),
+          "ttl"   => JSON::Any.new("3600s"),
+        } of String => JSON::Any
+
+        unless system_text.empty?
+          body["systemInstruction"] = JSON::Any.new({
+            "parts" => JSON::Any.new([
+              JSON::Any.new({"text" => JSON::Any.new(system_text)} of String => JSON::Any),
+            ] of JSON::Any),
+          } of String => JSON::Any)
+        end
+
+        if tools && !tools.empty?
+          body["tools"] = JSON::Any.new(tools)
+        end
+
+        headers = HTTP::Headers{"Content-Type" => "application/json", "User-Agent" => USER_AGENT}
+        response = http_post(url, headers, body.to_json)
+
+        if response.success?
+          json = JSON.parse(response.body)
+          name = json["name"]?.try(&.as_s?)
+          Log.info { "Created explicit Gemini cache: #{name}" }
+          name
+        else
+          Log.debug { "Failed to create cache (might be under min tokens): #{response.body}" }
+          nil
+        end
+      end
+
+      private def do_generate_content_cached(
+        model_path : String,
+        cached_name : String,
+        contents : Array(Hash(String, JSON::Any)),
+        max_tokens : Int32,
+        temperature : Float64,
+      ) : Response
+        api_base = @api_base || AI_STUDIO_BASE
+        url = "#{api_base}/#{model_path}:generateContent?key=#{@api_key}"
+
+        body = {
+          "cachedContent"    => JSON::Any.new(cached_name),
+          "contents"         => JSON::Any.new(contents.map { |c| JSON::Any.new(c) }),
+          "generationConfig" => JSON::Any.new({
+            "maxOutputTokens" => JSON::Any.new(max_tokens.to_i64),
+            "temperature"     => JSON::Any.new(temperature),
+          } of String => JSON::Any),
+        } of String => JSON::Any
+
+        headers = HTTP::Headers{"Content-Type" => "application/json", "User-Agent" => USER_AGENT}
+        response = http_post(url, headers, body.to_json)
+        parse_native_response(response.body)
+      end
+
+      private def do_generate_content_native(
+        model_path : String,
+        system_text : String,
+        tools : Array(Hash(String, JSON::Any))?,
+        contents : Array(Hash(String, JSON::Any)),
+        max_tokens : Int32,
+        temperature : Float64,
+      ) : Response
+        api_base = @api_base || AI_STUDIO_BASE
+        url = "#{api_base}/#{model_path}:generateContent?key=#{@api_key}"
+
+        body = {
+          "contents"         => JSON::Any.new(contents.map { |c| JSON::Any.new(c) }),
+          "generationConfig" => JSON::Any.new({
+            "maxOutputTokens" => JSON::Any.new(max_tokens.to_i64),
+            "temperature"     => JSON::Any.new(temperature),
+          } of String => JSON::Any),
+        } of String => JSON::Any
+
+        unless system_text.empty?
+          body["systemInstruction"] = JSON::Any.new({
+            "parts" => JSON::Any.new([
+              JSON::Any.new({"text" => JSON::Any.new(system_text)} of String => JSON::Any),
+            ] of JSON::Any),
+          } of String => JSON::Any)
+        end
+
+        if tools && !tools.empty?
+          body["tools"] = JSON::Any.new(tools.map { |t| JSON::Any.new(t) })
+        end
+
+        headers = HTTP::Headers{"Content-Type" => "application/json", "User-Agent" => USER_AGENT}
+        response = http_post(url, headers, body.to_json)
+        parse_native_response(response.body)
       end
 
       private def handle_error_response(response, attempt, max_retries, base_delay)
@@ -229,48 +373,6 @@ module Autobot
         end
 
         raise "Gemini API request failed: #{status} - #{response.body}"
-      end
-
-      private def build_openai_body(messages, tools, model, max_tokens, temperature)
-        {
-          "model"       => JSON::Any.new(model),
-          "messages"    => JSON::Any.new(messages.map { |msg| JSON::Any.new(msg.transform_values { |val| val }) }),
-          "max_tokens"  => JSON::Any.new(max_tokens.to_i64),
-          "temperature" => JSON::Any.new(temperature),
-          "tools"       => tools ? JSON::Any.new(tools.map { |tool| JSON::Any.new(tool.transform_values { |val| val }) }) : nil,
-          "tool_choice" => tools ? JSON::Any.new("auto") : nil,
-        }.compact.to_json
-      end
-
-      private def parse_openai_response(body : String) : Response
-        json = JSON.parse(body)
-        choice = json["choices"][0]
-        message = choice["message"]
-
-        content = message["content"]?.try(&.as_s?)
-        tool_calls = parse_openai_tool_calls(message["tool_calls"]?)
-        usage = parse_usage(json["usage"]?)
-
-        Response.new(
-          content: content,
-          tool_calls: tool_calls,
-          usage: usage
-        )
-      end
-
-      private def parse_openai_tool_calls(node : JSON::Any?) : Array(ToolCall)
-        return [] of ToolCall unless arr = node.try(&.as_a?)
-        arr.compact_map do |tcall|
-          func = tcall["function"]?
-          next unless func
-          args_str = func["arguments"].as_s
-          args = JSON.parse(args_str).as_h
-          ToolCall.new(
-            id: tcall["id"].as_s,
-            name: func["name"].as_s,
-            arguments: args
-          )
-        end
       end
 
       private def build_code_assist_payload(messages, tools, model, project_id) : String
@@ -411,6 +513,17 @@ module Autobot
         nil
       end
 
+      private def extract_system_prompt_text(messages : Array(Hash(String, JSON::Any))) : String
+        messages
+          .select { |message| message["role"]?.try(&.as_s?) == "system" }
+          .compact_map { |message| message["content"]?.try(&.as_s?) }
+          .join("\n\n")
+      end
+
+      private def reject_system_messages(messages : Array(Hash(String, JSON::Any))) : Array(Hash(String, JSON::Any))
+        messages.reject { |message| message["role"]?.try(&.as_s?) == "system" }
+      end
+
       private def map_tools_to_native(tools) : Array(Hash(String, JSON::Any))?
         return nil if tools.nil? || tools.empty?
 
@@ -427,6 +540,7 @@ module Autobot
         [{"functionDeclarations" => JSON::Any.new(decls.map { |decl| JSON::Any.new(decl) })}]
       end
 
+      # ameba:disable Metrics/CyclomaticComplexity
       private def parse_native_response(body : String) : Response
         json = JSON.parse(body)
         # Handle both wrapped and unwrapped response
@@ -476,7 +590,8 @@ module Autobot
             end
           end
 
-          usage = parse_native_usage(res["usageMetadata"]?)
+          usage_meta = res["usageMetadata"]?
+          usage = parse_native_usage(usage_meta)
 
           return Response.new(
             content: content,
@@ -494,7 +609,9 @@ module Autobot
         TokenUsage.new(
           prompt_tokens: node["promptTokenCount"]?.try(&.as_i) || 0,
           completion_tokens: node["candidatesTokenCount"]?.try(&.as_i) || 0,
-          total_tokens: node["totalTokenCount"]?.try(&.as_i) || 0
+          total_tokens: node["totalTokenCount"]?.try(&.as_i) || 0,
+          cache_creation_tokens: 0,
+          cache_read_tokens: node["cachedContentTokenCount"]?.try(&.as_i) || 0
         )
       end
 
@@ -518,6 +635,18 @@ module Autobot
         rescue
           JSON::Any.new({"result" => node})
         end
+      end
+
+      private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
+        uri = URI.parse(url)
+        tls = uri.scheme == "https"
+        host = uri.host || "generativelanguage.googleapis.com"
+        client = HTTP::Client.new(host, port: uri.port, tls: tls)
+        client.connect_timeout = CONNECT_TIMEOUT
+        client.read_timeout = READ_TIMEOUT
+        client.post(uri.request_target, headers: headers, body: body)
+      ensure
+        client.try(&.close)
       end
     end
   end
