@@ -14,11 +14,13 @@ module Autobot
     class SandboxExecutor
       MAX_FILE_SIZE = 1_048_576
 
-      def initialize(@workspace : Path?)
+      getter? sandboxed : Bool = true
+
+      def initialize(@workspace : Path?, @sandboxed : Bool = true)
       end
 
       def read_file(path : String) : ToolResult
-        if workspace = @workspace
+        if @sandboxed && (workspace = @workspace)
           read_file_via_sandbox_exec(path, workspace)
         else
           read_file_direct(path)
@@ -30,7 +32,7 @@ module Autobot
       # Read a file and return base64-encoded contents.
       # Safe for binary files (images, GIFs, documents).
       def read_file_base64(path : String) : ToolResult
-        if workspace = @workspace
+        if @sandboxed && (workspace = @workspace)
           success, output = Sandbox.read_file_base64(path, workspace)
           success ? ToolResult.success(output) : ToolResult.error(output)
         else
@@ -41,7 +43,7 @@ module Autobot
       end
 
       def write_file(path : String, content : String) : ToolResult
-        if workspace = @workspace
+        if @sandboxed && (workspace = @workspace)
           write_file_via_sandbox_exec(path, content, workspace)
         else
           write_file_direct(path, content)
@@ -51,7 +53,7 @@ module Autobot
       end
 
       def list_dir(path : String) : ToolResult
-        if workspace = @workspace
+        if @sandboxed && (workspace = @workspace)
           list_dir_via_sandbox_exec(path, workspace)
         else
           list_dir_direct(path)
@@ -61,7 +63,7 @@ module Autobot
       end
 
       def exec(command : String, timeout : Int32 = 60) : ToolResult
-        if workspace = @workspace
+        if @sandboxed && (workspace = @workspace)
           exec_via_sandbox_exec(command, timeout, workspace)
         else
           exec_direct(command, timeout)
