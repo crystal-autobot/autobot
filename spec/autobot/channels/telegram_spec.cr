@@ -41,6 +41,10 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
   def test_media_filename(attachment : Autobot::Bus::MediaAttachment, default : String) : String
     media_filename(attachment, default)
   end
+
+  def test_parse_script_args(args_str : String) : Array(String)
+    parse_script_args(args_str)
+  end
 end
 
 private def build_channel(
@@ -383,6 +387,33 @@ describe Autobot::Channels::TelegramChannel do
       caption_section = body.split("name=\"caption\"").last
       # The caption content (between headers and boundary) should be truncated
       caption_section.size.should be < 2000
+    end
+  end
+
+  describe "#parse_script_args" do
+    it "correctly parses simple arguments" do
+      channel = build_channel
+      channel.test_parse_script_args("foo bar baz").should eq(["foo", "bar", "baz"])
+    end
+
+    it "handles double quotes" do
+      channel = build_channel
+      channel.test_parse_script_args("foo \"bar baz\"").should eq(["foo", "bar baz"])
+    end
+
+    it "handles single quotes" do
+      channel = build_channel
+      channel.test_parse_script_args("foo 'bar baz'").should eq(["foo", "bar baz"])
+    end
+
+    it "handles escaped spaces" do
+      channel = build_channel
+      channel.test_parse_script_args("foo bar\\ baz").should eq(["foo", "bar baz"])
+    end
+
+    it "handles empty string" do
+      channel = build_channel
+      channel.test_parse_script_args("").should eq([] of String)
     end
   end
 end
