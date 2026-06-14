@@ -23,6 +23,7 @@ module Autobot
       MKDIR_TIMEOUT         =         5
       MAX_WRITE_OUTPUT      =    10_000
       MAX_LIST_OUTPUT       =   100_000
+      DEFAULT_MAX_OUTPUT    =    10_000
 
       enum Type
         Bubblewrap
@@ -93,7 +94,7 @@ module Autobot
         command : String,
         workspace : Path,
         timeout : Int32,
-        max_output_size : Int32 = 10_000,
+        max_output_size : Int32 = DEFAULT_MAX_OUTPUT,
       ) : {Process::Status, String, String}
         Log.debug { "Executing shell command in sandbox: #{command}" }
         run_in_sandbox(["sh", "-c", command], workspace, timeout, max_output_size)
@@ -106,7 +107,7 @@ module Autobot
         args : Array(String),
         workspace : Path,
         timeout : Int32,
-        max_output_size : Int32 = 10_000,
+        max_output_size : Int32 = DEFAULT_MAX_OUTPUT,
       ) : {Process::Status, String, String}
         Log.debug { "Executing program in sandbox: #{program} #{args.join(" ")}" }
         run_in_sandbox([program] + args, workspace, timeout, max_output_size)
@@ -154,7 +155,7 @@ module Autobot
         args.push("--")
         args.concat(cmd_args)
 
-        run_sandboxed_command("bwrap", args, timeout, max_output_size)
+        capture_command("bwrap", args, timeout, max_output_size)
       end
 
       private def self.run_in_docker(
@@ -181,7 +182,7 @@ module Autobot
         args << image
         args.concat(cmd_args)
 
-        run_sandboxed_command("docker", args, timeout, max_output_size)
+        capture_command("docker", args, timeout, max_output_size)
       end
 
       # Forward explicitly allowed environment variables to Docker container.
@@ -253,17 +254,20 @@ module Autobot
         false
       end
 
-      private def self.run_sandboxed_command(
-        sandbox_cmd : String,
+      # Runs a process, capturing stdout/stderr through pipes with a timeout.
+      # The read ends are closed once the process settles so reader fibers never
+      # block on daemons that inherit and keep the pipe write ends open.
+      def self.capture_command(
+        command : String,
         args : Array(String),
         timeout : Int32,
-        max_output_size : Int32,
+        max_output_size : Int32 = DEFAULT_MAX_OUTPUT,
       ) : {Process::Status, String, String}
         stdout_read, stdout_write = IO.pipe
         stderr_read, stderr_write = IO.pipe
 
         process = Process.new(
-          sandbox_cmd,
+          command,
           args,
           output: stdout_write,
           error: stderr_write
