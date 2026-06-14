@@ -190,7 +190,7 @@ module Autobot
           io = IO::Memory.new
           begin
             IO.copy(stdout_read, io)
-          rescue ex : IO::Error
+          rescue IO::Error
             # stream closed
           ensure
             stdout_channel.send(io.to_s)
@@ -201,7 +201,7 @@ module Autobot
           io = IO::Memory.new
           begin
             IO.copy(stderr_read, io)
-          rescue ex : IO::Error
+          rescue IO::Error
             # stream closed
           ensure
             stderr_channel.send(io.to_s)
