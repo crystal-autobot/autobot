@@ -176,4 +176,17 @@ describe Autobot::Tools::ExecTool do
       result.content.should contain("Command blocked")
     end
   end
+
+  describe "daemon execution handling" do
+    it "does not hang on background daemon processes" do
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+      start = Time.instant
+      result = tool.execute({"command" => JSON::Any.new("echo started; sleep 3 &")})
+      elapsed = Time.instant - start
+
+      result.success?.should be_true
+      result.content.strip.should start_with("started")
+      (elapsed < 1.second).should be_true
+    end
+  end
 end

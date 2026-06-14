@@ -95,17 +95,7 @@ module Autobot
 
       private def exec_via_sandbox_exec(command : String, timeout : Int32, workspace : Path) : ToolResult
         status, stdout, stderr = Sandbox.exec(command, workspace, timeout)
-
-        parts = [] of String
-        parts << stdout unless stdout.empty?
-        parts << "STDERR:\n#{stderr}" unless stderr.empty?
-
-        if !status.success? && status.exit_code != Sandbox::TIMEOUT_EXIT_CODE
-          parts << "\nExit code: #{status.exit_code}"
-        end
-
-        data = parts.empty? ? "[no output]" : parts.join("\n")
-        ToolResult.success(data)
+        build_exec_result(status, stdout, stderr)
       end
 
       # Direct execution (tests and non-sandbox mode)
@@ -173,49 +163,18 @@ module Autobot
       end
 
       private def exec_direct(command : String, timeout : Int32) : ToolResult
-        stdout_read, stdout_write = IO.pipe
-        stderr_read, stderr_write = IO.pipe
+        status, stdout, stderr = Sandbox.capture_command("sh", ["-c", command], timeout)
+        build_exec_result(status, stdout, stderr)
+      end
 
-        process = Process.new(
-          "sh", ["-c", command],
-          output: stdout_write,
-          error: stderr_write
-        )
-
-        stdout_write.close
-        stderr_write.close
-
-        stdout_channel = Channel(String).new(1)
-        stderr_channel = Channel(String).new(1)
-
-        spawn { stdout_channel.send(stdout_read.gets_to_end) }
-        spawn { stderr_channel.send(stderr_read.gets_to_end) }
-
-        completed = Channel(Process::Status).new(1)
-        spawn do
-          status = process.wait
-          completed.send(status)
-        end
-
-        select
-        when completed.receive
-          # Process completed
-        when timeout(timeout.seconds)
-          process.signal(Signal::TERM)
-          sleep 0.5.seconds
-          process.signal(Signal::KILL) unless process.terminated?
-          process.wait
-        end
-
-        stdout_text = stdout_channel.receive
-        stderr_text = stderr_channel.receive
-
-        stdout_read.close
-        stderr_read.close
-
+      private def build_exec_result(status : Process::Status, stdout : String, stderr : String) : ToolResult
         parts = [] of String
-        parts << stdout_text unless stdout_text.empty?
-        parts << "STDERR:\n#{stderr_text}" unless stderr_text.empty?
+        parts << stdout unless stdout.empty?
+        parts << "STDERR:\n#{stderr}" unless stderr.empty?
+
+        if !status.success? && status.exit_code != Sandbox::TIMEOUT_EXIT_CODE
+          parts << "\nExit code: #{status.exit_code}"
+        end
 
         data = parts.empty? ? "[no output]" : parts.join("\n")
         ToolResult.success(data)
