@@ -163,7 +163,8 @@ module Autobot::Config
     end
 
     def configured? : Bool
-      !api_key.empty? || (refresh_token? != nil && !refresh_token?.try(&.empty?))
+      (!api_key.empty? && !api_key.includes?("${")) ||
+        (rt = refresh_token?; !rt.nil? && !rt.empty? && !rt.includes?("${"))
     end
   end
 
@@ -180,7 +181,8 @@ module Autobot::Config
     end
 
     def configured? : Bool
-      !access_key_id.empty? && !secret_access_key.empty?
+      !access_key_id.empty? && !access_key_id.includes?("${") &&
+        !secret_access_key.empty? && !secret_access_key.includes?("${")
     end
   end
 

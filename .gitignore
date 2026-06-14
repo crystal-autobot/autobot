@@ -49,3 +49,6 @@ config.yml
 
 # Docker
 docker-compose.override.yml
+
+# AI Agents
+/.agents/
