@@ -35,7 +35,7 @@ module Autobot
         client_id : String? = nil,
         client_secret : String? = nil,
         refresh_token : String? = nil,
-        api_base : String? = nil
+        api_base : String? = nil,
       )
         super(api_key, api_base)
         @client_id = client_id.presence || ENV["GOOGLE_CLIENT_ID"]? || ENV["GEMINI_CLIENT_ID"]?
@@ -225,10 +225,10 @@ module Autobot
       private def build_openai_body(messages, tools, model, max_tokens, temperature)
         {
           "model"       => JSON::Any.new(model),
-          "messages"    => JSON::Any.new(messages.map { |m| JSON::Any.new(m.transform_values { |v| v }) }),
+          "messages"    => JSON::Any.new(messages.map { |msg| JSON::Any.new(msg.transform_values { |val| val }) }),
           "max_tokens"  => JSON::Any.new(max_tokens.to_i64),
           "temperature" => JSON::Any.new(temperature),
-          "tools"       => tools ? JSON::Any.new(tools.map { |t| JSON::Any.new(t.transform_values { |v| v }) }) : nil,
+          "tools"       => tools ? JSON::Any.new(tools.map { |tool| JSON::Any.new(tool.transform_values { |val| val }) }) : nil,
           "tool_choice" => tools ? JSON::Any.new("auto") : nil,
         }.compact.to_json
       end
@@ -251,13 +251,13 @@ module Autobot
 
       private def parse_openai_tool_calls(node : JSON::Any?) : Array(ToolCall)
         return [] of ToolCall unless arr = node.try(&.as_a?)
-        arr.compact_map do |tc|
-          func = tc["function"]?
+        arr.compact_map do |tcall|
+          func = tcall["function"]?
           next unless func
           args_str = func["arguments"].as_s
           args = JSON.parse(args_str).as_h
           ToolCall.new(
-            id: tc["id"].as_s,
+            id: tcall["id"].as_s,
             name: func["name"].as_s,
             arguments: args
           )
@@ -270,16 +270,16 @@ module Autobot
         native_tools = map_tools_to_native(tools)
 
         inner = {
-          "contents"          => JSON::Any.new(contents.map { |c| JSON::Any.new(c) }),
+          "contents"          => JSON::Any.new(contents.map { |content_msg| JSON::Any.new(content_msg) }),
           "systemInstruction" => system_instr ? JSON::Any.new(system_instr) : nil,
-          "tools"             => native_tools ? JSON::Any.new(native_tools.map { |t| JSON::Any.new(t) }) : nil,
+          "tools"             => native_tools ? JSON::Any.new(native_tools.map { |tool| JSON::Any.new(tool) }) : nil,
         }.compact
 
         {
           "model"          => JSON::Any.new(model),
           "project"        => JSON::Any.new(project_id),
           "user_prompt_id" => JSON::Any.new("autobot-#{Time.local.to_unix}"),
-          "request"        => JSON::Any.new(inner.transform_values { |v| v }),
+          "request"        => JSON::Any.new(inner.transform_values { |val| val }),
         }.to_json
       end
 
@@ -292,46 +292,85 @@ module Autobot
           role = "model" if role == "assistant"
           role = "function" if role == "tool"
 
-          parts = [] of Hash(String, JSON::Any)
-          if text = msg["content"]?.try(&.as_s?)
-            parts << {"text" => JSON::Any.new(text)}
-          end
-
-          # Handle tool calls in assistant messages
-          if role == "model" && (tcalls = msg["tool_calls"]?.try(&.as_a?))
-            tcalls.each do |tc|
-              func = tc["function"]
-              parts << {
-                "functionCall" => JSON::Any.new({
-                  "name" => func["name"],
-                  "args" => parse_json_or_wrap(func["arguments"]?),
-                } of String => JSON::Any),
-              }
-            end
-          end
-
-          # Handle tool results
-          if role == "function"
-            name = msg["name"]?.try(&.as_s?) || "unknown"
-            result = parse_json_or_wrap(msg["content"]?)
-            parts << {
-              "functionResponse" => JSON::Any.new({
-                "name"     => JSON::Any.new(name),
-                "response" => result,
-              } of String => JSON::Any),
-            }
-          end
-
+          parts = build_native_parts(msg, role)
           contents << {
             "role"  => JSON::Any.new(role),
-            "parts" => JSON::Any.new(parts.map { |p| JSON::Any.new(p) }),
+            "parts" => JSON::Any.new(parts.map { |part| JSON::Any.new(part) }),
           } unless parts.empty?
         end
         contents
       end
 
+      private def build_native_parts(msg, role) : Array(Hash(String, JSON::Any))
+        parts = [] of Hash(String, JSON::Any)
+
+        has_thought_parts = false
+        if role == "model" && (tcalls = msg["tool_calls"]?.try(&.as_a?))
+          if tparts = extract_thought_parts(tcalls)
+            parts.concat(tparts)
+            has_thought_parts = true
+          end
+        end
+
+        if !has_thought_parts
+          if text = msg["content"]?.try(&.as_s?)
+            parts << {"text" => JSON::Any.new(text)}
+          end
+        end
+
+        if role == "model" && (tcalls = msg["tool_calls"]?.try(&.as_a?))
+          append_native_tool_calls(parts, tcalls)
+        end
+
+        if role == "function"
+          append_native_tool_result(parts, msg)
+        end
+
+        parts
+      end
+
+      private def extract_thought_parts(tcalls) : Array(Hash(String, JSON::Any))?
+        tcalls.each do |tcall|
+          if extra = tcall["extra_content"]?
+            if thought_parts = extra["thought_parts"]?.try(&.as_a?)
+              res = [] of Hash(String, JSON::Any)
+              thought_parts.each do |tpart|
+                if tp_h = tpart.as_h?
+                  res << tp_h.transform_values { |val| val }
+                end
+              end
+              return res
+            end
+          end
+        end
+        nil
+      end
+
+      private def append_native_tool_calls(parts, tcalls)
+        tcalls.each do |tcall|
+          func = tcall["function"]
+          parts << {
+            "functionCall" => JSON::Any.new({
+              "name" => func["name"],
+              "args" => parse_json_or_wrap(func["arguments"]?),
+            } of String => JSON::Any),
+          }
+        end
+      end
+
+      private def append_native_tool_result(parts, msg)
+        name = msg["name"]?.try(&.as_s?) || "unknown"
+        result = parse_json_or_wrap(msg["content"]?)
+        parts << {
+          "functionResponse" => JSON::Any.new({
+            "name"     => JSON::Any.new(name),
+            "response" => result,
+          } of String => JSON::Any),
+        }
+      end
+
       private def extract_system_instruction(messages) : Hash(String, JSON::Any)?
-        if sys_msg = messages.find { |m| m["role"].as_s == "system" }
+        if sys_msg = messages.find { |msg| msg["role"].as_s == "system" }
           return {
             "role"  => JSON::Any.new("user"),
             "parts" => JSON::Any.new([JSON::Any.new({"text" => JSON::Any.new(sys_msg["content"].as_s)})]),
@@ -343,17 +382,17 @@ module Autobot
       private def map_tools_to_native(tools) : Array(Hash(String, JSON::Any))?
         return nil if tools.nil? || tools.empty?
 
-        decls = tools.compact_map do |t|
-          func = t["function"]?
+        decls = tools.compact_map do |tool|
+          func = tool["function"]?
           next unless func
           {
             "name"        => func["name"],
             "description" => func["description"]? || JSON::Any.new("No description available"),
-            "parameters"  => func["parameters"]? || JSON::Any.new({ "type" => JSON::Any.new("object"), "properties" => JSON::Any.new({} of String => JSON::Any) }),
+            "parameters"  => func["parameters"]? || JSON::Any.new({"type" => JSON::Any.new("object"), "properties" => JSON::Any.new({} of String => JSON::Any)}),
           } of String => JSON::Any
         end
 
-        [{"functionDeclarations" => JSON::Any.new(decls.map { |d| JSON::Any.new(d) })}]
+        [{"functionDeclarations" => JSON::Any.new(decls.map { |decl| JSON::Any.new(decl) })}]
       end
 
       private def parse_native_response(body : String) : Response
@@ -364,13 +403,28 @@ module Autobot
         if (candidates = res["candidates"]?) && (first = candidates[0]?)
           content = nil
           native_parts = [] of JSON::Any
-          if (parts = first["content"]?.try(&.["parts"]?.try(&.as_a?)))
+          thought_parts = [] of JSON::Any
+
+          if parts = first["content"]?.try(&.["parts"]?.try(&.as_a?))
             text_parts = parts.compact_map(&.["text"]?.try(&.as_s?))
             content = text_parts.join("\n") unless text_parts.empty?
-            
+
             # Save all parts for preservation (including thought/thought_signature)
-            parts.each { |p| native_parts << p }
+            parts.each do |part|
+              native_parts << part
+              unless part["functionCall"]?
+                thought_parts << part
+              end
+            end
           end
+
+          extra = if !thought_parts.empty?
+                    JSON::Any.new({
+                      "thought_parts" => JSON::Any.new(thought_parts),
+                    } of String => JSON::Any)
+                  else
+                    nil
+                  end
 
           tool_calls = [] of ToolCall
           if parts
@@ -381,7 +435,8 @@ module Autobot
                 tool_calls << ToolCall.new(
                   id: "call_#{Random::Secure.hex(8)}",
                   name: name,
-                  arguments: args
+                  arguments: args,
+                  extra_content: extra
                 )
               end
             end
@@ -392,7 +447,8 @@ module Autobot
           return Response.new(
             content: content,
             tool_calls: tool_calls,
-            usage: usage
+            usage: usage,
+            native_parts: native_parts
           )
         end
 

@@ -52,7 +52,7 @@ module Autobot
         puts "🔑 Gemini OAuth Authentication\n\n"
 
         port = find_available_port
-        
+
         # Generate PKCE
         verifier = Random::Secure.hex(32)
         sha256 = OpenSSL::Digest.new("SHA256")
@@ -60,7 +60,7 @@ module Autobot
         challenge = Base64.urlsafe_encode(sha256.final, padding: false)
 
         state = Random::Secure.hex(16)
-        
+
         # Use a channel to communicate the result from the server fiber
         result_chan = Channel(AuthResult).new
 
@@ -96,12 +96,12 @@ module Autobot
         spawn { server.listen }
 
         # Wait for result or timeout
-        auth_code = nil
-        select
+        auth_code = select
         when result = result_chan.receive
-          auth_code = result.auth_code
+          result.auth_code
         when timeout(5.minutes)
           puts "\n❌ Authorization timed out."
+          nil
         end
 
         # Small delay to let browser finish request, then close
@@ -125,12 +125,12 @@ module Autobot
 
       private def self.find_available_port : Int32
         # Try 8085 first, then random
-        [8085, 0].each do |p|
+        [8085, 0].each do |port|
           begin
-            s = TCPServer.new("127.0.0.1", p)
-            actual_p = s.local_address.port
+            s = TCPServer.new("127.0.0.1", port)
+            actual_port = s.local_address.port
             s.close
-            return actual_p
+            return actual_port
           rescue
             next
           end

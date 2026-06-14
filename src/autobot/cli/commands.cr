@@ -40,6 +40,7 @@ module Autobot
         dispatch_command(options)
       end
 
+      # ameba:disable Metrics/CyclomaticComplexity
       private def self.dispatch_command(options) : Nil
         case options[:command]
         when "help", "-h", "--help"
