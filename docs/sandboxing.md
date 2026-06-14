@@ -227,16 +227,16 @@ autobot agent --sandbox docker
 
 ## Development
 
-### Running Without Sandbox (Tests)
+### Running Without Sandbox (Tests and Development)
 
-Tests automatically disable sandboxing:
+Tests or configurations with `sandbox: none` disable sandboxing. If a workspace is configured but sandboxing is disabled, operations run directly on the host filesystem:
 
 ```crystal
-# Tests pass nil workspace to SandboxExecutor
-executor = SandboxExecutor.new(nil)
+# Initialize SandboxExecutor with sandboxed: false
+executor = SandboxExecutor.new(workspace, sandboxed: false)
 tool = ReadFileTool.new(executor)
 
-# Tool uses direct file operations (fast, no overhead)
+# Tool uses direct file operations on the host filesystem
 tool.execute({"path" => JSON::Any.new("test.txt")})  # Direct File.read
 ```
 

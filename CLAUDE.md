@@ -3,6 +3,9 @@
 ## Rules
 
 1. When making changes, ensure the docs/ also reflect it.
+2. **Coding Agents & Assistants (Jules, Claude, Gemini, ChatGPT, Cursor)**:
+   - **Scope Boundary**: Modify *only* files directly related to your task. Do not perform global formatting or style cleanups that alter unrelated files (e.g. stripping trailing commas).
+   - **Upstream Alignment**: Always branch off the latest commit of the upstream main branch (`crystal-autobot/autobot:main`). Sync fork branches before starting.
 
 ## Code Quality Standards
 
