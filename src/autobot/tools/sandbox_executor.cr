@@ -191,7 +191,6 @@ module Autobot
           begin
             IO.copy(stdout_read, io)
           rescue IO::Error
-            # stream closed
           ensure
             stdout_channel.send(io.to_s)
           end
@@ -202,7 +201,6 @@ module Autobot
           begin
             IO.copy(stderr_read, io)
           rescue IO::Error
-            # stream closed
           ensure
             stderr_channel.send(io.to_s)
           end
@@ -216,7 +214,6 @@ module Autobot
 
         select
         when completed.receive
-          # Process completed
         when timeout(timeout.seconds)
           process.signal(Signal::TERM)
           sleep 0.5.seconds
