@@ -349,12 +349,17 @@ module Autobot
       private def append_native_tool_calls(parts, tcalls)
         tcalls.each do |tcall|
           func = tcall["function"]
-          parts << {
+          thought_sig = tcall["thought_signature"]?.try(&.as_s?)
+          part_payload = {
             "functionCall" => JSON::Any.new({
               "name" => func["name"],
               "args" => parse_json_or_wrap(func["arguments"]?),
             } of String => JSON::Any),
-          }
+          } of String => JSON::Any
+          if thought_sig
+            part_payload["thoughtSignature"] = JSON::Any.new(thought_sig)
+          end
+          parts << part_payload
         end
       end
 
@@ -432,11 +437,13 @@ module Autobot
               if fcall = part["functionCall"]?
                 name = fcall["name"].as_s
                 args = fcall["args"]?.try(&.as_h) || {} of String => JSON::Any
+                thought_sig = part["thoughtSignature"]?.try(&.as_s?)
                 tool_calls << ToolCall.new(
                   id: "call_#{Random::Secure.hex(8)}",
                   name: name,
                   arguments: args,
-                  extra_content: extra
+                  extra_content: extra,
+                  thought_signature: thought_sig
                 )
               end
             end

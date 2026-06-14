@@ -88,6 +88,10 @@ module Autobot::Agent
             data["extra_content"] = extra_content
           end
 
+          if ts = tool_call.thought_signature
+            data["thought_signature"] = JSON::Any.new(ts)
+          end
+
           JSON::Any.new(data)
         end
 

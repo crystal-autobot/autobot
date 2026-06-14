@@ -77,11 +77,13 @@ describe Autobot::Providers::ToolCall do
     call = Autobot::Providers::ToolCall.new(
       id: "c1",
       name: "exec",
-      arguments: {"command" => JSON::Any.new("ls")}
+      arguments: {"command" => JSON::Any.new("ls")},
+      thought_signature: "sig_abc123"
     )
     json = call.to_json
     parsed = Autobot::Providers::ToolCall.from_json(json)
     parsed.name.should eq("exec")
+    parsed.thought_signature.should eq("sig_abc123")
   end
 end
 
