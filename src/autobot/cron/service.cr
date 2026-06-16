@@ -401,6 +401,13 @@ module Autobot
 
       private def run_exec_job(job : CronJob, start_ms : Int64) : Nil
         output = exec_command(job)
+
+        # Limit stored output to prevent E2BIG errors in environment variables on next runs
+        max_bytes = 32768
+        if output.bytesize > max_bytes
+          output = output.byte_slice(0, max_bytes) + "\n...[Output truncated due to size limit]"
+        end
+
         job.state = job.state.copy(
           last_run_at_ms: start_ms,
           last_status: JobStatus::Ok,
