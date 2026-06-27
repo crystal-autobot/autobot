@@ -16,6 +16,8 @@ module Autobot::Channels
   module MarkdownToTelegramHTML
     TELEGRAM_MAX_LENGTH = 4096
 
+    # Prefix (no closing ">") so it matches both <pre><code> and
+    # <pre><code class="language-...">; the full open tag is recovered later.
     HTML_CODE_OPEN  = "<pre><code"
     HTML_CODE_CLOSE = "</code></pre>"
 
