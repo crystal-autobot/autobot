@@ -6,6 +6,7 @@ require "socket"
 require "uri"
 require "openssl"
 require "base64"
+require "colorize"
 
 module Autobot
   module CLI
@@ -20,6 +21,15 @@ module Autobot
         "https://www.googleapis.com/auth/userinfo.profile",
       ]
 
+      DEFAULT_CALLBACK_PORT   = 8085
+      AUTH_TIMEOUT            = 5.minutes
+      GOOGLE_OAUTH_USER_AGENT = "google-api-nodejs-client/9.15.1"
+
+      SUCCESS_HTML = "<h1>Authorization successful</h1>" \
+                     "<p>You can close this window and return to the terminal.</p>" \
+                     "<script>window.close()</script>"
+      FAILURE_HTML = "<h1>Authorization failed</h1><p>Invalid state or missing code.</p>"
+
       # Default Client ID and Secret (loaded from environment)
       def self.client_id : String
         ENV["GOOGLE_CLIENT_ID"]? || ENV["GEMINI_CLIENT_ID"]? || ""
@@ -27,12 +37,6 @@ module Autobot
 
       def self.client_secret : String
         ENV["GOOGLE_CLIENT_SECRET"]? || ENV["GEMINI_CLIENT_SECRET"]? || ""
-      end
-
-      # Helper class to store authorization result
-      private class AuthResult
-        property auth_code : String? = nil
-        property received_state : String? = nil
       end
 
       def self.run(config_path : String?, args : Array(String)) : Nil
@@ -49,7 +53,7 @@ module Autobot
       end
 
       private def self.authenticate_gemini(config_path : String?) : Nil
-        puts "🔑 Gemini OAuth Authentication\n\n"
+        puts "🔑 Gemini OAuth authentication\n\n"
 
         port = find_available_port
 
@@ -61,22 +65,20 @@ module Autobot
 
         state = Random::Secure.hex(16)
 
-        # Use a channel to communicate the result from the server fiber
-        result_chan = Channel(AuthResult).new
+        # Channel carries the authorization code back from the callback fiber
+        result_chan = Channel(String).new
 
         server = HTTP::Server.new do |context|
           params = HTTP::Params.parse(URI.parse(context.request.resource).query || "")
-          res = AuthResult.new
-          res.auth_code = params["code"]?
-          res.received_state = params["state"]?
-
           context.response.content_type = "text/html"
-          if res.auth_code && res.received_state == state
-            context.response.print "<h1>Authorization Successful!</h1><p>You can close this window and return to the terminal.</p><script>window.close();</script>"
-            result_chan.send(res)
+
+          code = params["code"]?
+          if code && params["state"]? == state
+            context.response.print SUCCESS_HTML
+            result_chan.send(code)
           else
-            context.response.status_code = 400
-            context.response.print "<h1>Authorization Failed</h1><p>Invalid state or missing code.</p>"
+            context.response.status = HTTP::Status::BAD_REQUEST
+            context.response.print FAILURE_HTML
           end
         end
 
@@ -90,16 +92,16 @@ module Autobot
         auth_url = build_auth_url(cid, redirect_uri, SCOPES.join("%20"), state, challenge)
 
         puts "Please visit this URL to authorize Autobot:\n\n"
-        puts "\e[1;34m#{auth_url}\e[0m\n\n"
+        puts "#{auth_url.colorize.blue.bold}\n\n"
         puts "Waiting for authorization on #{redirect_uri}..."
 
         spawn { server.listen }
 
         # Wait for result or timeout
         auth_code = select
-        when result = result_chan.receive
-          result.auth_code
-        when timeout(5.minutes)
+        when received = result_chan.receive
+          received
+        when timeout(AUTH_TIMEOUT)
           puts "\n❌ Authorization timed out."
           nil
         end
@@ -124,18 +126,18 @@ module Autobot
       end
 
       private def self.find_available_port : Int32
-        # Try 8085 first, then random
-        [8085, 0].each do |port|
+        # Try the preferred port first, then let the OS pick a free one
+        [DEFAULT_CALLBACK_PORT, 0].each do |port|
           begin
-            s = TCPServer.new("127.0.0.1", port)
-            actual_port = s.local_address.port
-            s.close
-            return actual_port
+            server = TCPServer.new("127.0.0.1", port)
+            available_port = server.local_address.port
+            server.close
+            return available_port
           rescue
             next
           end
         end
-        8085 # Fallback
+        DEFAULT_CALLBACK_PORT
       end
 
       private def self.exchange_code_for_tokens(config_path : String?, client_id : String, client_secret : String, code : String, verifier : String, redirect_uri : String) : Nil
@@ -150,7 +152,7 @@ module Autobot
 
         headers = HTTP::Headers{
           "Content-Type" => "application/x-www-form-urlencoded",
-          "User-Agent"   => "google-api-nodejs-client/9.15.1",
+          "User-Agent"   => GOOGLE_OAUTH_USER_AGENT,
         }
 
         response = HTTP::Client.post(OAUTH_TOKEN_URL, headers: headers, form: params)
