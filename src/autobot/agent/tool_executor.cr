@@ -70,7 +70,10 @@ module Autobot::Agent
       @max_iterations.times do
         truncate_old_tool_results(messages, iteration_boundaries)
 
-        compact_tools = called_tools.empty? ? nil : called_tools.to_a
+        compact_tools = nil
+        if @provider.supports_progressive_disclosure? && !called_tools.empty?
+          compact_tools = called_tools.to_a
+        end
         response = call_llm(messages, tools, exclude_tools, compact_tools)
         total_tokens += response.usage.total_tokens
 

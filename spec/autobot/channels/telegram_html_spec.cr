@@ -217,5 +217,16 @@ describe Autobot::Channels::MarkdownToTelegramHTML do
       chunks = Autobot::Channels::MarkdownToTelegramHTML.split_message(text)
       chunks.join("\n\n").should eq(text)
     end
+
+    it "balances HTML tags across split chunks" do
+      code_block = "<pre><code>" + ("a\n" * 2500) + "</code></pre>"
+      chunks = Autobot::Channels::MarkdownToTelegramHTML.split_message(code_block)
+      chunks.size.should be > 1
+      chunks.each do |chunk|
+        Autobot::Channels::MarkdownToTelegramHTML.valid_html?(chunk).should be_true
+        chunk.should start_with("<pre><code>") if chunk != chunks.first
+        chunk.should end_with("</code></pre>") if chunk != chunks.last
+      end
+    end
   end
 end

@@ -28,7 +28,7 @@ module Autobot
       def self.validate_provider(config : Config::Config) : Nil
         provider_config, _name = config.match_provider
         bedrock_config = config.match_bedrock
-        unless provider_config || bedrock_config
+        unless (provider_config && provider_config.configured?) || bedrock_config
           STDERR.puts "Error: No API key configured."
           STDERR.puts "Set one in config.yml under providers section"
           exit 1
@@ -68,12 +68,23 @@ module Autobot
         else
           provider_config, provider_name = config.match_provider
           raise "No provider configured" unless provider_config
-          Providers::HttpProvider.new(
-            api_key: provider_config.api_key,
-            api_base: provider_config.api_base?,
-            model: config.default_model,
-            provider_name: provider_name,
-          )
+          if provider_name == "gemini"
+            Providers::GeminiProvider.new(
+              api_key: provider_config.api_key,
+              model: config.default_model,
+              client_id: provider_config.client_id?,
+              client_secret: provider_config.client_secret?,
+              refresh_token: provider_config.refresh_token?,
+              api_base: provider_config.api_base?,
+            )
+          else
+            Providers::HttpProvider.new(
+              api_key: provider_config.api_key,
+              api_base: provider_config.api_base?,
+              model: config.default_model,
+              provider_name: provider_name,
+            )
+          end
         end
       end
 

@@ -26,6 +26,13 @@ module Autobot
 
       # The default model identifier for this provider.
       abstract def default_model : String
+
+      # Whether this provider benefits from progressive tool disclosure.
+      # Providers with caching (like Gemini) should disable this so the
+      # tool schemas remain stable and don't bust the cache.
+      def supports_progressive_disclosure? : Bool
+        true
+      end
     end
   end
 end

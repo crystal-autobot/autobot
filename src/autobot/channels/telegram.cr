@@ -16,6 +16,11 @@ module Autobot::Channels
   module MarkdownToTelegramHTML
     TELEGRAM_MAX_LENGTH = 4096
 
+    # Prefix (no closing ">") so it matches both <pre><code> and
+    # <pre><code class="language-...">; the full open tag is recovered later.
+    HTML_CODE_OPEN  = "<pre><code"
+    HTML_CODE_CLOSE = "</code></pre>"
+
     CODE_BLOCK_PREFIX  = "\x00CB"
     INLINE_CODE_PREFIX = "\x00IC"
     UNDERSCORE_PREFIX  = "\x00US"
@@ -87,7 +92,97 @@ module Autobot::Channels
 
     def self.split_message(text : String) : Array(String)
       return [text] if text.size <= TELEGRAM_MAX_LENGTH
-      split_by_paragraphs(text)
+
+      chunks = [] of String
+      code_block_segments(text).each do |segment|
+        next if segment.empty?
+        if segment.starts_with?(HTML_CODE_OPEN)
+          split_code_block(segment, chunks)
+        else
+          split_by_paragraphs(segment).each { |chunk| chunks << chunk }
+        end
+      end
+      chunks
+    end
+
+    # Splits text into alternating plain and complete <pre><code>...</code></pre>
+    # segments so neither can be broken across a chunk boundary.
+    private def self.code_block_segments(text : String) : Array(String)
+      segments = [] of String
+      cursor = 0
+
+      while open_index = text.index(HTML_CODE_OPEN, cursor)
+        close_index = text.index(HTML_CODE_CLOSE, open_index)
+        break unless close_index
+
+        block_end = close_index + HTML_CODE_CLOSE.size
+        segments << text[cursor, open_index - cursor] if open_index > cursor
+        segments << text[open_index, block_end - open_index]
+        cursor = block_end
+      end
+
+      segments << text[cursor..] if cursor < text.size
+      segments
+    end
+
+    # Splits an oversized code block into self-contained <pre><code> chunks that
+    # each stay within the length limit.
+    private def self.split_code_block(block : String, chunks : Array(String)) : Nil
+      if block.size <= TELEGRAM_MAX_LENGTH
+        chunks << block
+        return
+      end
+
+      open_tag = code_block_open_tag(block)
+      inner = block[open_tag.size, block.size - open_tag.size - HTML_CODE_CLOSE.size]
+      budget = TELEGRAM_MAX_LENGTH - open_tag.size - HTML_CODE_CLOSE.size
+
+      pack_code_lines(inner, budget).each do |piece|
+        chunks << "#{open_tag}#{piece}#{HTML_CODE_CLOSE}"
+      end
+    end
+
+    private def self.code_block_open_tag(block : String) : String
+      pre_end = block.index('>')
+      code_end = pre_end ? block.index('>', pre_end + 1) : nil
+      code_end ? block[0, code_end + 1] : "<pre><code>"
+    end
+
+    private def self.pack_code_lines(content : String, budget : Int32) : Array(String)
+      pieces = [] of String
+      buffer = String::Builder.new
+      buffer_size = 0
+
+      each_code_unit(content, budget) do |unit|
+        if buffer_size > 0 && buffer_size + unit.size > budget
+          pieces << buffer.to_s
+          buffer = String::Builder.new
+          buffer_size = 0
+        end
+        buffer << unit
+        buffer_size += unit.size
+      end
+
+      pieces << buffer.to_s if buffer_size > 0
+      pieces
+    end
+
+    # Yields the content line by line (newlines preserved), hard-splitting any
+    # single line that exceeds the budget so concatenation reproduces the input.
+    private def self.each_code_unit(content : String, budget : Int32, & : String ->) : Nil
+      lines = content.split('\n')
+      last_index = lines.size - 1
+
+      lines.each_with_index do |line, index|
+        unit = index == last_index ? line : "#{line}\n"
+        next if unit.empty?
+
+        if unit.size <= budget
+          yield unit
+        else
+          0.step(to: unit.size - 1, by: budget) { |start| yield unit[start, budget] }
+        end
+      end
     end
 
     private def self.extract_code_blocks(text : String, store : Array(String)) : String
