@@ -207,6 +207,7 @@ module Autobot
           if bytes_read > max_size
             buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
             buffer << "\n... (output truncated at #{max_size} bytes)"
+            io.close unless io.closed?
             break
           end
           buffer.write(chunk[0, n])

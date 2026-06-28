@@ -27,6 +27,9 @@ module Autobot
         ".gif"  => {"animation", "image/gif"},
         ".mp4"  => {"video", "video/mp4"},
         ".pdf"  => {"document", "application/pdf"},
+        ".ogg"  => {"voice", "audio/ogg"},
+        ".mp3"  => {"audio", "audio/mpeg"},
+        ".wav"  => {"audio", "audio/wav"},
       }
 
       @send_callback : SendCallback?

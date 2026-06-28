@@ -196,9 +196,12 @@ module Autobot
       IMAGE_CAPABLE_PROVIDERS = {"openai", "gemini"}
 
       BUILTIN_PLUGINS = {
-        "sqlite"  => -> { Plugins::Builtin::SQLitePlugin.new.as(Plugins::Plugin) },
-        "github"  => -> { Plugins::Builtin::GithubPlugin.new.as(Plugins::Plugin) },
-        "weather" => -> { Plugins::Builtin::WeatherPlugin.new.as(Plugins::Plugin) },
+        "sqlite"         => -> { Plugins::Builtin::SQLitePlugin.new.as(Plugins::Plugin) },
+        "github"         => -> { Plugins::Builtin::GithubPlugin.new.as(Plugins::Plugin) },
+        "weather"        => -> { Plugins::Builtin::WeatherPlugin.new.as(Plugins::Plugin) },
+        "system_info"    => -> { Plugins::SystemInfoPlugin.new.as(Plugins::Plugin) },
+        "text_to_speech" => -> { Plugins::TextToSpeechPlugin.new.as(Plugins::Plugin) },
+        "chat_log"       => -> { Plugins::ChatLogPlugin.new.as(Plugins::Plugin) },
       }
 
       # Register builtin plugins that are enabled in config (all enabled by default).

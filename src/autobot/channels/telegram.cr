@@ -300,6 +300,7 @@ module Autobot::Channels
     @offset : Int64 = 0_i64
     @bot_username : String = ""
     @typing_channels : Set(String) = Set(String).new
+    @chat_log_mutex : Mutex = Mutex.new
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -386,6 +387,21 @@ module Autobot::Channels
       media.find { |attachment| attachment.type == "photo" && attachment.data }
     end
 
+    private def get_media_params(attachment : Bus::MediaAttachment)
+      case attachment.type
+      when "photo"
+        {api_method: "sendPhoto", field_name: "photo", filename: media_filename(attachment, "image.png"), content_type: attachment.mime_type || "image/png"}
+      when "animation"
+        {api_method: "sendAnimation", field_name: "animation", filename: media_filename(attachment, "animation.gif"), content_type: attachment.mime_type || "image/gif"}
+      when "voice"
+        {api_method: "sendVoice", field_name: "voice", filename: media_filename(attachment, "voice.ogg"), content_type: attachment.mime_type || "audio/ogg"}
+      when "audio"
+        {api_method: "sendAudio", field_name: "audio", filename: media_filename(attachment, "audio.mp3"), content_type: attachment.mime_type || "audio/mpeg"}
+      else
+        {api_method: "sendDocument", field_name: "document", filename: media_filename(attachment, "file"), content_type: attachment.mime_type || "application/octet-stream"}
+      end
+    end
+
     private def send_media(chat_id : String, attachment : Bus::MediaAttachment, caption : String) : Nil
       data = attachment.data
       unless data
@@ -395,27 +411,13 @@ module Autobot::Channels
       end
 
       file_bytes = Base64.decode(data)
+      params = get_media_params(attachment)
 
-      case attachment.type
-      when "photo"
-        send_media_request(chat_id, file_bytes, caption,
-          api_method: "sendPhoto",
-          field_name: "photo",
-          filename: media_filename(attachment, "image.png"),
-          content_type: attachment.mime_type || "image/png")
-      when "animation"
-        send_media_request(chat_id, file_bytes, caption,
-          api_method: "sendAnimation",
-          field_name: "animation",
-          filename: media_filename(attachment, "animation.gif"),
-          content_type: attachment.mime_type || "image/gif")
-      else
-        send_media_request(chat_id, file_bytes, caption,
-          api_method: "sendDocument",
-          field_name: "document",
-          filename: media_filename(attachment, "file"),
-          content_type: attachment.mime_type || "application/octet-stream")
-      end
+      send_media_request(chat_id, file_bytes, caption,
+        api_method: params[:api_method],
+        field_name: params[:field_name],
+        filename: params[:filename],
+        content_type: params[:content_type])
     rescue ex
       Log.error { "Error sending media: #{ex.message}" }
       send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
@@ -537,20 +539,30 @@ module Autobot::Channels
       end
 
       content, media_attachments = build_content_and_media(msg)
-
       content = prepend_reply_context(content, extract_reply_context(msg))
 
-      Log.debug { "Message from #{sender[:sender_id]}: #{content}" }
+      display_name = sender[:username] ? "@#{sender[:username]}" : sender[:first_name]
+      content_to_process = sender[:is_group] ? "#{display_name}: #{content}" : content
 
-      start_typing(sender[:chat_id])
+      # Record every message in this chat log (whether mentioned or not)
+      if sender[:is_group]
+        record_chat_log(sender[:chat_id], display_name, content)
+      end
 
-      handle_message(
-        sender_id: sender[:sender_id],
-        chat_id: sender[:chat_id],
-        content: content,
-        media: media_attachments.empty? ? nil : media_attachments,
-        metadata: build_metadata(msg, sender),
-      )
+      if addressed?(msg, sender)
+        Log.debug { "Message from #{sender[:sender_id]}: #{content_to_process}" }
+        start_typing(sender[:chat_id])
+
+        handle_message(
+          sender_id: sender[:sender_id],
+          chat_id: sender[:chat_id],
+          content: content_to_process,
+          media: media_attachments.empty? ? nil : media_attachments,
+          metadata: build_metadata(msg, sender),
+        )
+      else
+        Log.debug { "Logged group message from #{sender[:sender_id]} silently" }
+      end
     rescue ex
       Log.error { "Error processing message: #{ex.message}" }
     end
@@ -1085,6 +1097,58 @@ module Autobot::Channels
         "text"       => text,
         "parse_mode" => "HTML",
       })
+    end
+
+    private def addressed?(msg : JSON::Any, sender : NamedTuple(chat_id: String, user_id: String, username: String?, first_name: String, sender_id: String, is_group: Bool)) : Bool
+      return true unless sender[:is_group]
+      mentioned?(msg)
+    end
+
+    private def mentioned?(msg : JSON::Any) : Bool
+      return false if @bot_username.empty?
+      if text = msg["text"]?.try(&.as_s)
+        return true if text.includes?("@#{@bot_username}")
+      end
+      if caption = msg["caption"]?.try(&.as_s)
+        return true if caption.includes?("@#{@bot_username}")
+      end
+
+      # Check if message is a reply to the bot
+      if reply_to = msg["reply_to_message"]?
+        if reply_from = reply_to["from"]?
+          if reply_username = reply_from["username"]?.try(&.as_s)
+            return true if reply_username == @bot_username
+          end
+        end
+      end
+
+      false
+    end
+
+    private def record_chat_log(chat_id : String, sender_name : String, text : String) : Nil
+      workspace = @session_manager.try(&.sessions_dir.parent) || Path["."]
+      log_dir = workspace / "data" / "chat_logs"
+      Dir.mkdir_p(log_dir) unless Dir.exists?(log_dir)
+      log_path = log_dir / "telegram_#{chat_id}.log"
+
+      @chat_log_mutex.synchronize do
+        # Append message with timestamp
+        timestamp = Time.local.to_s("%Y-%m-%d %H:%M:%S")
+        File.open(log_path.to_s, "a") do |file|
+          file.puts("[#{timestamp}] #{sender_name}: #{text}")
+        end
+
+        # Truncate periodically (when it exceeds 150 lines, prune to last 100 lines)
+        # to avoid reading and writing the whole file on every single message.
+        if File.exists?(log_path.to_s)
+          lines = File.read_lines(log_path.to_s)
+          if lines.size > 150
+            File.write(log_path.to_s, lines[-100..].join("\n") + "\n")
+          end
+        end
+      end
+    rescue ex
+      Log.error { "Error writing to chat log: #{ex.message}" }
     end
   end
 end
