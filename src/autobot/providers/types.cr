@@ -39,8 +39,9 @@ module Autobot
       getter name : String
       getter arguments : Hash(String, JSON::Any)
       getter extra_content : JSON::Any?
+      getter thought_signature : String?
 
-      def initialize(@id, @name, @arguments = {} of String => JSON::Any, @extra_content = nil)
+      def initialize(@id, @name, @arguments = {} of String => JSON::Any, @extra_content = nil, @thought_signature = nil)
       end
     end
 
@@ -53,6 +54,7 @@ module Autobot
       getter finish_reason : String
       getter usage : TokenUsage
       getter reasoning_content : String?
+      getter native_parts : Array(JSON::Any)?
 
       def initialize(
         @content = nil,
@@ -60,6 +62,7 @@ module Autobot
         @finish_reason = "stop",
         @usage = TokenUsage.new,
         @reasoning_content = nil,
+        @native_parts = nil,
       )
       end
 

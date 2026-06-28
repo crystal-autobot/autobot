@@ -1,6 +1,6 @@
 # Google Gemini
 
-Autobot supports Google Gemini as an LLM provider via the [OpenAI-compatible endpoint](https://ai.google.dev/gemini-api/docs/openai). This gives access to Gemini Pro, Flash, and other Google AI models.
+Autobot features native, highly optimized support for Google Gemini LLMs. It directly implements the `generateContent` and `cachedContents` REST APIs, offering native context caching to drastically reduce token usage and cost for long-running autonomous tasks.
 
 ## Setup
 
@@ -30,7 +30,7 @@ In `config.yml`:
 ```yaml
 agents:
   defaults:
-    model: "gemini/gemini-2.5-flash"
+    model: "gemini/gemini-3.5-flash"
 
 providers:
   gemini:
@@ -49,55 +49,40 @@ autobot doctor
 Models use the `gemini/` prefix followed by the Google model ID:
 
 ```yaml
+# Gemini 3.5
+model: "gemini/gemini-3.5-pro"
+model: "gemini/gemini-3.5-flash"
+
 # Gemini 2.5
 model: "gemini/gemini-2.5-pro"
 model: "gemini/gemini-2.5-flash"
-
-# Gemini 2.0
-model: "gemini/gemini-2.0-flash"
-
-# Gemini 1.5
-model: "gemini/gemini-1.5-pro"
-model: "gemini/gemini-1.5-flash"
 ```
 
 The `gemini/` prefix tells autobot to route to the Gemini API. It is stripped before sending to the API.
 
 See the full model list in the [Gemini docs](https://ai.google.dev/gemini-api/docs/models).
 
+## Native Context Caching
+
+Autobot automatically leverages Gemini's **Context Caching** API to optimize costs for long-running or looping agents.
+
+If your agent's system prompt and tools payload exceeds **8,000 characters**, Autobot will:
+1. Hash the system state.
+2. Explicitly cache it on Google's servers for 1 hour (`ttl: "3600s"`).
+3. Reuse that cache on subsequent loops or prompts.
+
+This is highly recommended for autonomous agent execution as it routinely drops token costs by over 90%.
+
 ## Configuration reference
 
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `api_key` | Yes | — | Google AI API key |
-| `api_base` | No | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` | Custom API endpoint |
-| `extra_headers` | No | — | Additional HTTP headers for every request |
-
-## How it works
-
-Gemini uses Google's OpenAI-compatible endpoint, which follows the standard Chat Completions format:
-
-- **`Authorization: Bearer` header** for authentication
-- **Standard message format** with `role` and `content` fields
-- **Function calling** via `tools` array
-
-Autobot detects Gemini models by the `gemini` keyword and routes to Google's OpenAI-compatible endpoint automatically. Tools, MCP servers, plugins, and all other features work the same as with other providers.
-
-Note that Gemini's error responses may use an array-wrapped format (`[{"error": {...}}]`). Autobot handles both standard and array-wrapped error formats transparently.
-
-## Voice transcription
-
-Gemini does not provide a Whisper-compatible transcription API. If you need voice message support, configure an additional [Groq](groq.md) or [OpenAI](openai.md) provider for Whisper-based transcription.
-
-## Known limitations
-
-- **No streaming** — Responses are returned in full after the model finishes generating.
-- **Tool choice is always `auto`** — There is no configuration to force a specific tool or disable tool use per-request.
-- **Free tier limits** — Google AI Studio has per-minute and per-day request limits on the free tier.
+| `api_base` | No | `https://generativelanguage.googleapis.com/v1beta` | Custom API endpoint |
 
 ## Troubleshooting
 
-Enable debug logging to see request/response details:
+Enable debug logging to see request/response details and cache usage:
 
 ```sh
 LOG_LEVEL=DEBUG autobot agent -m "Hello"
@@ -105,16 +90,13 @@ LOG_LEVEL=DEBUG autobot agent -m "Hello"
 
 Look for:
 
-- `POST https://generativelanguage.googleapis.com/... model=...` — confirms provider is active
-- `Response 200 (N bytes)` — confirms API response
+- `Created explicit Gemini cache: ...` — confirms caching is working and saving tokens
 - `HTTP 4xx/5xx: ...` — API errors with details
 
 ### Common issues
 
-**"No LLM provider configured"** — Check that `api_key` is set and non-empty in `config.yml`.
+**"HTTP 400: Function call is missing a thought_signature"** — This indicates an outdated provider version that is failing to pass back Gemini's internal reasoning state. Update `autobot` to the latest version.
 
 **"API error: API key not valid"** — Invalid or expired API key. Verify at [aistudio.google.com](https://aistudio.google.com/apikey).
 
 **"API error: Resource has been exhausted"** — Rate limit or quota exceeded. Check your usage and limits in Google AI Studio.
-
-**"API error: model not found"** — Model ID is wrong or not available. Check the [Gemini models page](https://ai.google.dev/gemini-api/docs/models) for current availability.

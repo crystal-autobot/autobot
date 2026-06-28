@@ -168,8 +168,16 @@ module Autobot::Config
     property api_key : String = ""
     property? api_base : String? = nil
     property? extra_headers : Hash(String, String)? = nil
+    property? client_id : String? = nil
+    property? client_secret : String? = nil
+    property? refresh_token : String? = nil
 
     def initialize
+    end
+
+    def configured? : Bool
+      (!api_key.empty? && !api_key.includes?("${")) ||
+        (rt = refresh_token?; !rt.nil? && !rt.empty? && !rt.includes?("${"))
     end
   end
 
@@ -186,7 +194,8 @@ module Autobot::Config
     end
 
     def configured? : Bool
-      !access_key_id.empty? && !secret_access_key.empty?
+      !access_key_id.empty? && !access_key_id.includes?("${") &&
+        !secret_access_key.empty? && !secret_access_key.includes?("${")
     end
   end
 
@@ -394,13 +403,13 @@ module Autobot::Config
       if p = providers
         {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
-          if provider && provider.api_key != "" && model_str.includes?({{ provider_name }})
+          if provider && provider.configured? && model_str.includes?({{ provider_name }})
             return {provider, {{ provider_name }}}
           end
         {% end %}
         {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
-          if provider && provider.api_key != ""
+          if provider && provider.configured?
             return {provider, {{ provider_name }}}
           end
         {% end %}
@@ -426,7 +435,7 @@ module Autobot::Config
       {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
         if normalized == {{ provider_name }}
           provider = p.{{ provider_name.id }}
-          return provider if provider && !provider.api_key.empty?
+          return provider if provider && provider.configured?
         end
       {% end %}
       nil
@@ -442,7 +451,7 @@ module Autobot::Config
       if p = providers
         {% for provider_name in %w[anthropic openai openrouter deepseek groq gemini kimi vllm duckai] %}
           provider = p.{{ provider_name.id }}
-          has_provider ||= (provider && provider.api_key != "")
+          has_provider ||= (provider && provider.configured?)
         {% end %}
         has_provider ||= (p.bedrock.try(&.configured?) || false)
       end

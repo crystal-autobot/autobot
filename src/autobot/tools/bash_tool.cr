@@ -55,19 +55,14 @@ module Autobot
 
       private def run_script(args_str : String) : String
         args = parse_args(args_str)
-        command = "#{@script_path} #{args.map { |arg| shell_escape(arg) }.join(" ")}"
 
-        result = @executor.exec(command, timeout: SCRIPT_TIMEOUT)
+        result = @executor.exec_program(@script_path, args, timeout: SCRIPT_TIMEOUT)
 
         if result.success?
           result.content
         else
           raise "Script execution failed: #{result.content}"
         end
-      end
-
-      private def shell_escape(arg : String) : String
-        "'#{arg.gsub("'", "'\\''")}'"
       end
 
       private def parse_args(args_str : String) : Array(String)

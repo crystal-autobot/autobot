@@ -72,6 +72,16 @@ module Autobot
         ToolResult.error("Cannot execute command: #{ex.message}")
       end
 
+      def exec_program(program : String, args : Array(String), timeout : Int32 = 60) : ToolResult
+        if @sandboxed && (workspace = @workspace)
+          exec_program_via_sandbox_exec(program, args, timeout, workspace)
+        else
+          exec_program_direct(program, args, timeout)
+        end
+      rescue ex
+        ToolResult.error("Cannot execute program: #{ex.message}")
+      end
+
       # Sandbox.exec-based execution
       private def read_file_via_sandbox_exec(path : String, workspace : Path) : ToolResult
         success, output = Sandbox.read_file(path, workspace)
@@ -95,6 +105,11 @@ module Autobot
 
       private def exec_via_sandbox_exec(command : String, timeout : Int32, workspace : Path) : ToolResult
         status, stdout, stderr = Sandbox.exec(command, workspace, timeout)
+        build_exec_result(status, stdout, stderr)
+      end
+
+      private def exec_program_via_sandbox_exec(program : String, args : Array(String), timeout : Int32, workspace : Path) : ToolResult
+        status, stdout, stderr = Sandbox.exec_program(program, args, workspace, timeout)
         build_exec_result(status, stdout, stderr)
       end
 
@@ -178,6 +193,11 @@ module Autobot
 
         data = parts.empty? ? "[no output]" : parts.join("\n")
         ToolResult.success(data)
+      end
+
+      private def exec_program_direct(program : String, args : Array(String), timeout : Int32) : ToolResult
+        status, stdout, stderr = Sandbox.capture_command(program, args, timeout)
+        build_exec_result(status, stdout, stderr)
       end
     end
   end

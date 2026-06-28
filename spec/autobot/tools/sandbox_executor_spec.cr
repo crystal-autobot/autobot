@@ -55,6 +55,11 @@ describe Autobot::Tools::SandboxExecutor do
     exec_result = executor.exec("echo hello direct")
     exec_result.success?.should be_true
     exec_result.content.strip.should eq("hello direct")
+
+    # exec_program should execute directly too
+    program_result = executor.exec_program("echo", ["hello", "program"])
+    program_result.success?.should be_true
+    program_result.content.strip.should eq("hello program")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end

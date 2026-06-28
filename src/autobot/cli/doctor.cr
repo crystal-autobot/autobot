@@ -144,10 +144,10 @@ module Autobot
       end
 
       def self.check_provider(config : Config::Config, errors : Int32) : Int32
-        _provider, provider_name = config.match_provider
+        provider, provider_name = config.match_provider
         bedrock = config.match_bedrock
 
-        if provider_name
+        if provider_name && provider && provider.configured?
           report(Status::Pass, "LLM provider configured (#{provider_name})")
           errors
         elsif bedrock
