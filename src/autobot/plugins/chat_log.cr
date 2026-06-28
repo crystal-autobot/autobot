@@ -56,7 +56,16 @@ module Autobot
 
       def execute(params : Hash(String, JSON::Any)) : Tools::ToolResult
         chat_id = params["chat_id"].as_s
-        limit = params["limit"]?.try(&.as_i) || 50
+
+        limit_val = params["limit"]?
+        limit = 50
+        if limit_val
+          if val_i = limit_val.as_i?
+            limit = val_i
+          elsif val_s = limit_val.as_s?
+            limit = val_s.to_i? || 50
+          end
+        end
         limit = 100 if limit > 100
 
         # Prevent directory traversal
@@ -82,6 +91,3 @@ module Autobot
     end
   end
 end
-
-# Register the plugin for loading
-Autobot::Plugins::Loader.register(Autobot::Plugins::ChatLogPlugin.new)

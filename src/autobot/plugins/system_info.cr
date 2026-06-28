@@ -45,48 +45,57 @@ module Autobot
       end
 
       def execute(params : Hash(String, JSON::Any)) : Tools::ToolResult
-        # Retrieve disk statistics for workspace directory
-        df_out = IO::Memory.new
-        Process.run("df", ["-h", @workspace.to_s], output: df_out)
+        df_out = run_command("df", ["-h", @workspace.to_s])
+        free_out = run_command("free", ["-h"])
+        uptime_out = run_command("uptime")
 
-        # Retrieve memory statistics
-        free_out = IO::Memory.new
-        Process.run("free", ["-h"], output: free_out)
-
-        # Retrieve system uptime
-        uptime_out = IO::Memory.new
-        Process.run("uptime", output: uptime_out)
-
-        # Retrieve CPU details
-        cpu_out = IO::Memory.new
-        Process.run("lscpu", output: cpu_out)
-        cpu_line = cpu_out.to_s.lines.find(&.starts_with?("CPU(s):")) || "Unknown CPU count"
+        # For lscpu, retrieve and find the CPU line
+        cpu_info = run_command("lscpu")
+        cpu_line = if cpu_info.includes?("CPU(s):")
+                     cpu_info.lines.find(&.starts_with?("CPU(s):")).try(&.strip) || "Unknown CPU count"
+                   else
+                     cpu_info
+                   end
 
         content = <<-METRICS
         ### Host Metrics
 
         **Uptime:**
-        #{uptime_out.to_s.strip}
+        #{uptime_out}
 
         **CPU Info:**
-        #{cpu_line.strip}
+        #{cpu_line}
 
         **Memory Usage:**
         ```
-        #{free_out.to_s.strip}
+        #{free_out}
         ```
 
         **Disk Space (workspace):**
         ```
-        #{df_out.to_s.strip}
+        #{df_out}
         ```
         METRICS
 
         Tools::ToolResult.success(content)
+      rescue ex
+        Tools::ToolResult.error("Failed to retrieve system info: #{ex.message}")
+      end
+
+      private def run_command(command : String, args : Array(String) = [] of String) : String
+        stdout = IO::Memory.new
+        stderr = IO::Memory.new
+        status = Process.run(command, args, output: stdout, error: stderr)
+        if status.success?
+          stdout.to_s.strip
+        else
+          "Error running #{command}: #{stderr.to_s.strip}"
+        end
+      rescue ex : File::NotFoundError
+        "Command '#{command}' not found"
+      rescue ex
+        "Error running #{command}: #{ex.message}"
       end
     end
   end
 end
-
-# Register the custom plugin for auto-loading
-Autobot::Plugins::Loader.register(Autobot::Plugins::SystemInfoPlugin.new)

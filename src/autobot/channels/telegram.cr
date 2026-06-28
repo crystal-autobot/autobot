@@ -300,6 +300,7 @@ module Autobot::Channels
     @offset : Int64 = 0_i64
     @bot_username : String = ""
     @typing_channels : Set(String) = Set(String).new
+    @chat_log_mutex : Mutex = Mutex.new
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -1104,6 +1105,7 @@ module Autobot::Channels
     end
 
     private def mentioned?(msg : JSON::Any) : Bool
+      return false if @bot_username.empty?
       if text = msg["text"]?.try(&.as_s)
         return true if text.includes?("@#{@bot_username}")
       end
@@ -1129,17 +1131,20 @@ module Autobot::Channels
       Dir.mkdir_p(log_dir) unless Dir.exists?(log_dir)
       log_path = log_dir / "telegram_#{chat_id}.log"
 
-      # Append message with timestamp
-      timestamp = Time.local.to_s("%Y-%m-%d %H:%M:%S")
-      File.open(log_path.to_s, "a") do |file|
-        file.puts("[#{timestamp}] #{sender_name}: #{text}")
-      end
+      @chat_log_mutex.synchronize do
+        # Append message with timestamp
+        timestamp = Time.local.to_s("%Y-%m-%d %H:%M:%S")
+        File.open(log_path.to_s, "a") do |file|
+          file.puts("[#{timestamp}] #{sender_name}: #{text}")
+        end
 
-      # Truncate to keep only last 100 lines (rolling log)
-      if File.exists?(log_path.to_s)
-        lines = File.read_lines(log_path.to_s)
-        if lines.size > 100
-          File.write(log_path.to_s, lines[-100..].join("\n") + "\n")
+        # Truncate periodically (when it exceeds 150 lines, prune to last 100 lines)
+        # to avoid reading and writing the whole file on every single message.
+        if File.exists?(log_path.to_s)
+          lines = File.read_lines(log_path.to_s)
+          if lines.size > 150
+            File.write(log_path.to_s, lines[-100..].join("\n") + "\n")
+          end
         end
       end
     rescue ex

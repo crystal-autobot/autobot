@@ -34,7 +34,7 @@ module Autobot
       end
 
       def description : String
-        "Converts written text into a spoken voice file (voice.ogg). Call this tool with the text to say, and then use the message tool with file_path='voice.ogg' to send it to the user."
+        "Converts written text into a spoken voice file with a unique filename. The tool will return the filename of the generated OGG file, which you should pass to the message tool via its file_path parameter."
       end
 
       def parameters : Tools::ToolSchema
@@ -58,9 +58,11 @@ module Autobot
         text = params["text"].as_s
         lang = params["lang"]?.try(&.as_s) || "es"
 
-        # Output paths resolved within the workspace directory
-        mp3_path = (@workspace / "temp_voice.mp3").to_s
-        ogg_path = (@workspace / "voice.ogg").to_s
+        unique_id = Random::Secure.hex(8)
+        mp3_filename = "temp_voice_#{unique_id}.mp3"
+        ogg_filename = "voice_#{unique_id}.ogg"
+        mp3_path = (@workspace / mp3_filename).to_s
+        ogg_path = (@workspace / ogg_filename).to_s
 
         # Runtime dependency check
         unless system_cmd_exists?("gtts-cli")
@@ -70,11 +72,23 @@ module Autobot
           return Tools::ToolResult.error("ffmpeg is not installed or available in PATH.")
         end
 
+        # Clean up older voice files in the workspace (older than 1 minute)
         begin
-          # Clean up old voice files
-          File.delete(mp3_path) if File.exists?(mp3_path)
-          File.delete(ogg_path) if File.exists?(ogg_path)
+          Dir.glob((@workspace / "voice_*.ogg").to_s).each do |file|
+            if File.info(file).modification_time < 1.minute.ago
+              File.delete(file)
+            end
+          end
+          Dir.glob((@workspace / "temp_voice_*.mp3").to_s).each do |file|
+            if File.info(file).modification_time < 1.minute.ago
+              File.delete(file)
+            end
+          end
+        rescue ex
+          Log.warn { "Failed to clean up old voice files: #{ex.message}" }
+        end
 
+        begin
           # 1. Run gtts-cli to generate MP3
           gtts_status = Process.run(
             "gtts-cli",
@@ -87,7 +101,7 @@ module Autobot
           end
 
           unless File.exists?(mp3_path)
-            return Tools::ToolResult.error("gtts-cli succeeded but temp_voice.mp3 was not created.")
+            return Tools::ToolResult.error("gtts-cli succeeded but #{mp3_filename} was not created.")
           end
 
           # 2. Run ffmpeg to convert to Opus OGG (native Telegram voice codec)
@@ -102,10 +116,10 @@ module Autobot
           end
 
           unless File.exists?(ogg_path)
-            return Tools::ToolResult.error("ffmpeg completed but voice.ogg was not created.")
+            return Tools::ToolResult.error("ffmpeg completed but #{ogg_filename} was not created.")
           end
 
-          Tools::ToolResult.success("Voice file generated successfully at voice.ogg. Now call the message tool with file_path='voice.ogg' and content='[Voice message]' to deliver it.")
+          Tools::ToolResult.success("Voice file generated successfully at #{ogg_filename}. Now call the message tool with file_path='#{ogg_filename}' and content='[Voice message]' to deliver it.")
         rescue ex
           Tools::ToolResult.error("Error generating text-to-speech: #{ex.message}")
         ensure
@@ -122,6 +136,3 @@ module Autobot
     end
   end
 end
-
-# Register the plugin
-Autobot::Plugins::Loader.register(Autobot::Plugins::TextToSpeechPlugin.new)
