@@ -11,7 +11,8 @@ module Autobot
       getter status : Status
       getter content : String
 
-      def initialize(@status : Status, @content : String)
+      def initialize(@status : Status, content : String)
+        @content = content.scrub
       end
 
       def self.success(content : String) : ToolResult
