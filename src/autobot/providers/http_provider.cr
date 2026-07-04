@@ -85,7 +85,7 @@ module Autobot
 
         Log.debug { "POST #{url} model=#{model}" }
         response = http_post(url, headers, body.to_json)
-        parse_compatible_response(response.body)
+        parse_compatible_response(response)
       end
 
       private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
@@ -114,8 +114,29 @@ module Autobot
         body
       end
 
-      private def parse_compatible_response(body : String) : Response
-        json = JSON.parse(body)
+      private def parse_compatible_response(response : HTTP::Client::Response) : Response
+        unless response.success?
+          begin
+            json = JSON.parse(response.body)
+            if error = extract_error(json)
+              return Response.new(content: "API error (HTTP #{response.status_code}): #{error}", finish_reason: "error")
+            end
+          rescue
+          end
+          return Response.new(
+            content: "HTTP request failed with status #{response.status_code}: #{response.body}",
+            finish_reason: "error"
+          )
+        end
+
+        begin
+          json = JSON.parse(response.body)
+        rescue ex
+          return Response.new(
+            content: "Failed to parse API response as JSON (HTTP #{response.status_code}): #{ex.message}. Body: #{response.body}",
+            finish_reason: "error"
+          )
+        end
 
         if error = extract_error(json)
           return Response.new(content: "API error: #{error}", finish_reason: "error")
@@ -158,7 +179,7 @@ module Autobot
 
         Log.debug { "POST #{url} model=#{model} (anthropic)" }
         response = http_post(url, headers, body.to_json)
-        parse_anthropic_response(response.body)
+        parse_anthropic_response(response)
       end
 
       private def build_anthropic_body(messages, tools, model, max_tokens, temperature)
@@ -349,9 +370,31 @@ module Autobot
         items[-1] = JSON::Any.new(updated)
       end
 
-      private def parse_anthropic_response(body : String) : Response
-        json = JSON.parse(body)
-        if error_response = parse_anthropic_error(json, body)
+      private def parse_anthropic_response(response : HTTP::Client::Response) : Response
+        unless response.success?
+          begin
+            json = JSON.parse(response.body)
+            if error_response = parse_anthropic_error(json, response.body)
+              return error_response
+            end
+          rescue
+          end
+          return Response.new(
+            content: "HTTP request failed with status #{response.status_code}: #{response.body}",
+            finish_reason: "error"
+          )
+        end
+
+        begin
+          json = JSON.parse(response.body)
+        rescue ex
+          return Response.new(
+            content: "Failed to parse API response as JSON (HTTP #{response.status_code}): #{ex.message}. Body: #{response.body}",
+            finish_reason: "error"
+          )
+        end
+
+        if error_response = parse_anthropic_error(json, response.body)
           return error_response
         end
 

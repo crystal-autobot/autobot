@@ -13,7 +13,12 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
   end
 
   def test_parse_compatible_response(body : String) : Autobot::Providers::Response
-    parse_compatible_response(body)
+    response = HTTP::Client::Response.new(200, body: body)
+    parse_compatible_response(response)
+  end
+
+  def test_parse_compatible_response_direct(response : HTTP::Client::Response) : Autobot::Providers::Response
+    parse_compatible_response(response)
   end
 
   def test_convert_content_for_anthropic(content : JSON::Any) : JSON::Any
@@ -29,7 +34,12 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
   end
 
   def test_parse_anthropic_response(body : String) : Autobot::Providers::Response
-    parse_anthropic_response(body)
+    response = HTTP::Client::Response.new(200, body: body)
+    parse_anthropic_response(response)
+  end
+
+  def test_parse_anthropic_response_direct(response : HTTP::Client::Response) : Autobot::Providers::Response
+    parse_anthropic_response(response)
   end
 
   def test_max_tokens_param_name(model : String) : String
@@ -232,6 +242,22 @@ describe Autobot::Providers::HttpProvider do
       response = provider.test_parse_compatible_response(body)
       response.has_tool_calls?.should be_true
       response.tool_calls.first.extra_content.should be_nil
+    end
+
+    it "handles non-JSON error response with non-200 status (e.g. Forbidden)" do
+      http_response = HTTP::Client::Response.new(403, body: "Forbidden")
+      response = provider.test_parse_compatible_response_direct(http_response)
+      response.finish_reason.should eq("error")
+      response.content.not_nil!.should contain("HTTP request failed with status 403")
+      response.content.not_nil!.should contain("Forbidden")
+    end
+
+    it "handles non-JSON body with 200 status gracefully" do
+      http_response = HTTP::Client::Response.new(200, body: "Something went wrong but HTTP 200")
+      response = provider.test_parse_compatible_response_direct(http_response)
+      response.finish_reason.should eq("error")
+      response.content.not_nil!.should contain("Failed to parse API response as JSON (HTTP 200)")
+      response.content.not_nil!.should contain("Something went wrong but HTTP 200")
     end
   end
 
