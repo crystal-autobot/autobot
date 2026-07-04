@@ -189,3 +189,26 @@ describe Autobot::Tools::PropertySchema do
     end
   end
 end
+
+describe Autobot::Tools::ToolResult do
+  it "scrubs invalid UTF-8 bytes from success content" do
+    invalid_str = "hello \xff world"
+    result = Autobot::Tools::ToolResult.success(invalid_str)
+    result.content.should_not contain("\xff")
+    result.content.should contain("hello \u{FFFD} world")
+  end
+
+  it "scrubs invalid UTF-8 bytes from error message" do
+    invalid_str = "error \xff details"
+    result = Autobot::Tools::ToolResult.error(invalid_str)
+    result.content.should_not contain("\xff")
+    result.content.should contain("error \u{FFFD} details")
+  end
+
+  it "scrubs invalid UTF-8 bytes from access denied message" do
+    invalid_str = "denied \xff reason"
+    result = Autobot::Tools::ToolResult.access_denied(invalid_str)
+    result.content.should_not contain("\xff")
+    result.content.should contain("denied \u{FFFD} reason")
+  end
+end
