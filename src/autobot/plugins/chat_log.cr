@@ -24,6 +24,10 @@ module Autobot
 
     # Custom tool to read recent rolling chat logs.
     class ChatLogTool < Tools::Tool
+      DEFAULT_LIMIT =  50
+      MIN_LIMIT     =   1
+      MAX_LIMIT     = 100
+
       @workspace : Path
 
       def initialize(@workspace : Path)
@@ -46,8 +50,10 @@ module Autobot
             ),
             "limit" => Tools::PropertySchema.new(
               type: "integer",
-              description: "Number of recent lines to retrieve (default: 50, max: 100)",
-              default_value: "50"
+              description: "Number of recent lines to retrieve (default: #{DEFAULT_LIMIT}, max: #{MAX_LIMIT})",
+              minimum: MIN_LIMIT.to_i64,
+              maximum: MAX_LIMIT.to_i64,
+              default_value: DEFAULT_LIMIT.to_s
             ),
           },
           required: ["chat_id"]
@@ -57,16 +63,7 @@ module Autobot
       def execute(params : Hash(String, JSON::Any)) : Tools::ToolResult
         chat_id = params["chat_id"].as_s
 
-        limit_val = params["limit"]?
-        limit = 50
-        if limit_val
-          if val_i = limit_val.as_i?
-            limit = val_i
-          elsif val_s = limit_val.as_s?
-            limit = val_s.to_i? || 50
-          end
-        end
-        limit = 100 if limit > 100
+        limit = (params["limit"]?.try(&.as_i?) || DEFAULT_LIMIT).clamp(MIN_LIMIT, MAX_LIMIT)
 
         # Prevent directory traversal
         unless chat_id.match(/^[a-zA-Z0-9_@-]+$/)

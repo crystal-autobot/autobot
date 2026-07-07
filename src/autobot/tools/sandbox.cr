@@ -309,7 +309,11 @@ module Autobot
           if bytes_read > max_size
             buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
             buffer << "\n... (output truncated at #{max_size} bytes)"
-            io.close unless io.closed?
+            # Drain the rest instead of closing the pipe: closing the read end
+            # sends SIGPIPE to a still-running child and can kill it before its
+            # side effects finish. The parent closes read ends after the process
+            # exits, which unblocks this drain for detached/daemon writers.
+            io.skip_to_end
             break
           end
           buffer.write(chunk[0, n])

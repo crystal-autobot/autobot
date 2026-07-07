@@ -180,14 +180,17 @@ LLM generates file (exec tool) -> message(content, file_path) -> Read & base64 e
 | `.gif` | animation | `sendAnimation` |
 | `.mp4` | video | `sendDocument` |
 | `.pdf` | document | `sendDocument` |
+| `.ogg` | voice | `sendVoice` |
+| `.mp3`, `.wav` | audio | `sendAudio` |
 | Other | document | `sendDocument` |
 
 ### Supported channels
 
 | Channel   | Status    | Notes                                    |
 |-----------|-----------|------------------------------------------|
-| Telegram  | Supported | Photos, animations (GIFs), and documents |
+| Telegram  | Supported | Photos, animations (GIFs), voice, audio, and documents |
 | Slack     | Text fallback | Logs warning, sends caption as text    |
+| Zulip     | Text fallback | Logs warning, sends caption as text    |
 
 ---
 

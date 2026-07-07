@@ -75,8 +75,8 @@ module Autobot::Channels
     end
 
     def send_message(message : Bus::OutboundMessage) : Nil
-      if message.media?.try(&.any? { |attachment| attachment.type == "photo" && attachment.data })
-        Log.warn { "Image sending not yet supported for Zulip" }
+      if attachment = message.media?.try(&.find(&.data))
+        Log.warn { "Media sending (#{attachment.type}) not yet supported for Zulip; delivering text only" }
       end
 
       params = {

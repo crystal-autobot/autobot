@@ -299,6 +299,7 @@ module Autobot::Channels
 
     @offset : Int64 = 0_i64
     @bot_username : String = ""
+    @bot_mention_regex : Regex? = nil
     @typing_channels : Set(String) = Set(String).new
     @chat_log_mutex : Mutex = Mutex.new
 
@@ -315,6 +316,9 @@ module Autobot::Channels
       super(Constants::CHANNEL_TELEGRAM, @bus, @allow_from)
     end
 
+    GETME_MAX_ATTEMPTS = 5
+    GETME_RETRY_DELAY  = 2.seconds
+
     def start : Nil
       if @token.empty?
         Log.error { "Telegram bot token not configured" }
@@ -323,17 +327,35 @@ module Autobot::Channels
 
       @running = true
 
-      if bot_info = api_request("getMe")
-        if username = bot_info["username"]?.try(&.as_s)
-          @bot_username = username
-        end
-        Log.info { "Telegram bot @#{@bot_username} connected" }
-      end
+      resolve_bot_username
 
       register_commands
 
       Log.info { "Starting Telegram bot (long polling)..." }
       poll_updates
+    end
+
+    # Resolves the bot username via getMe, retrying on transient failures.
+    # Mention detection in groups depends on it, so a single startup hiccup
+    # must not silently disable group replies for the process lifetime.
+    private def resolve_bot_username : Nil
+      GETME_MAX_ATTEMPTS.times do |attempt|
+        if username = fetch_bot_username
+          @bot_username = username
+          Log.info { "Telegram bot @#{@bot_username} connected" }
+          return
+        end
+
+        Log.warn { "getMe failed (attempt #{attempt + 1}/#{GETME_MAX_ATTEMPTS})" }
+        sleep GETME_RETRY_DELAY unless attempt == GETME_MAX_ATTEMPTS - 1
+      end
+
+      Log.error { "Could not resolve bot username after #{GETME_MAX_ATTEMPTS} attempts; group mention detection is disabled until restart" }
+    end
+
+    private def fetch_bot_username : String?
+      return nil unless bot_info = api_request("getMe")
+      bot_info["username"]?.try(&.as_s)
     end
 
     def stop : Nil
@@ -532,37 +554,41 @@ module Autobot::Channels
         end
       end
 
-      unless allowed?(sender[:sender_id])
-        Log.warn { "Access denied for sender #{sender[:sender_id]} on telegram. Add to allow_from to grant access." }
-        send_reply(sender[:chat_id], access_denied_message(sender[:sender_id]))
-        return
-      end
-
       content, media_attachments = build_content_and_media(msg)
       content = prepend_reply_context(content, extract_reply_context(msg))
 
       display_name = sender[:username] ? "@#{sender[:username]}" : sender[:first_name]
       content_to_process = sender[:is_group] ? "#{display_name}: #{content}" : content
 
-      # Record every message in this chat log (whether mentioned or not)
+      # Record every group message (regardless of allowlist or mention) so the
+      # rolling chat log stays complete.
       if sender[:is_group]
         record_chat_log(sender[:chat_id], display_name, content)
       end
 
-      if addressed?(msg, sender)
-        Log.debug { "Message from #{sender[:sender_id]}: #{content_to_process}" }
-        start_typing(sender[:chat_id])
-
-        handle_message(
-          sender_id: sender[:sender_id],
-          chat_id: sender[:chat_id],
-          content: content_to_process,
-          media: media_attachments.empty? ? nil : media_attachments,
-          metadata: build_metadata(msg, sender),
-        )
-      else
+      # Stay silent for group messages that do not address the bot, before the
+      # allowlist check, so passive group chatter never triggers a denial reply.
+      unless addressed?(msg, sender)
         Log.debug { "Logged group message from #{sender[:sender_id]} silently" }
+        return
       end
+
+      unless allowed?(sender[:sender_id])
+        Log.warn { "Access denied for sender #{sender[:sender_id]} on telegram. Add to allow_from to grant access." }
+        send_reply(sender[:chat_id], access_denied_message(sender[:sender_id]))
+        return
+      end
+
+      Log.debug { "Message from #{sender[:sender_id]}: #{content_to_process}" }
+      start_typing(sender[:chat_id])
+
+      handle_message(
+        sender_id: sender[:sender_id],
+        chat_id: sender[:chat_id],
+        content: content_to_process,
+        media: media_attachments.empty? ? nil : media_attachments,
+        metadata: build_metadata(msg, sender),
+      )
     rescue ex
       Log.error { "Error processing message: #{ex.message}" }
     end
@@ -1105,50 +1131,60 @@ module Autobot::Channels
     end
 
     private def mentioned?(msg : JSON::Any) : Bool
-      return false if @bot_username.empty?
+      return false unless regex = bot_mention_regex
+
       if text = msg["text"]?.try(&.as_s)
-        return true if text.includes?("@#{@bot_username}")
+        return true if regex.matches?(text)
       end
       if caption = msg["caption"]?.try(&.as_s)
-        return true if caption.includes?("@#{@bot_username}")
+        return true if regex.matches?(caption)
       end
 
-      # Check if message is a reply to the bot
-      if reply_to = msg["reply_to_message"]?
-        if reply_from = reply_to["from"]?
-          if reply_username = reply_from["username"]?.try(&.as_s)
-            return true if reply_username == @bot_username
-          end
-        end
+      if reply_username = msg.dig?("reply_to_message", "from", "username").try(&.as_s)
+        return true if reply_username.compare(@bot_username, case_insensitive: true) == 0
       end
 
       false
     end
 
+    # Telegram usernames are case-insensitive; match the mention as a whole
+    # token so "@bot" does not also fire on "@bot_staging".
+    private def bot_mention_regex : Regex?
+      return nil if @bot_username.empty?
+      @bot_mention_regex ||= /@#{Regex.escape(@bot_username)}\b/i
+    end
+
+    CHAT_LOG_MAX_BYTES  = 64_000
+    CHAT_LOG_KEEP_LINES =    100
+
     private def record_chat_log(chat_id : String, sender_name : String, text : String) : Nil
       workspace = @session_manager.try(&.sessions_dir.parent) || Path["."]
       log_dir = workspace / "data" / "chat_logs"
-      Dir.mkdir_p(log_dir) unless Dir.exists?(log_dir)
-      log_path = log_dir / "telegram_#{chat_id}.log"
+      Dir.mkdir_p(log_dir)
+      log_path = (log_dir / "telegram_#{chat_id}.log").to_s
 
       @chat_log_mutex.synchronize do
-        # Append message with timestamp
         timestamp = Time.local.to_s("%Y-%m-%d %H:%M:%S")
-        File.open(log_path.to_s, "a") do |file|
+        File.open(log_path, "a") do |file|
           file.puts("[#{timestamp}] #{sender_name}: #{text}")
         end
 
-        # Truncate periodically (when it exceeds 150 lines, prune to last 100 lines)
-        # to avoid reading and writing the whole file on every single message.
-        if File.exists?(log_path.to_s)
-          lines = File.read_lines(log_path.to_s)
-          if lines.size > 150
-            File.write(log_path.to_s, lines[-100..].join("\n") + "\n")
-          end
-        end
+        prune_chat_log(log_path)
       end
     rescue ex
       Log.error { "Error writing to chat log: #{ex.message}" }
+    end
+
+    # Rewrites the log only once it grows past the byte cap, so the common
+    # append path costs a single write plus a cheap size check rather than
+    # reading the whole file on every message.
+    private def prune_chat_log(log_path : String) : Nil
+      return if File.size(log_path) <= CHAT_LOG_MAX_BYTES
+
+      lines = File.read_lines(log_path)
+      return if lines.size <= CHAT_LOG_KEEP_LINES
+
+      File.write(log_path, lines.last(CHAT_LOG_KEEP_LINES).join("\n") + "\n")
     end
   end
 end

@@ -24,6 +24,26 @@ describe Autobot::Plugins::ChatLogTool do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  it "clamps a non-positive limit to the last line instead of returning all" do
+    tmp = TestHelper.tmp_dir
+    log_dir = tmp / "data" / "chat_logs"
+    Dir.mkdir_p(log_dir)
+    File.write((log_dir / "telegram_-100123456.log").to_s, "line1\nline2\nline3\n")
+
+    tool = Autobot::Plugins::ChatLogTool.new(tmp)
+    res = tool.execute({
+      "chat_id" => JSON::Any.new("-100123456"),
+      "limit"   => JSON::Any.new(0_i64),
+    })
+
+    res.success?.should be_true
+    res.content.should contain("line3")
+    res.content.should_not contain("line1")
+    res.content.should_not contain("line2")
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "returns message when no logs found" do
     tmp = TestHelper.tmp_dir
     tool = Autobot::Plugins::ChatLogTool.new(tmp)
