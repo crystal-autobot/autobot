@@ -104,7 +104,17 @@ channels:
 - **Documents** — attached to the message context
 - **Typing indicators** — shows "typing..." while the LLM responds
 - **Markdown rendering** — LLM responses are converted to Telegram HTML
-- **Group chats** — bot responds when mentioned in groups
+- **Group chats** — the bot only replies when addressed: mentioned by `@username` or replied to. Other group messages are ignored (no response, no access-denied notice).
+- **Voice replies** — the `text_to_speech` plugin can generate spoken replies (see [Plugins](plugins.md))
+
+### Group chat logging
+
+Every message in a group the bot is a member of is appended to a rolling
+per-chat log at `data/chat_logs/telegram_<chat_id>.log`, whether or not it
+addresses the bot. The log is capped in size and only the most recent messages
+are retained. The `get_recent_chat_log` tool reads these logs so the bot can
+consult recent discussion. Operators should be aware this persists group
+members' messages to disk; disable the `chat_log` plugin to turn it off.
 
 ## Configuration reference
 

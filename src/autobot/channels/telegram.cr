@@ -299,7 +299,9 @@ module Autobot::Channels
 
     @offset : Int64 = 0_i64
     @bot_username : String = ""
+    @bot_mention_regex : Regex? = nil
     @typing_channels : Set(String) = Set(String).new
+    @chat_log_mutex : Mutex = Mutex.new
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -314,6 +316,9 @@ module Autobot::Channels
       super(Constants::CHANNEL_TELEGRAM, @bus, @allow_from)
     end
 
+    GETME_MAX_ATTEMPTS = 5
+    GETME_RETRY_DELAY  = 2.seconds
+
     def start : Nil
       if @token.empty?
         Log.error { "Telegram bot token not configured" }
@@ -322,17 +327,35 @@ module Autobot::Channels
 
       @running = true
 
-      if bot_info = api_request("getMe")
-        if username = bot_info["username"]?.try(&.as_s)
-          @bot_username = username
-        end
-        Log.info { "Telegram bot @#{@bot_username} connected" }
-      end
+      resolve_bot_username
 
       register_commands
 
       Log.info { "Starting Telegram bot (long polling)..." }
       poll_updates
+    end
+
+    # Resolves the bot username via getMe, retrying on transient failures.
+    # Mention detection in groups depends on it, so a single startup hiccup
+    # must not silently disable group replies for the process lifetime.
+    private def resolve_bot_username : Nil
+      GETME_MAX_ATTEMPTS.times do |attempt|
+        if username = fetch_bot_username
+          @bot_username = username
+          Log.info { "Telegram bot @#{@bot_username} connected" }
+          return
+        end
+
+        Log.warn { "getMe failed (attempt #{attempt + 1}/#{GETME_MAX_ATTEMPTS})" }
+        sleep GETME_RETRY_DELAY unless attempt == GETME_MAX_ATTEMPTS - 1
+      end
+
+      Log.error { "Could not resolve bot username after #{GETME_MAX_ATTEMPTS} attempts; group mention detection is disabled until restart" }
+    end
+
+    private def fetch_bot_username : String?
+      return nil unless bot_info = api_request("getMe")
+      bot_info["username"]?.try(&.as_s)
     end
 
     def stop : Nil
@@ -386,6 +409,21 @@ module Autobot::Channels
       media.find { |attachment| attachment.type == "photo" && attachment.data }
     end
 
+    private def get_media_params(attachment : Bus::MediaAttachment)
+      case attachment.type
+      when "photo"
+        {api_method: "sendPhoto", field_name: "photo", filename: media_filename(attachment, "image.png"), content_type: attachment.mime_type || "image/png"}
+      when "animation"
+        {api_method: "sendAnimation", field_name: "animation", filename: media_filename(attachment, "animation.gif"), content_type: attachment.mime_type || "image/gif"}
+      when "voice"
+        {api_method: "sendVoice", field_name: "voice", filename: media_filename(attachment, "voice.ogg"), content_type: attachment.mime_type || "audio/ogg"}
+      when "audio"
+        {api_method: "sendAudio", field_name: "audio", filename: media_filename(attachment, "audio.mp3"), content_type: attachment.mime_type || "audio/mpeg"}
+      else
+        {api_method: "sendDocument", field_name: "document", filename: media_filename(attachment, "file"), content_type: attachment.mime_type || "application/octet-stream"}
+      end
+    end
+
     private def send_media(chat_id : String, attachment : Bus::MediaAttachment, caption : String) : Nil
       data = attachment.data
       unless data
@@ -395,27 +433,13 @@ module Autobot::Channels
       end
 
       file_bytes = Base64.decode(data)
+      params = get_media_params(attachment)
 
-      case attachment.type
-      when "photo"
-        send_media_request(chat_id, file_bytes, caption,
-          api_method: "sendPhoto",
-          field_name: "photo",
-          filename: media_filename(attachment, "image.png"),
-          content_type: attachment.mime_type || "image/png")
-      when "animation"
-        send_media_request(chat_id, file_bytes, caption,
-          api_method: "sendAnimation",
-          field_name: "animation",
-          filename: media_filename(attachment, "animation.gif"),
-          content_type: attachment.mime_type || "image/gif")
-      else
-        send_media_request(chat_id, file_bytes, caption,
-          api_method: "sendDocument",
-          field_name: "document",
-          filename: media_filename(attachment, "file"),
-          content_type: attachment.mime_type || "application/octet-stream")
-      end
+      send_media_request(chat_id, file_bytes, caption,
+        api_method: params[:api_method],
+        field_name: params[:field_name],
+        filename: params[:filename],
+        content_type: params[:content_type])
     rescue ex
       Log.error { "Error sending media: #{ex.message}" }
       send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
@@ -530,24 +554,38 @@ module Autobot::Channels
         end
       end
 
+      content, media_attachments = build_content_and_media(msg)
+      content = prepend_reply_context(content, extract_reply_context(msg))
+
+      display_name = sender[:username] ? "@#{sender[:username]}" : sender[:first_name]
+      content_to_process = sender[:is_group] ? "#{display_name}: #{content}" : content
+
+      # Record every group message (regardless of allowlist or mention) so the
+      # rolling chat log stays complete.
+      if sender[:is_group]
+        record_chat_log(sender[:chat_id], display_name, content)
+      end
+
+      # Stay silent for group messages that do not address the bot, before the
+      # allowlist check, so passive group chatter never triggers a denial reply.
+      unless addressed?(msg, sender)
+        Log.debug { "Logged group message from #{sender[:sender_id]} silently" }
+        return
+      end
+
       unless allowed?(sender[:sender_id])
         Log.warn { "Access denied for sender #{sender[:sender_id]} on telegram. Add to allow_from to grant access." }
         send_reply(sender[:chat_id], access_denied_message(sender[:sender_id]))
         return
       end
 
-      content, media_attachments = build_content_and_media(msg)
-
-      content = prepend_reply_context(content, extract_reply_context(msg))
-
-      Log.debug { "Message from #{sender[:sender_id]}: #{content}" }
-
+      Log.debug { "Message from #{sender[:sender_id]}: #{content_to_process}" }
       start_typing(sender[:chat_id])
 
       handle_message(
         sender_id: sender[:sender_id],
         chat_id: sender[:chat_id],
-        content: content,
+        content: content_to_process,
         media: media_attachments.empty? ? nil : media_attachments,
         metadata: build_metadata(msg, sender),
       )
@@ -1085,6 +1123,68 @@ module Autobot::Channels
         "text"       => text,
         "parse_mode" => "HTML",
       })
+    end
+
+    private def addressed?(msg : JSON::Any, sender : NamedTuple(chat_id: String, user_id: String, username: String?, first_name: String, sender_id: String, is_group: Bool)) : Bool
+      return true unless sender[:is_group]
+      mentioned?(msg)
+    end
+
+    private def mentioned?(msg : JSON::Any) : Bool
+      return false unless regex = bot_mention_regex
+
+      if text = msg["text"]?.try(&.as_s)
+        return true if regex.matches?(text)
+      end
+      if caption = msg["caption"]?.try(&.as_s)
+        return true if regex.matches?(caption)
+      end
+
+      if reply_username = msg.dig?("reply_to_message", "from", "username").try(&.as_s)
+        return true if reply_username.compare(@bot_username, case_insensitive: true) == 0
+      end
+
+      false
+    end
+
+    # Telegram usernames are case-insensitive; match the mention as a whole
+    # token so "@bot" does not also fire on "@bot_staging".
+    private def bot_mention_regex : Regex?
+      return nil if @bot_username.empty?
+      @bot_mention_regex ||= /@#{Regex.escape(@bot_username)}\b/i
+    end
+
+    CHAT_LOG_MAX_BYTES  = 64_000
+    CHAT_LOG_KEEP_LINES =    100
+
+    private def record_chat_log(chat_id : String, sender_name : String, text : String) : Nil
+      workspace = @session_manager.try(&.sessions_dir.parent) || Path["."]
+      log_dir = workspace / "data" / "chat_logs"
+      Dir.mkdir_p(log_dir)
+      log_path = (log_dir / "telegram_#{chat_id}.log").to_s
+
+      @chat_log_mutex.synchronize do
+        timestamp = Time.local.to_s("%Y-%m-%d %H:%M:%S")
+        File.open(log_path, "a") do |file|
+          file.puts("[#{timestamp}] #{sender_name}: #{text}")
+        end
+
+        prune_chat_log(log_path)
+      end
+    rescue ex
+      Log.error { "Error writing to chat log: #{ex.message}" }
+    end
+
+    # Rewrites the log only once it grows past the byte cap, so the common
+    # append path costs a single write plus a cheap size check rather than
+    # reading the whole file on every message.
+    private def prune_chat_log(log_path : String) : Nil
+      return if File.size(log_path) <= CHAT_LOG_MAX_BYTES
+
+      lines = File.read_lines(log_path)
+      return if lines.size <= CHAT_LOG_KEEP_LINES
+
+      File.write(log_path, lines.last(CHAT_LOG_KEEP_LINES).join("\n") + "\n")
     end
   end
 end

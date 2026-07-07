@@ -32,6 +32,9 @@ describe Autobot::CLI::SetupHelper do
       names.should contain("sqlite")
       names.should contain("github")
       names.should contain("weather")
+      names.should contain("system_info")
+      names.should contain("text_to_speech")
+      names.should contain("chat_log")
     ensure
       Autobot::Plugins::Loader.clear_pending
     end
@@ -58,6 +61,9 @@ describe Autobot::CLI::SetupHelper do
       names.should_not contain("sqlite")
       names.should_not contain("github")
       names.should contain("weather")
+      names.should contain("system_info")
+      names.should contain("text_to_speech")
+      names.should contain("chat_log")
     ensure
       Autobot::Plugins::Loader.clear_pending
     end
@@ -68,7 +74,7 @@ describe Autobot::CLI::SetupHelper do
 
       Autobot::CLI::SetupHelper.register_builtin_plugins(config)
 
-      Autobot::Plugins::Loader.pending.size.should eq(3)
+      Autobot::Plugins::Loader.pending.size.should eq(6)
     ensure
       Autobot::Plugins::Loader.clear_pending
     end
