@@ -115,28 +115,12 @@ module Autobot
       end
 
       private def parse_compatible_response(response : HTTP::Client::Response) : Response
-        unless response.success?
-          begin
-            json = JSON.parse(response.body)
-            if error = extract_error(json)
-              return Response.new(content: "API error (HTTP #{response.status_code}): #{error}", finish_reason: "error")
-            end
-          rescue
+        json = resolve_json(response) do |body|
+          if error = extract_error(body)
+            Response.new(content: "API error (HTTP #{response.status_code}): #{error}", finish_reason: "error")
           end
-          return Response.new(
-            content: "HTTP request failed with status #{response.status_code}: #{response.body}",
-            finish_reason: "error"
-          )
         end
-
-        begin
-          json = JSON.parse(response.body)
-        rescue ex
-          return Response.new(
-            content: "Failed to parse API response as JSON (HTTP #{response.status_code}): #{ex.message}. Body: #{response.body}",
-            finish_reason: "error"
-          )
-        end
+        return json if json.is_a?(Response)
 
         if error = extract_error(json)
           return Response.new(content: "API error: #{error}", finish_reason: "error")
@@ -371,28 +355,8 @@ module Autobot
       end
 
       private def parse_anthropic_response(response : HTTP::Client::Response) : Response
-        unless response.success?
-          begin
-            json = JSON.parse(response.body)
-            if error_response = parse_anthropic_error(json, response.body)
-              return error_response
-            end
-          rescue
-          end
-          return Response.new(
-            content: "HTTP request failed with status #{response.status_code}: #{response.body}",
-            finish_reason: "error"
-          )
-        end
-
-        begin
-          json = JSON.parse(response.body)
-        rescue ex
-          return Response.new(
-            content: "Failed to parse API response as JSON (HTTP #{response.status_code}): #{ex.message}. Body: #{response.body}",
-            finish_reason: "error"
-          )
-        end
+        json = resolve_json(response) { |body| parse_anthropic_error(body, response.body) }
+        return json if json.is_a?(Response)
 
         if error_response = parse_anthropic_error(json, response.body)
           return error_response
@@ -406,6 +370,47 @@ module Autobot
         return nil unless json["type"]?.try(&.as_s?) == "error"
         msg = json["error"]?.try { |error| error["message"]?.try(&.as_s?) } || body
         Response.new(content: "API error: #{msg}", finish_reason: "error")
+      end
+
+      # Parses the response body into JSON, or returns an error Response when
+      # the request failed or the body is not valid JSON. On a failed status the
+      # block may surface a provider-specific error from the parsed body before
+      # falling back to a generic status message.
+      private def resolve_json(response : HTTP::Client::Response, & : JSON::Any -> Response?) : JSON::Any | Response
+        unless response.success?
+          if json = parse_json?(response.body)
+            if error_response = yield json
+              return error_response
+            end
+          end
+          return http_failure_response(response)
+        end
+
+        begin
+          JSON.parse(response.body)
+        rescue ex
+          json_parse_error_response(response, ex)
+        end
+      end
+
+      private def parse_json?(body : String) : JSON::Any?
+        JSON.parse(body)
+      rescue
+        nil
+      end
+
+      private def http_failure_response(response : HTTP::Client::Response) : Response
+        Response.new(
+          content: "HTTP request failed with status #{response.status_code}: #{response.body}",
+          finish_reason: "error",
+        )
+      end
+
+      private def json_parse_error_response(response : HTTP::Client::Response, error : Exception) : Response
+        Response.new(
+          content: "Failed to parse API response as JSON (HTTP #{response.status_code}): #{error.message}. Body: #{response.body}",
+          finish_reason: "error",
+        )
       end
 
       # Extracts an error message from an OpenAI-compatible response.
