@@ -87,6 +87,12 @@ plugins:
     enabled: true
   weather:
     enabled: false  # disable weather plugin
+  system_info:
+    enabled: true
+  text_to_speech:
+    enabled: true
+  chat_log:
+    enabled: true
 ```
 
 Omitting the `plugins` section keeps all builtins enabled. Use `autobot doctor` to verify plugin status and dependencies.
@@ -116,6 +122,18 @@ Provides a `sqlite` tool for persistent structured data storage. Requires `sqlit
 **Database storage:** databases are stored as `data/{name}.db`.
 
 **Migrations:** place SQL files in `data/migrations/{db_name}/` (e.g. `data/migrations/app/001_create_users.sql`). They are auto-applied in alphabetical order on first database access and tracked in a `schema_migrations` table. Use `migrate` action to apply new migrations created during a session.
+
+### System info
+
+Provides a `get_system_info` tool that returns host metrics (CPU count, memory usage, uptime, and disk space for the workspace). Runs `df`, `free`, `uptime`, and `lscpu`, so it targets Linux hosts.
+
+### Text to speech
+
+Provides a `text_to_speech` tool that converts text into an OGG/Opus voice file in the workspace. Requires `gtts-cli` (`pip install gtts`) and `ffmpeg` to be installed. Voice delivery is currently supported only on the Telegram channel.
+
+### Chat log
+
+Provides a `get_recent_chat_log` tool for consulting the rolling log of a group chat. Logs are written only by the Telegram channel (see [Telegram](telegram.md)); on other channels the tool reports no logs.
 
 ## Notes
 

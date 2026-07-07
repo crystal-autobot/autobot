@@ -5,7 +5,7 @@ module Autobot
   module Session
     # Manages conversation sessions with JSONL file persistence.
     class Manager
-      @sessions_dir : Path
+      getter sessions_dir : Path
       @cache : Hash(String, Session) = {} of String => Session
 
       def initialize(workspace : Path)
