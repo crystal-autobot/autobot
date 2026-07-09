@@ -175,7 +175,7 @@ module Autobot
         "Invalid URL"
       end
 
-      private def resolve_and_validate_ip(host : String) : String
+      private def resolve_and_validate_ip(host : String) : Array(String)
         # First check if host looks like an IP address with alternate notation
         if error = check_alternate_ip_notation(host)
           raise error
@@ -211,8 +211,7 @@ module Autobot
 
         raise "No valid IPs found" if validated_ips.empty?
 
-        # Return first validated IP to connect to (prevents DNS rebinding)
-        validated_ips.first
+        validated_ips
       rescue ex
         raise "SSRF validation failed: #{ex.message}"
       end
@@ -271,44 +270,61 @@ module Autobot
         raise "Invalid URI: missing host" unless hostname
 
         # Validate all resolved IPs before connecting (SSRF protection)
-        validated_ip = resolve_and_validate_ip(hostname)
+        validated_ips = resolve_and_validate_ip(hostname)
 
         headers = HTTP::Headers{"User-Agent" => USER_AGENT}
 
+        response = nil
         if uri.scheme == "https"
           # HTTPS: connect via hostname for proper SNI/cert validation.
           # DNS rebinding is mitigated by TLS — a rebind target won't have
           # a valid certificate for the original hostname.
           client = HTTP::Client.new(hostname, uri.port, tls: true)
+          client.read_timeout = DEFAULT_TIMEOUT
+          client.connect_timeout = DEFAULT_TIMEOUT
+          begin
+            response = client.get(uri.request_target, headers: headers)
+          ensure
+            client.close
+          end
         else
           # HTTP: connect to validated IP to prevent DNS rebinding.
-          headers["Host"] = hostname
-          client = HTTP::Client.new(validated_ip, uri.port)
-        end
-        client.read_timeout = DEFAULT_TIMEOUT
-        client.connect_timeout = DEFAULT_TIMEOUT
-
-        begin
-          response = client.get(uri.request_target, headers: headers)
-
-          if response.status.redirection? && (location = response.headers["Location"]?)
-            new_uri = URI.parse(location)
-            # Handle relative redirects
-            unless new_uri.host
-              new_uri = uri.resolve(new_uri)
+          last_exception = nil
+          validated_ips.each do |ip|
+            headers["Host"] = hostname
+            client = HTTP::Client.new(ip, uri.port)
+            client.read_timeout = DEFAULT_TIMEOUT
+            client.connect_timeout = DEFAULT_TIMEOUT
+            begin
+              response = client.get(uri.request_target, headers: headers)
+              break
+            rescue ex : Socket::Error | IO::TimeoutError
+              last_exception = ex
+            ensure
+              client.close
             end
-
-            if error = validate_redirect_uri(new_uri)
-              raise "Redirect blocked: #{error}"
-            end
-
-            return fetch_with_redirects(new_uri, redirects + 1)
           end
 
-          response
-        ensure
-          client.close
+          if response.nil?
+            raise last_exception || Socket::ConnectError.new("Failed to connect to any resolved IP address")
+          end
         end
+
+        if response.status.redirection? && (location = response.headers["Location"]?)
+          new_uri = URI.parse(location)
+          # Handle relative redirects
+          unless new_uri.host
+            new_uri = uri.resolve(new_uri)
+          end
+
+          if error = validate_redirect_uri(new_uri)
+            raise "Redirect blocked: #{error}"
+          end
+
+          return fetch_with_redirects(new_uri, redirects + 1)
+        end
+
+        response
       end
 
       private def validate_redirect_uri(uri : URI) : String?
