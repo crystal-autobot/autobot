@@ -248,18 +248,24 @@ describe Autobot::Providers::HttpProvider do
       http_response = HTTP::Client::Response.new(403, body: "Forbidden")
       response = provider.test_parse_compatible_response_direct(http_response)
       response.finish_reason.should eq("error")
-      content = response.content.as(String)
-      content.should contain("HTTP request failed with status 403")
-      content.should contain("Forbidden")
+      if content = response.content
+        content.should contain("HTTP request failed with status 403")
+        content.should contain("Forbidden")
+      else
+        fail("Expected content to not be nil")
+      end
     end
 
     it "handles non-JSON body with 200 status gracefully" do
       http_response = HTTP::Client::Response.new(200, body: "Something went wrong but HTTP 200")
       response = provider.test_parse_compatible_response_direct(http_response)
       response.finish_reason.should eq("error")
-      content = response.content.as(String)
-      content.should contain("Failed to parse API response as JSON (HTTP 200)")
-      content.should contain("Something went wrong but HTTP 200")
+      if content = response.content
+        content.should contain("Failed to parse API response as JSON (HTTP 200)")
+        content.should contain("Something went wrong but HTTP 200")
+      else
+        fail("Expected content to not be nil")
+      end
     end
   end
 
