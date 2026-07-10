@@ -272,43 +272,7 @@ module Autobot
         # Validate all resolved IPs before connecting (SSRF protection)
         validated_ips = resolve_and_validate_ip(hostname)
 
-        headers = HTTP::Headers{"User-Agent" => USER_AGENT}
-
-        response = nil
-        if uri.scheme == "https"
-          # HTTPS: connect via hostname for proper SNI/cert validation.
-          # DNS rebinding is mitigated by TLS — a rebind target won't have
-          # a valid certificate for the original hostname.
-          client = HTTP::Client.new(hostname, uri.port, tls: true)
-          client.read_timeout = DEFAULT_TIMEOUT
-          client.connect_timeout = DEFAULT_TIMEOUT
-          begin
-            response = client.get(uri.request_target, headers: headers)
-          ensure
-            client.close
-          end
-        else
-          # HTTP: connect to validated IP to prevent DNS rebinding.
-          last_exception = nil
-          validated_ips.each do |ip|
-            headers["Host"] = hostname
-            client = HTTP::Client.new(ip, uri.port)
-            client.read_timeout = DEFAULT_TIMEOUT
-            client.connect_timeout = DEFAULT_TIMEOUT
-            begin
-              response = client.get(uri.request_target, headers: headers)
-              break
-            rescue ex : Socket::Error | IO::TimeoutError
-              last_exception = ex
-            ensure
-              client.close
-            end
-          end
-
-          if response.nil?
-            raise last_exception || Socket::ConnectError.new("Failed to connect to any resolved IP address")
-          end
-        end
+        response = fetch_response(uri, hostname, validated_ips)
 
         if response.status.redirection? && (location = response.headers["Location"]?)
           new_uri = URI.parse(location)
@@ -325,6 +289,43 @@ module Autobot
         end
 
         response
+      end
+
+      private def fetch_response(uri : URI, hostname : String, validated_ips : Array(String)) : HTTP::Client::Response
+        headers = HTTP::Headers{"User-Agent" => USER_AGENT}
+
+        if uri.scheme == "https"
+          # HTTPS: connect via hostname for proper SNI/cert validation.
+          # DNS rebinding is mitigated by TLS — a rebind target won't have
+          # a valid certificate for the original hostname.
+          perform_get(HTTP::Client.new(hostname, uri.port, tls: true), uri, headers)
+        else
+          # HTTP: connect to validated IPs instead of the hostname to prevent
+          # DNS rebinding, trying each in order so an unreachable IP falls back
+          # to the next.
+          headers["Host"] = hostname
+          get_first_reachable(validated_ips, uri, headers)
+        end
+      end
+
+      private def get_first_reachable(ips : Array(String), uri : URI, headers : HTTP::Headers) : HTTP::Client::Response
+        last_exception = nil
+
+        ips.each do |ip|
+          return perform_get(HTTP::Client.new(ip, uri.port), uri, headers)
+        rescue ex : Socket::Error | IO::TimeoutError
+          last_exception = ex
+        end
+
+        raise last_exception || Socket::ConnectError.new("Failed to connect to any resolved IP address")
+      end
+
+      private def perform_get(client : HTTP::Client, uri : URI, headers : HTTP::Headers) : HTTP::Client::Response
+        client.read_timeout = DEFAULT_TIMEOUT
+        client.connect_timeout = DEFAULT_TIMEOUT
+        client.get(uri.request_target, headers: headers)
+      ensure
+        client.close
       end
 
       private def validate_redirect_uri(uri : URI) : String?
