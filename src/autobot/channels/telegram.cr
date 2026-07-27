@@ -1107,6 +1107,9 @@ module Autobot::Channels
         if bytes_read > max_size
           buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
           buffer << "\n... (truncated)"
+          # Drain remaining output until EOF to prevent child process pipe deadlocks
+          while io.read(chunk) > 0
+          end
           break
         end
         buffer.write(chunk[0, n])
