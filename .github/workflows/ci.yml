@@ -26,6 +26,7 @@ jobs:
 
       - name: Run linter
         run: |
+          mkdir -p bin
           crystal build -o bin/ameba lib/ameba/bin/ameba.cr
           bin/ameba src/
 
