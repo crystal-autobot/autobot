@@ -2,6 +2,7 @@ require "http/client"
 require "json"
 require "log"
 require "uri"
+require "./blocked_address"
 require "./result"
 
 module Autobot
@@ -190,23 +191,8 @@ module Autobot
         addrinfo.each do |addr|
           ip_str = addr.ip_address.address
 
-          # Strip IPv4-mapped IPv6 prefix for validation to prevent SSRF bypass
-          validation_ip = ip_str.starts_with?("::ffff:") ? ip_str.sub("::ffff:", "") : ip_str
-
-          if private_ip?(validation_ip)
-            raise "Access to private IP addresses is blocked"
-          end
-
-          if loopback?(validation_ip)
-            raise "Access to localhost is blocked"
-          end
-
-          if cloud_metadata?(validation_ip)
-            raise "Access to cloud metadata endpoints is blocked"
-          end
-
-          if link_local?(validation_ip)
-            raise "Access to link-local addresses is blocked"
+          if reason = BlockedAddress.reason_for(ip_str)
+            raise reason
           end
 
           validated_ips << ip_str
@@ -237,31 +223,6 @@ module Autobot
         end
 
         nil
-      end
-
-      private def private_ip?(ip : String) : Bool
-        # IPv4 RFC 1918 private ranges
-        return true if ip.starts_with?("10.")                       # 10.0.0.0/8
-        return true if ip.starts_with?("192.168.")                  # 192.168.0.0/16
-        return true if ip.matches?(/^172\.(1[6-9]|2[0-9]|3[01])\./) # 172.16.0.0/12
-
-        # IPv6 private ranges
-        return true if ip.starts_with?("fc") # fc00::/7 (Unique Local)
-        return true if ip.starts_with?("fd") # fd00::/8 (Unique Local)
-
-        false
-      end
-
-      private def loopback?(ip : String) : Bool
-        ip.starts_with?("127.") || ip == "::1" || ip == "0.0.0.0" || ip == "::"
-      end
-
-      private def cloud_metadata?(ip : String) : Bool
-        ip == "169.254.169.254" || ip == "fd00:ec2::254"
-      end
-
-      private def link_local?(ip : String) : Bool
-        ip.starts_with?("169.254.") || ip.starts_with?("fe80:")
       end
 
       private def fetch_with_redirects(uri : URI, redirects = 0) : HTTP::Client::Response

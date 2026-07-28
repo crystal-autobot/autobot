@@ -74,9 +74,10 @@ The Brave API key can also be set via the `BRAVE_API_KEY` environment variable. 
 4. **Blocks loopback** — `127.x`, `::1`, `0.0.0.0`
 5. **Blocks cloud metadata** — `169.254.169.254` (AWS/GCP/Azure metadata endpoint)
 6. **Blocks link-local** — `169.254.x`, `fe80:`
-7. **Blocks alternate IP notation** — octal (`0177.0.0.1`), hex (`0x7f000001`), integer notation
-8. **Validates redirect targets** — each redirect hop is re-validated against all SSRF checks
-9. **Connects to validated IP** — prevents DNS rebinding by connecting to the resolved IP directly
+7. **Unwraps IPv4-mapped IPv6** — `::ffff:127.0.0.1` is checked as `127.0.0.1`, so mapped addresses cannot bypass the rules above
+8. **Blocks alternate IP notation** — octal (`0177.0.0.1`), hex (`0x7f000001`), integer notation
+9. **Validates redirect targets** — each redirect hop is re-validated against all SSRF checks
+10. **Connects to validated IP** — prevents DNS rebinding by connecting to the resolved IP directly
 
 ### Rate Limiting
 
