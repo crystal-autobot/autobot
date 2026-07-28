@@ -31,7 +31,7 @@ development_dependencies:
   # Code quality and linting
   ameba:
     github: crystal-ameba/ameba
-    version: ~> 1.5
+    branch: master
 
 targets:
   autobot:
