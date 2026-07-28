@@ -91,7 +91,11 @@ test-verbose: deps ## Run tests with verbose output
 
 ## —— Code Quality ————————————————————————————————————
 
-lint: deps ## Run ameba linter
+$(BIN_DIR)/ameba: lib/ameba/bin/ameba.cr
+	@mkdir -p $(BIN_DIR)
+	$(CRYSTAL) build -o $(BIN_DIR)/ameba lib/ameba/bin/ameba.cr
+
+lint: deps $(BIN_DIR)/ameba ## Run ameba linter
 	$(BIN_DIR)/ameba src/
 
 format: ## Format source code

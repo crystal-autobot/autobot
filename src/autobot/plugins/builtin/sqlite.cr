@@ -207,12 +207,12 @@ module Autobot
         private def init_migrations_table(db_name : String) : Tools::ToolResult
           sql = "CREATE TABLE IF NOT EXISTS schema_migrations " \
                 "(version TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP);"
-          @executor.exec("sqlite3 #{shell_escape(db_path(db_name))} #{shell_escape(sql)}", timeout: INIT_TIMEOUT)
+          @executor.exec("sqlite3 -safe #{shell_escape(db_path(db_name))} #{shell_escape(sql)}", timeout: INIT_TIMEOUT)
         end
 
         private def get_applied_migrations(db_name : String) : Array(String)
           result = @executor.exec(
-            "sqlite3 #{shell_escape(db_path(db_name))} #{shell_escape("SELECT version FROM schema_migrations ORDER BY version;")}",
+            "sqlite3 -safe #{shell_escape(db_path(db_name))} #{shell_escape("SELECT version FROM schema_migrations ORDER BY version;")}",
             timeout: SCHEMA_TIMEOUT
           )
           return [] of String if command_failed?(result)
@@ -225,7 +225,7 @@ module Autobot
           migration_path = "#{dir}/#{file}"
 
           apply_result = @executor.exec(
-            "sqlite3 #{shell_escape(path)} < #{shell_escape(migration_path)}",
+            "sqlite3 -safe #{shell_escape(path)} < #{shell_escape(migration_path)}",
             timeout: MIGRATION_TIMEOUT
           )
 
@@ -235,7 +235,7 @@ module Autobot
 
           record_sql = "INSERT INTO schema_migrations (version) VALUES (#{shell_escape(file)});"
           record_result = @executor.exec(
-            "sqlite3 #{shell_escape(path)} #{shell_escape(record_sql)}",
+            "sqlite3 -safe #{shell_escape(path)} #{shell_escape(record_sql)}",
             timeout: INIT_TIMEOUT
           )
 
@@ -253,7 +253,7 @@ module Autobot
           return Tools::ToolResult.error("'query' parameter is required for action 'query'") unless query
 
           @executor.exec(
-            "sqlite3 -header -column #{shell_escape(db_path(db_name))} #{shell_escape(query)}",
+            "sqlite3 -safe -header -column #{shell_escape(db_path(db_name))} #{shell_escape(query)}",
             timeout: QUERY_TIMEOUT
           )
         end
@@ -262,7 +262,7 @@ module Autobot
 
         private def show_schema(db_name : String) : Tools::ToolResult
           result = @executor.exec(
-            "sqlite3 #{shell_escape(db_path(db_name))} '.schema'",
+            "sqlite3 -safe #{shell_escape(db_path(db_name))} '.schema'",
             timeout: SCHEMA_TIMEOUT
           )
           return result unless result.success?
@@ -272,7 +272,7 @@ module Autobot
 
         private def list_tables(db_name : String) : Tools::ToolResult
           result = @executor.exec(
-            "sqlite3 #{shell_escape(db_path(db_name))} '.tables'",
+            "sqlite3 -safe #{shell_escape(db_path(db_name))} '.tables'",
             timeout: SCHEMA_TIMEOUT
           )
           return result unless result.success?
