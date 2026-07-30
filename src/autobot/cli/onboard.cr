@@ -59,6 +59,7 @@ module Autobot
 
         if File.exists?(config_file)
           print "Config already exists at #{config_file}. Overwrite? [y/N] "
+          STDOUT.flush
           answer = gets
           unless answer && answer.strip.downcase == "y"
             puts "Aborted."

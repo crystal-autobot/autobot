@@ -190,19 +190,22 @@ module Autobot
         addrinfo.each do |addr|
           ip_str = addr.ip_address.address
 
-          if private_ip?(ip_str)
+          # Strip IPv4-mapped IPv6 prefix for validation to prevent SSRF bypass
+          validation_ip = ip_str.starts_with?("::ffff:") ? ip_str.sub("::ffff:", "") : ip_str
+
+          if private_ip?(validation_ip)
             raise "Access to private IP addresses is blocked"
           end
 
-          if loopback?(ip_str)
+          if loopback?(validation_ip)
             raise "Access to localhost is blocked"
           end
 
-          if cloud_metadata?(ip_str)
+          if cloud_metadata?(validation_ip)
             raise "Access to cloud metadata endpoints is blocked"
           end
 
-          if link_local?(ip_str)
+          if link_local?(validation_ip)
             raise "Access to link-local addresses is blocked"
           end
 
