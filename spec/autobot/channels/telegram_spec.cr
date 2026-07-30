@@ -45,6 +45,22 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
   def test_parse_script_args(args_str : String) : Array(String)
     parse_script_args(args_str)
   end
+
+  def test_execute_script(script_path : String, args : String, chat_id : String) : Nil
+    execute_script(script_path, args, chat_id)
+  end
+
+  getter sent_replies = [] of String
+
+  private def send_reply(chat_id : String, text : String) : Nil
+    sent_replies << text
+  end
+
+  private def start_typing(chat_id : String) : Nil
+  end
+
+  private def stop_typing(chat_id : String) : Nil
+  end
 end
 
 private def build_channel(
@@ -414,6 +430,29 @@ describe Autobot::Channels::TelegramChannel do
     it "handles empty string" do
       channel = build_channel
       channel.test_parse_script_args("").should eq([] of String)
+    end
+  end
+
+  describe "#execute_script" do
+    it "drains large stderr output concurrent with stdout without deadlocking" do
+      tmp = TestHelper.tmp_dir
+      script_file = tmp / "test_script.sh"
+      File.write(script_file, <<-SCRIPT)
+        #!/bin/sh
+        echo 'stdout output'
+        yes x | head -c 100000 >&2
+        exit 1
+        SCRIPT
+      File.chmod(script_file, 0o755)
+
+      channel = build_channel
+      channel.test_execute_script(script_file.to_s, "", "123")
+
+      channel.sent_replies.size.should eq(1)
+      channel.sent_replies.first.should contain("Script failed (exit 1)")
+      channel.sent_replies.first.should contain("truncated")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
     end
   end
 end

@@ -888,6 +888,9 @@ module Autobot::Channels
       end
     end
 
+    SCRIPT_OUTPUT_LIMIT = 4000
+    READ_CHUNK_SIZE     = 4096
+
     private def execute_script(script_path : String, args : String, chat_id : String) : Nil
       expanded = Path[script_path].expand(home: true).to_s
 
@@ -905,9 +908,12 @@ module Autobot::Channels
         error: Process::Redirect::Pipe,
       )
 
-      # Read with size limit to prevent DoS (truncate at 4000 chars)
-      output = read_limited_io(process.output, 4000)
-      error_output = read_limited_io(process.error, 4000)
+      # stderr must be read concurrently with stdout: a child blocked on a full pipe never exits
+      error_channel = ::Channel(String).new(1)
+      spawn { error_channel.send(read_limited_io(process.error, SCRIPT_OUTPUT_LIMIT)) }
+
+      output = read_limited_io(process.output, SCRIPT_OUTPUT_LIMIT)
+      error_output = error_channel.receive
       status = process.wait
 
       result = if status.success?
@@ -1100,13 +1106,16 @@ module Autobot::Channels
     private def read_limited_io(io : IO, max_size : Int32) : String
       buffer = IO::Memory.new
       bytes_read = 0
-      chunk = Bytes.new(4096)
+      chunk = Bytes.new(READ_CHUNK_SIZE)
 
       while (n = io.read(chunk)) > 0
         bytes_read += n
         if bytes_read > max_size
           buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
           buffer << "\n... (truncated)"
+          # drain to EOF so the child never blocks on a full pipe
+          while io.read(chunk) > 0
+          end
           break
         end
         buffer.write(chunk[0, n])
