@@ -905,9 +905,15 @@ module Autobot::Channels
         error: Process::Redirect::Pipe,
       )
 
-      # Read with size limit to prevent DoS (truncate at 4000 chars)
-      output = read_limited_io(process.output, 4000)
-      error_output = read_limited_io(process.error, 4000)
+      # Read stdout and stderr concurrently to prevent pipe deadlocks when one stream fills up
+      output_channel = ::Channel(String).new(1)
+      error_channel = ::Channel(String).new(1)
+
+      spawn { output_channel.send(read_limited_io(process.output, 4000)) }
+      spawn { error_channel.send(read_limited_io(process.error, 4000)) }
+
+      output = output_channel.receive
+      error_output = error_channel.receive
       status = process.wait
 
       result = if status.success?
