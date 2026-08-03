@@ -77,6 +77,7 @@ Built-in protection against Server-Side Request Forgery:
 - Link-local addresses (169.254.x, fe80:)
 - Alternate IP notation (octal: 0177.0.0.1, hex: 0x7f.0.0.1)
 - IPv6 private ranges (fc00::/7, fd00::/8)
+- IPv4-mapped IPv6 (::ffff:127.0.0.1) — unwrapped to the embedded IPv4 before checking
 
 **All DNS records validated** to prevent DNS rebinding attacks.
 
