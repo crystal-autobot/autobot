@@ -1056,7 +1056,9 @@ module Autobot::Channels
 
     private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
       url = "#{TELEGRAM_API_BASE}/bot#{@token}/#{method}"
-      response = HTTP::Client.post(url, form: URI::Params.encode(params))
+      client = HTTP::Client.new(url)
+      apply_proxy(client)
+      response = client.post("", form: URI::Params.encode(params))
 
       if response.status_code == 200
         data = JSON.parse(response.body)
@@ -1085,6 +1087,7 @@ module Autobot::Channels
       uri = URI.parse(TELEGRAM_API_BASE)
       client = HTTP::Client.new(uri)
       client.read_timeout = (POLL_TIMEOUT + 10).seconds
+      apply_proxy(client)
 
       query = URI::Params.encode(params)
       response = client.get("/bot#{@token}/#{method}?#{query}")
