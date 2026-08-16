@@ -2,15 +2,19 @@ version: 2.0
 shards:
   ameba:
     git: https://github.com/crystal-ameba/ameba.git
-    version: 1.7.0-dev+git.commit.cdd58b34b0d8a9c785d67183a7a8f07541549e55
+    version: 1.7.0-dev+git.commit.f53fcd3382553121239c8f144aec5e27aeadbed8
 
   awscr-signer:
     git: https://github.com/taylorfinnell/awscr-signer.git
     version: 0.9.0
 
+  cookie_jar:
+    git: https://github.com/mamantoha/http-cookie_jar.git
+    version: 0.1.0
+
   crest:
     git: https://github.com/mamantoha/crest.git
-    version: 1.6.2
+    version: 1.8.1
 
   cron_parser:
     git: https://github.com/kostya/cron_parser.git
@@ -22,5 +26,5 @@ shards:
 
   http_proxy:
     git: https://github.com/mamantoha/http_proxy.git
-    version: 0.14.0
+    version: 0.15.1
 
