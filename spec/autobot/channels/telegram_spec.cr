@@ -50,6 +50,15 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     execute_script(script_path, args, chat_id)
   end
 
+  def test_apply_proxy(client : HTTP::Client) : Nil
+    apply_proxy(client)
+  end
+
+  def test_send_media_request(chat_id : String, file_bytes : Bytes, caption : String, api_method : String, field_name : String, filename : String, content_type : String) : Nil
+    send_media_request(chat_id, file_bytes, caption,
+      api_method: api_method, field_name: field_name, filename: filename, content_type: content_type)
+  end
+
   getter sent_replies = [] of String
 
   private def send_reply(chat_id : String, text : String) : Nil
@@ -67,6 +76,7 @@ private def build_channel(
   allow_from : Array(String) = [] of String,
   custom_commands : Autobot::Config::CustomCommandsConfig? = nil,
   cron_service : Autobot::Cron::Service? = nil,
+  proxy : String? = nil,
 ) : TelegramChannelTest
   bus = Autobot::Bus::MessageBus.new
   cmds = custom_commands || Autobot::Config::CustomCommandsConfig.new
@@ -74,6 +84,7 @@ private def build_channel(
     bus: bus,
     token: "test-token",
     allow_from: allow_from,
+    proxy: proxy,
     custom_commands: cmds,
     cron_service: cron_service,
   )
@@ -453,6 +464,94 @@ describe Autobot::Channels::TelegramChannel do
       channel.sent_replies.first.should contain("truncated")
     ensure
       FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "#apply_proxy" do
+    it "leaves the client unproxied when no proxy is configured" do
+      channel = build_channel
+      client = HTTP::Client.new(URI.parse("http://127.0.0.1"))
+
+      channel.test_apply_proxy(client)
+
+      client.proxy?.should be_false
+    end
+
+    it "leaves the client unproxied when the proxy URL has no host" do
+      channel = build_channel(proxy: "invalid")
+      client = HTTP::Client.new(URI.parse("http://127.0.0.1"))
+
+      channel.test_apply_proxy(client)
+
+      client.proxy?.should be_false
+    end
+
+    it "connects the client through the configured proxy" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+      channel = build_channel(proxy: "http://127.0.0.1:#{port}")
+      # Plain-http target: the proxy connection opens without a CONNECT handshake.
+      client = HTTP::Client.new(URI.parse("http://upstream.test"))
+
+      channel.test_apply_proxy(client)
+
+      if proxy = client.proxy
+        proxy.host.should eq("127.0.0.1")
+        proxy.port.should eq(port)
+      else
+        fail("expected proxy to be applied to the client")
+      end
+    ensure
+      client.close if client
+      server.close if server
+    end
+  end
+
+  describe "#send_media_request" do
+    it "tunnels the media upload through the configured proxy" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+      connect_request = Channel(String).new
+
+      spawn do
+        if socket = server.accept?
+          request_line = socket.gets.to_s
+          while (line = socket.gets) && !line.empty?
+          end
+          socket << "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n"
+          socket.flush
+          socket.close
+          connect_request.send(request_line)
+        end
+      end
+
+      channel = build_channel(proxy: "http://127.0.0.1:#{port}")
+      upload_error = Channel(Exception?).new
+
+      spawn do
+        channel.test_send_media_request("123", Bytes[1, 2, 3], "caption",
+          api_method: "sendPhoto", field_name: "photo",
+          filename: "image.png", content_type: "image/png")
+        upload_error.send(nil)
+      rescue ex
+        upload_error.send(ex)
+      end
+
+      select
+      when error = upload_error.receive
+        error.should be_a(IO::Error)
+      when timeout(5.seconds)
+        fail("media upload did not go through the proxy")
+      end
+
+      select
+      when request_line = connect_request.receive
+        request_line.should eq("CONNECT api.telegram.org:443 HTTP/1.1")
+      when timeout(5.seconds)
+        fail("proxy did not receive a CONNECT request")
+      end
+    ensure
+      server.close if server
     end
   end
 end
