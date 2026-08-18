@@ -457,12 +457,16 @@ module Autobot::Channels
       body = build_media_multipart(chat_id, file_bytes, caption,
         field_name: field_name, filename: filename, content_type: content_type)
 
-      url = "#{TELEGRAM_API_BASE}/bot#{@token}/#{api_method}"
+      uri = URI.parse(TELEGRAM_API_BASE)
+      client = HTTP::Client.new(uri)
+      apply_proxy(client)
+
       headers = HTTP::Headers{
         "Content-Type" => "multipart/form-data; boundary=#{MULTIPART_BOUNDARY}",
       }
 
-      response = HTTP::Client.post(url, headers: headers, body: body)
+      response = client.post("/bot#{@token}/#{api_method}", headers: headers, body: body)
+      client.close
 
       unless response.status_code == 200
         Log.error { "#{api_method} failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
