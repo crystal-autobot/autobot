@@ -448,6 +448,8 @@ module Autobot
         if !has_thought_parts
           if text = msg["content"]?.try(&.as_s?)
             parts << {"text" => JSON::Any.new(text)}
+          elsif blocks = msg["content"]?.try(&.as_a?)
+            append_multimodal_blocks(parts, blocks)
           end
         end
 
@@ -460,6 +462,39 @@ module Autobot
         end
 
         parts
+      end
+
+      private def append_multimodal_blocks(parts : Array(Hash(String, JSON::Any)), blocks : Array(JSON::Any)) : Nil
+        blocks.each do |block|
+          case block["type"]?.try(&.as_s?)
+          when "text"
+            if b_text = block["text"]?.try(&.as_s?)
+              parts << {"text" => JSON::Any.new(b_text)}
+            end
+          when "image_url"
+            append_image_url_block(parts, block)
+          end
+        end
+      end
+
+      private def append_image_url_block(parts : Array(Hash(String, JSON::Any)), block : JSON::Any) : Nil
+        img_url = block["image_url"]?.try { |image_obj| image_obj["url"]?.try(&.as_s?) }
+        return unless img_url
+        return unless img_url.starts_with?("data:")
+
+        comma_idx = img_url.index(',')
+        return unless comma_idx
+
+        header = img_url[5...comma_idx]
+        mime_type = header.split(';').first
+        b64_data = img_url[(comma_idx + 1)..]
+
+        parts << {
+          "inlineData" => JSON::Any.new({
+            "mimeType" => JSON::Any.new(mime_type),
+            "data"     => JSON::Any.new(b64_data),
+          } of String => JSON::Any),
+        }
       end
 
       private def extract_thought_parts(tcalls) : Array(Hash(String, JSON::Any))?
