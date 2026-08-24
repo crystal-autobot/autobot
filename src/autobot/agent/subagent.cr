@@ -42,6 +42,7 @@ module Autobot
       @sandbox_config : String
       @rate_limiter : Tools::RateLimiter?
       @running_tasks : Hash(String, Bool) = {} of String => Bool
+      @tasks_mutex : Mutex = Mutex.new
 
       def initialize(
         @provider : Providers::Provider,
@@ -70,11 +71,18 @@ module Autobot
 
         origin = {"channel" => origin_channel, "chat_id" => origin_chat_id}
 
-        @running_tasks[task_id] = true
+        @tasks_mutex.synchronize do
+          @running_tasks[task_id] = true
+        end
 
         ::spawn do
-          run_subagent(task_id, task, display_label, origin)
-          @running_tasks.delete(task_id)
+          begin
+            run_subagent(task_id, task, display_label, origin)
+          ensure
+            @tasks_mutex.synchronize do
+              @running_tasks.delete(task_id)
+            end
+          end
         end
 
         Log.info { "Spawned subagent [#{task_id}]: #{display_label}" }
@@ -83,7 +91,9 @@ module Autobot
 
       # Return the number of currently running subagents.
       def running_count : Int32
-        @running_tasks.size
+        @tasks_mutex.synchronize do
+          @running_tasks.size
+        end
       end
 
       private def run_subagent(
