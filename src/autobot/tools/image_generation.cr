@@ -142,21 +142,25 @@ module Autobot
           "Content-Type"  => "application/json",
         }
 
-        response = client.post("/v1/images/generations", headers: headers, body: body)
-        client.close
+        begin
+          response = client.post("/v1/images/generations", headers: headers, body: body)
 
-        unless response.status_code == 200
-          error_msg = parse_error(response.body)
-          raise "OpenAI image API error (HTTP #{response.status_code}): #{error_msg}"
+          unless response.status_code == 200
+            error_msg = parse_error(response.body)
+            raise "OpenAI image API error (HTTP #{response.status_code}): #{error_msg}"
+          end
+
+          data = JSON.parse(response.body)
+          b64 = data["data"][0]["b64_json"].as_s
+          {b64, "image/png"}
+        ensure
+          client.close
         end
-
-        data = JSON.parse(response.body)
-        b64 = data["data"][0]["b64_json"].as_s
-        {b64, "image/png"}
       end
 
       private def generate_gemini(prompt : String) : {String, String}
         model = @model || DEFAULT_GEMINI_MODEL
+        base = @api_base || GEMINI_API_BASE
 
         body = {
           "contents" => [{
@@ -167,7 +171,7 @@ module Autobot
           },
         }.to_json
 
-        uri = URI.parse(GEMINI_API_BASE)
+        uri = URI.parse(base)
         client = build_client(uri)
 
         path = "/v1beta/models/#{model}:generateContent"
@@ -176,16 +180,19 @@ module Autobot
           "x-goog-api-key" => @api_key,
         }
 
-        response = client.post(path, headers: headers, body: body)
-        client.close
+        begin
+          response = client.post(path, headers: headers, body: body)
 
-        unless response.status_code == 200
-          error_msg = parse_error(response.body)
-          raise "Gemini image API error (HTTP #{response.status_code}): #{error_msg}"
+          unless response.status_code == 200
+            error_msg = parse_error(response.body)
+            raise "Gemini image API error (HTTP #{response.status_code}): #{error_msg}"
+          end
+
+          data = JSON.parse(response.body)
+          extract_gemini_image(data)
+        ensure
+          client.close
         end
-
-        data = JSON.parse(response.body)
-        extract_gemini_image(data)
       end
 
       private def extract_gemini_image(data : JSON::Any) : {String, String}

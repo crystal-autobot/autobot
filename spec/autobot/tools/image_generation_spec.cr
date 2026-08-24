@@ -126,4 +126,76 @@ describe Autobot::Tools::ImageGenerationTool do
     func = schema["function"].as_h
     func["name"].should eq(JSON::Any.new("generate_image"))
   end
+
+  describe "HTTP client socket lifecycle" do
+    it "closes HTTP client on OpenAI request network error" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          socket.close
+        end
+      end
+
+      tool = TestImageGenerationTool.new(
+        api_key: "test-key",
+        provider_name: "openai",
+        api_base: "http://127.0.0.1:#{port}",
+      )
+
+      expect_raises(Exception) do
+        tool.test_generate_openai("a sunset", "1024x1024")
+      end
+
+      tool.created_clients.size.should eq(1)
+      tool.created_clients.first.closed?.should be_true
+    ensure
+      server.close if server
+    end
+
+    it "closes HTTP client on Gemini request network error" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          socket.close
+        end
+      end
+
+      tool = TestImageGenerationTool.new(
+        api_key: "test-key",
+        provider_name: "gemini",
+        api_base: "http://127.0.0.1:#{port}",
+      )
+
+      expect_raises(Exception) do
+        tool.test_generate_gemini("a sunset")
+      end
+
+      tool.created_clients.size.should eq(1)
+      tool.created_clients.first.closed?.should be_true
+    ensure
+      server.close if server
+    end
+  end
+end
+
+private class TestImageGenerationTool < Autobot::Tools::ImageGenerationTool
+  getter created_clients = [] of HTTP::Client
+
+  private def build_client(uri : URI) : HTTP::Client
+    client = super(uri)
+    @created_clients << client
+    client
+  end
+
+  def test_generate_openai(prompt : String, size : String) : {String, String}
+    generate_openai(prompt, size)
+  end
+
+  def test_generate_gemini(prompt : String) : {String, String}
+    generate_gemini(prompt)
+  end
 end

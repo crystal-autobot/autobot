@@ -5,6 +5,15 @@ require "../src/autobot"
 
 ::Log.setup(::Log::Severity::None)
 
+class HTTP::Client
+  getter? closed : Bool = false
+
+  def close : Nil
+    @closed = true
+    previous_def
+  end
+end
+
 # Shared test helper for temporary directories
 module TestHelper
   # Create a temporary directory for test isolation.
