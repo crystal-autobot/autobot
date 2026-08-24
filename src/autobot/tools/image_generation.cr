@@ -134,25 +134,23 @@ module Autobot
           "output_format" => "png",
         }.to_json
 
-        uri = URI.parse(base)
-        client = build_client(uri)
-
-        headers = HTTP::Headers{
+        headers = ::HTTP::Headers{
           "Authorization" => "Bearer #{@api_key}",
           "Content-Type"  => "application/json",
         }
 
-        response = client.post("/v1/images/generations", headers: headers, body: body)
-        client.close
+        Autobot::HTTP.with_client(base, read_timeout: IMAGE_GEN_TIMEOUT) do |client|
+          response = client.post("/v1/images/generations", headers: headers, body: body)
 
-        unless response.status_code == 200
-          error_msg = parse_error(response.body)
-          raise "OpenAI image API error (HTTP #{response.status_code}): #{error_msg}"
+          unless response.status_code == 200
+            error_msg = parse_error(response.body)
+            raise "OpenAI image API error (HTTP #{response.status_code}): #{error_msg}"
+          end
+
+          data = JSON.parse(response.body)
+          b64 = data["data"][0]["b64_json"].as_s
+          {b64, "image/png"}
         end
-
-        data = JSON.parse(response.body)
-        b64 = data["data"][0]["b64_json"].as_s
-        {b64, "image/png"}
       end
 
       private def generate_gemini(prompt : String) : {String, String}
@@ -167,25 +165,24 @@ module Autobot
           },
         }.to_json
 
-        uri = URI.parse(GEMINI_API_BASE)
-        client = build_client(uri)
-
         path = "/v1beta/models/#{model}:generateContent"
-        headers = HTTP::Headers{
+        headers = ::HTTP::Headers{
           "Content-Type"   => "application/json",
           "x-goog-api-key" => @api_key,
         }
 
-        response = client.post(path, headers: headers, body: body)
-        client.close
+        base = @api_base || GEMINI_API_BASE
+        Autobot::HTTP.with_client(base, read_timeout: IMAGE_GEN_TIMEOUT) do |client|
+          response = client.post(path, headers: headers, body: body)
 
-        unless response.status_code == 200
-          error_msg = parse_error(response.body)
-          raise "Gemini image API error (HTTP #{response.status_code}): #{error_msg}"
+          unless response.status_code == 200
+            error_msg = parse_error(response.body)
+            raise "Gemini image API error (HTTP #{response.status_code}): #{error_msg}"
+          end
+
+          data = JSON.parse(response.body)
+          extract_gemini_image(data)
         end
-
-        data = JSON.parse(response.body)
-        extract_gemini_image(data)
       end
 
       private def extract_gemini_image(data : JSON::Any) : {String, String}
@@ -208,13 +205,6 @@ module Autobot
         end
 
         raise "No image data in Gemini response"
-      end
-
-      private def build_client(uri : URI) : HTTP::Client
-        client = HTTP::Client.new(uri)
-        client.read_timeout = IMAGE_GEN_TIMEOUT
-        client.connect_timeout = 30.seconds
-        client
       end
 
       private def parse_error(body : String) : String

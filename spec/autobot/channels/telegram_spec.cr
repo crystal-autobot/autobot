@@ -1,7 +1,35 @@
 require "../../spec_helper"
 
+class TrackingClient < HTTP::Client
+  getter? explicitly_closed : Bool = false
+
+  def close : Nil
+    @explicitly_closed = true
+    super
+  end
+end
+
 # Expose private methods for testing via a thin subclass.
 class TelegramChannelTest < Autobot::Channels::TelegramChannel
+  getter created_clients = [] of TrackingClient
+  property stubbed_file_path : String? = nil
+  property target_uri : URI = URI.parse(TELEGRAM_API_BASE)
+
+  protected def build_api_client : HTTP::Client
+    client = TrackingClient.new(@target_uri)
+    client.connect_timeout = REQUEST_CONNECT_TIMEOUT
+    client.read_timeout = DEFAULT_READ_TIMEOUT
+    @created_clients << client
+    client
+  end
+
+  private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
+    if method == "getFile" && (fp = @stubbed_file_path)
+      return JSON.parse(%({"file_path": "#{fp}", "file_size": 100}))
+    end
+    super
+  end
+
   def test_access_denied_message(sender_id : String) : String
     access_denied_message(sender_id)
   end
@@ -51,7 +79,21 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
   end
 
   def test_apply_proxy(client : HTTP::Client) : Nil
-    apply_proxy(client)
+    if proxy_url = @proxy
+      Autobot::HTTP.apply_proxy(client, proxy_url)
+    end
+  end
+
+  def test_api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
+    api_request(method, params)
+  end
+
+  def test_api_get(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
+    api_get(method, params)
+  end
+
+  def test_download_telegram_file_bytes(file_id : String) : Bytes?
+    download_telegram_file_bytes(file_id)
   end
 
   def test_send_media_request(chat_id : String, file_bytes : Bytes, caption : String, api_method : String, field_name : String, filename : String, content_type : String) : Nil
@@ -550,6 +592,116 @@ describe Autobot::Channels::TelegramChannel do
       when timeout(5.seconds)
         fail("proxy did not receive a CONNECT request")
       end
+    ensure
+      server.close if server
+    end
+  end
+
+  describe "HTTP client socket lifecycle" do
+    it "closes client in #api_request on successful keep-alive response" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          while (line = socket.gets) && !line.empty?
+          end
+          body = %({"ok":true,"result":{"id":123,"is_bot":true,"first_name":"bot"}})
+          socket << "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: keep-alive\r\nContent-Length: #{body.bytesize}\r\n\r\n#{body}"
+          socket.flush
+        end
+      end
+
+      channel = build_channel
+      channel.target_uri = URI.parse("http://127.0.0.1:#{port}")
+      result = channel.test_api_request("getMe")
+
+      result.should_not be_nil
+      result.try(&.[]("id").as_i).should eq(123)
+      channel.created_clients.size.should eq(1)
+      channel.created_clients.first.explicitly_closed?.should be_true
+    ensure
+      server.close if server
+    end
+
+    it "closes client in #api_request on network error" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          socket.close
+        end
+      end
+
+      channel = build_channel(proxy: "http://127.0.0.1:#{port}")
+      channel.test_api_request("getMe")
+
+      channel.created_clients.size.should eq(1)
+      channel.created_clients.first.explicitly_closed?.should be_true
+    ensure
+      server.close if server
+    end
+
+    it "closes client in #api_get on network error" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          socket.close
+        end
+      end
+
+      channel = build_channel(proxy: "http://127.0.0.1:#{port}")
+      channel.test_api_get("getUpdates")
+
+      channel.created_clients.size.should eq(1)
+      channel.created_clients.first.explicitly_closed?.should be_true
+    ensure
+      server.close if server
+    end
+
+    it "closes download client in #download_telegram_file_bytes on network error" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          socket.close
+        end
+      end
+
+      channel = build_channel(proxy: "http://127.0.0.1:#{port}")
+      channel.stubbed_file_path = "photos/file_123.jpg"
+      channel.test_download_telegram_file_bytes("file_123")
+
+      channel.created_clients.size.should eq(1)
+      channel.created_clients.first.explicitly_closed?.should be_true
+    ensure
+      server.close if server
+    end
+
+    it "closes client in #send_media_request on network error" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          socket.close
+        end
+      end
+
+      channel = build_channel(proxy: "http://127.0.0.1:#{port}")
+      begin
+        channel.test_send_media_request("123", Bytes[1, 2, 3], "caption",
+          api_method: "sendPhoto", field_name: "photo",
+          filename: "image.png", content_type: "image/png")
+      rescue
+      end
+
+      channel.created_clients.should_not be_empty
+      channel.created_clients.all?(&.explicitly_closed?).should be_true
     ensure
       server.close if server
     end

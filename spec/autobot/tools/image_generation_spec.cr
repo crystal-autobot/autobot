@@ -126,4 +126,54 @@ describe Autobot::Tools::ImageGenerationTool do
     func = schema["function"].as_h
     func["name"].should eq(JSON::Any.new("generate_image"))
   end
+
+  it "handles network errors gracefully during OpenAI generation" do
+    server = TCPServer.new("127.0.0.1", 0)
+    port = server.local_address.port
+
+    spawn do
+      while socket = server.accept?
+        socket.close
+      end
+    end
+
+    tool = Autobot::Tools::ImageGenerationTool.new(
+      api_key: "test-key",
+      provider_name: "openai",
+      api_base: "http://127.0.0.1:#{port}"
+    )
+    tool.set_context("telegram", "123")
+    tool.send_callback = ->(_msg : Autobot::Bus::OutboundMessage) { nil }
+
+    result = tool.execute({"prompt" => JSON::Any.new("a sunset")})
+    result.success?.should be_false
+    result.content.should contain("Image generation failed")
+  ensure
+    server.close if server
+  end
+
+  it "handles network errors gracefully during Gemini generation" do
+    server = TCPServer.new("127.0.0.1", 0)
+    port = server.local_address.port
+
+    spawn do
+      while socket = server.accept?
+        socket.close
+      end
+    end
+
+    tool = Autobot::Tools::ImageGenerationTool.new(
+      api_key: "test-key",
+      provider_name: "gemini",
+      api_base: "http://127.0.0.1:#{port}"
+    )
+    tool.set_context("telegram", "123")
+    tool.send_callback = ->(_msg : Autobot::Bus::OutboundMessage) { nil }
+
+    result = tool.execute({"prompt" => JSON::Any.new("a sunset")})
+    result.success?.should be_false
+    result.content.should contain("Image generation failed")
+  ensure
+    server.close if server
+  end
 end

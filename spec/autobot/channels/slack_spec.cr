@@ -2,6 +2,12 @@ require "../../spec_helper"
 
 # Expose private methods for testing via a thin subclass.
 class SlackChannelTest < Autobot::Channels::SlackChannel
+  property test_api_base : String? = nil
+
+  protected def slack_api_base : String
+    @test_api_base || super
+  end
+
   def test_slack_allowed?(sender_id : String, chat_id : String, channel_type : String) : Bool
     slack_allowed?(sender_id, chat_id, channel_type)
   end
@@ -16,6 +22,14 @@ class SlackChannelTest < Autobot::Channels::SlackChannel
 
   def test_parse_socket_event(event : JSON::Any)
     parse_socket_event(event)
+  end
+
+  def test_slack_api_get(method : String, params : Hash(String, String)) : String?
+    slack_api_get(method, params)
+  end
+
+  def test_slack_api_with_token(method : String, token : String, body : String? = nil) : String?
+    slack_api_with_token(method, token, body)
   end
 end
 
@@ -218,5 +232,43 @@ describe Autobot::Config::ConfigValidator do
 
     warnings = issues.select { |i| i.severity == Autobot::Config::ValidatorCommon::Severity::Warning }
     warnings.any?(&.message.includes?("allow_from is empty")).should be_true
+  end
+end
+
+describe "SlackChannel HTTP requests" do
+  it "handles network errors gracefully in #slack_api_get" do
+    server = TCPServer.new("127.0.0.1", 0)
+    port = server.local_address.port
+
+    spawn do
+      while socket = server.accept?
+        socket.close
+      end
+    end
+
+    channel = build_slack_channel
+    channel.test_api_base = "http://127.0.0.1:#{port}"
+    result = channel.test_slack_api_get("conversations.replies", {"channel" => "C123", "ts" => "123.456"})
+    result.should be_nil
+  ensure
+    server.close if server
+  end
+
+  it "handles network errors gracefully in #slack_api_with_token" do
+    server = TCPServer.new("127.0.0.1", 0)
+    port = server.local_address.port
+
+    spawn do
+      while socket = server.accept?
+        socket.close
+      end
+    end
+
+    channel = build_slack_channel
+    channel.test_api_base = "http://127.0.0.1:#{port}"
+    result = channel.test_slack_api_with_token("chat.postMessage", "xoxb-test", %({"channel":"C123","text":"hi"}))
+    result.should be_nil
+  ensure
+    server.close if server
   end
 end
