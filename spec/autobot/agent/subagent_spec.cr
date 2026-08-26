@@ -23,6 +23,15 @@ private class BlockingSubagentManager < Autobot::Agent::SubagentManager
   ) : Nil
     @started.send(nil)
     @gate.receive
+  end
+
+  private def run_and_untrack(
+    task_id : String,
+    task : String,
+    label : String,
+    origin : Hash(String, String),
+  ) : Nil
+    super
   ensure
     @completed.send(nil)
   end
@@ -38,6 +47,15 @@ private class FailingSubagentManager < Autobot::Agent::SubagentManager
     origin : Hash(String, String),
   ) : Nil
     raise "Simulated background subagent failure"
+  end
+
+  private def run_and_untrack(
+    task_id : String,
+    task : String,
+    label : String,
+    origin : Hash(String, String),
+  ) : Nil
+    super
   ensure
     @completed.send(nil)
   end
@@ -46,7 +64,7 @@ end
 private class TrackingSubagentManager < Autobot::Agent::SubagentManager
   getter completed = Channel(String).new(100)
 
-  private def run_subagent(
+  private def run_and_untrack(
     task_id : String,
     task : String,
     label : String,
@@ -81,12 +99,6 @@ describe Autobot::Agent::SubagentManager do
     manager.gate.send(nil)
     manager.completed.receive
 
-    # Wait for outer ensure block to cleanly delete task
-    100.times do
-      break if manager.running_count == 0
-      sleep 1.millisecond
-    end
-
     manager.running_count.should eq(0)
   ensure
     FileUtils.rm_rf(tmp) if tmp
@@ -106,14 +118,8 @@ describe Autobot::Agent::SubagentManager do
     manager.running_count.should eq(0)
     manager.spawn("Failing task", label: "Failing Worker")
 
-    # Wait until background fiber finishes and raises
+    # Wait until background fiber finishes and cleans up
     manager.completed.receive
-
-    # Wait for outer ensure block to cleanly delete task
-    100.times do
-      break if manager.running_count == 0
-      sleep 1.millisecond
-    end
 
     manager.running_count.should eq(0)
   ensure
@@ -145,12 +151,6 @@ describe Autobot::Agent::SubagentManager do
 
     # Deterministically wait for all 25 subagent background fibers to complete
     concurrent_tasks.times { manager.completed.receive }
-
-    # Wait for outer ensure block to cleanly delete all tasks
-    100.times do
-      break if manager.running_count == 0
-      sleep 1.millisecond
-    end
 
     manager.running_count.should eq(0)
   ensure

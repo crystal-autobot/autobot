@@ -76,13 +76,7 @@ module Autobot
         end
 
         ::spawn do
-          begin
-            run_subagent(task_id, task, display_label, origin)
-          ensure
-            @tasks_mutex.synchronize do
-              @running_tasks.delete(task_id)
-            end
-          end
+          run_and_untrack(task_id, task, display_label, origin)
         end
 
         Log.info { "Spawned subagent [#{task_id}]: #{display_label}" }
@@ -93,6 +87,19 @@ module Autobot
       def running_count : Int32
         @tasks_mutex.synchronize do
           @running_tasks.size
+        end
+      end
+
+      private def run_and_untrack(
+        task_id : String,
+        task : String,
+        label : String,
+        origin : Hash(String, String),
+      ) : Nil
+        run_subagent(task_id, task, label, origin)
+      ensure
+        @tasks_mutex.synchronize do
+          @running_tasks.delete(task_id)
         end
       end
 
