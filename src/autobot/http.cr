@@ -2,6 +2,54 @@ require "http/client"
 require "http_proxy"
 require "uri"
 
+# Patch HTTP::Proxy::Client#open to close raw TCPSocket if TLS negotiation or CONNECT fails.
+class HTTP::Proxy::Client
+  def open(host, port, tls = nil, *, dns_timeout, connect_timeout, read_timeout, write_timeout) : IO
+    socket = TCPSocket.new(@host, @port, dns_timeout, connect_timeout)
+    socket.read_timeout = read_timeout if read_timeout
+    socket.write_timeout = write_timeout if write_timeout
+    socket.sync = false
+
+    if tls
+      begin
+        socket << "CONNECT #{host}:#{port} HTTP/1.1\r\n"
+
+        @headers.each do |name, values|
+          values.each do |value|
+            socket << "#{name}: #{value}\r\n"
+          end
+        end
+
+        socket << "Host: #{host}:#{port}\r\n"
+
+        if (username = @username) && (password = @password)
+          credentials = Base64.strict_encode("#{username}:#{password}")
+          socket << "Proxy-Authorization: Basic #{credentials}\r\n"
+        end
+
+        socket << "\r\n"
+        socket.flush
+
+        resp = HTTP::Client::Response.from_io(socket, ignore_body: true)
+
+        if resp.success?
+          {% if !flag?(:without_openssl) %}
+            socket = OpenSSL::SSL::Socket::Client.new(socket, context: tls, sync_close: true, hostname: host)
+          {% end %}
+        else
+          socket.close rescue nil
+          raise IO::Error.new("Proxy CONNECT failed: #{resp.status_code}")
+        end
+      rescue ex
+        socket.close rescue nil
+        raise ex
+      end
+    end
+
+    socket
+  end
+end
+
 module Autobot
   # Centralized HTTP utility for managing HTTP::Client instances, timeouts,
   # proxy routing, and deterministic exception-safe socket closure.

@@ -62,4 +62,68 @@ describe Autobot::HTTP do
       end
     end
   end
+
+  describe "HTTP::Proxy::Client#open socket safety" do
+    it "closes underlying socket when CONNECT handshake fails" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          socket.close
+        end
+      end
+
+      proxy_client = HTTP::Proxy::Client.new("127.0.0.1", port)
+      tls_ctx = OpenSSL::SSL::Context::Client.new
+
+      expect_raises(Exception) do
+        proxy_client.open(
+          "api.telegram.org",
+          443,
+          tls: tls_ctx,
+          dns_timeout: 2.seconds,
+          connect_timeout: 2.seconds,
+          read_timeout: 2.seconds,
+          write_timeout: 2.seconds
+        )
+      end
+    ensure
+      server.close if server
+    end
+
+    it "closes underlying socket when TLS negotiation fails" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        if socket = server.accept?
+          while (line = socket.gets) && !line.empty?
+          end
+          socket << "HTTP/1.1 200 Connection established\r\n\r\n"
+          socket.flush
+          socket.write("invalid tls handshake".to_slice)
+          socket.flush
+          socket.close
+        end
+      end
+
+      proxy_client = HTTP::Proxy::Client.new("127.0.0.1", port)
+      tls_ctx = OpenSSL::SSL::Context::Client.new
+
+      expect_raises(Exception) do
+        proxy_client.open(
+          "api.telegram.org",
+          443,
+          tls: tls_ctx,
+          dns_timeout: 2.seconds,
+          connect_timeout: 2.seconds,
+          read_timeout: 2.seconds,
+          write_timeout: 2.seconds
+        )
+      end
+    ensure
+      server.close if server
+    end
+  end
 end
