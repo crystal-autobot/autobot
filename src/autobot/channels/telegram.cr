@@ -393,10 +393,13 @@ module Autobot::Channels
         return
       end
 
+      return if message.content.strip.empty?
+
       html = MarkdownToTelegramHTML.convert(message.content)
       html = MarkdownToTelegramHTML.strip_html(html) unless MarkdownToTelegramHTML.valid_html?(html)
 
       MarkdownToTelegramHTML.split_message(html).each do |chunk|
+        next if chunk.strip.empty?
         send_html_chunk(message.chat_id, chunk)
       end
     end

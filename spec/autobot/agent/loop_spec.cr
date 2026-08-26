@@ -2,12 +2,19 @@ require "../../spec_helper"
 
 # Mock provider that returns a simple text response (no tool calls).
 class MockProvider < Autobot::Providers::HttpProvider
-  def initialize
+  def initialize(@response_content : String = "Mock response", @responses : Array(String)? = nil)
     super(api_key: "test-key", model: "mock-model")
+    @response_index = 0
   end
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
-    HTTP::Client::Response.new(200, body: %({"choices":[{"message":{"content":"Mock response"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}))
+    if responses = @responses
+      resp = responses[@response_index]? || responses.last
+      @response_index += 1
+      HTTP::Client::Response.new(200, body: resp)
+    else
+      HTTP::Client::Response.new(200, body: %({"choices":[{"message":{"content":#{@response_content.to_json}},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}))
+    end
   end
 end
 
@@ -308,6 +315,79 @@ describe Autobot::Agent::Loop do
       response.try(&.content).should eq(Autobot::Agent::Loop::VOICE_NOTE_NOT_HEARD)
       response.try(&.metadata["thread_ts"]).should eq("1")
       Autobot::Session::Manager.new(tmp).get_or_create("telegram:chat1").get_history.should be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "falls back to FALLBACK_RESPONSE when provider returns empty string" do
+      tmp = TestHelper.tmp_dir
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      provider = MockProvider.new(response_content: "")
+      tools = Autobot::Tools::Registry.new
+      sessions = Autobot::Session::Manager.new(tmp)
+
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: provider,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        memory_window: 0,
+        sandbox_config: "none"
+      )
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "Hello"
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.should_not be_nil
+      response.try(&.content).should eq(Autobot::Agent::Loop::FALLBACK_RESPONSE)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "saves message tool content to session history when LLM returns empty string" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"message","arguments":"{\\"content\\":\\"Sent via message tool\\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
+      empty_resp = %({"choices":[{"message":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
+      provider = MockProvider.new(responses: [tool_call_resp, empty_resp])
+      tools = Autobot::Tools::Registry.new
+
+      message_tool = Autobot::Tools::MessageTool.new
+      tools.register(message_tool)
+
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: provider,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        memory_window: 0,
+        sandbox_config: "none"
+      )
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "Hello"
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.should be_nil
+
+      session = sessions.get_or_create("telegram:chat1")
+      history = session.get_history
+      history.size.should eq(2)
+      history[0]["role"].should eq("user")
+      history[1]["role"].should eq("assistant")
+      history[1]["content"].should eq("Sent via message tool")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

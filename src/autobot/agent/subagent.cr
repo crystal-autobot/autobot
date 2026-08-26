@@ -58,6 +58,8 @@ module Autobot
         @enabled_tools : Array(String) = [] of String,
         @filesystem_roots : Array(String) = [] of String,
         @web_allowed_domains : Array(String) = [] of String,
+        @max_tokens : Int32 = Config::AgentDefaults.new.max_tokens,
+        @temperature : Float64 = Config::AgentDefaults.new.temperature,
       )
         @context = Context::Builder.new(@workspace)
       end
@@ -132,13 +134,15 @@ module Autobot
             provider: @provider,
             context: @context,
             model: @model || @provider.default_model,
-            max_iterations: MAX_ITERATIONS
+            max_iterations: MAX_ITERATIONS,
+            max_tokens: @max_tokens,
+            temperature: @temperature
           )
 
           messages = build_initial_messages(task)
           result = executor.execute(messages, tools)
 
-          final_result = result.content || "Task completed but no final response was generated."
+          final_result = result.content.presence || "Task completed but no final response was generated."
 
           Log.info { "Subagent [#{task_id}] completed successfully" }
           announce_result(task_id, label, task, final_result, origin, Status::Ok)
