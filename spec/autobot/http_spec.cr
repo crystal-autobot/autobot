@@ -114,7 +114,7 @@ describe Autobot::HTTP do
       proxy_client = HTTP::Proxy::Client.new("127.0.0.1", port)
       tls_ctx = OpenSSL::SSL::Context::Client.new
 
-      expect_raises(Exception) do
+      expect_raises(OpenSSL::SSL::Error) do
         proxy_client.open(
           "api.telegram.org",
           443,
@@ -125,6 +125,38 @@ describe Autobot::HTTP do
           write_timeout: 2.seconds
         )
       end
+      Dir.children("/dev/fd").size.should eq(open_fds)
+    ensure
+      server.close if server
+    end
+
+    it "releases the socket when the proxied TLS handshake fails via Autobot::HTTP.with_client" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.local_address.port
+
+      spawn do
+        while socket = server.accept?
+          while (line = socket.gets) && !line.empty?
+          end
+          socket << "HTTP/1.1 200 Connection established\r\n\r\n"
+          socket.flush
+          socket.write("invalid tls handshake".to_slice)
+          socket.flush
+          socket.close
+        end
+      end
+
+      attempt = -> do
+        expect_raises(OpenSSL::SSL::Error) do
+          Autobot::HTTP.with_client("https://api.telegram.org", proxy: "http://127.0.0.1:#{port}") do |client|
+            client.get("/")
+          end
+        end
+      end
+
+      attempt.call
+      open_fds = Dir.children("/dev/fd").size
+      attempt.call
       Dir.children("/dev/fd").size.should eq(open_fds)
     ensure
       server.close if server

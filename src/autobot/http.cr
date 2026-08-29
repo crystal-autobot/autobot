@@ -22,8 +22,8 @@ class HTTP::Proxy::Client
 
         socket << "Host: #{host}:#{port}\r\n"
 
-        if (username = @username) && (password = @password)
-          credentials = Base64.strict_encode("#{username}:#{password}")
+        if @username
+          credentials = Base64.strict_encode("#{@username}:#{@password}")
           socket << "Proxy-Authorization: Basic #{credentials}\r\n"
         end
 
