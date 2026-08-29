@@ -136,7 +136,7 @@ module Autobot::Channels
 
       Log.info { "Connecting to Slack WebSocket..." }
 
-      ws = HTTP::WebSocket.new(host: host, path: path, tls: true)
+      ws = ::HTTP::WebSocket.new(host: host, path: path, tls: true)
 
       ws.on_message do |raw|
         handle_socket_message(raw, ws)
@@ -149,7 +149,7 @@ module Autobot::Channels
       ws.run
     end
 
-    private def handle_socket_message(raw : String, ws : HTTP::WebSocket) : Nil
+    private def handle_socket_message(raw : String, ws : ::HTTP::WebSocket) : Nil
       data = JSON.parse(raw)
       acknowledge_envelope(data, ws)
 
@@ -183,7 +183,7 @@ module Autobot::Channels
       Log.error { "Error handling Slack event: #{ex.message}" }
     end
 
-    private def acknowledge_envelope(data : JSON::Any, ws : HTTP::WebSocket) : Nil
+    private def acknowledge_envelope(data : JSON::Any, ws : ::HTTP::WebSocket) : Nil
       if envelope_id = data["envelope_id"]?.try(&.as_s)
         ws.send({envelope_id: envelope_id}.to_json)
       end

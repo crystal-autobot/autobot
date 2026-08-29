@@ -1,6 +1,4 @@
 require "http/client"
-require "http/server"
-require "http/web_socket"
 require "http_proxy"
 require "uri"
 
@@ -11,10 +9,6 @@ module Autobot
     alias Client = ::HTTP::Client
     alias Headers = ::HTTP::Headers
     alias Request = ::HTTP::Request
-    alias Server = ::HTTP::Server
-    alias WebSocket = ::HTTP::WebSocket
-    alias Status = ::HTTP::Status
-    alias Params = ::HTTP::Params
 
     Log = ::Log.for("autobot.http")
 
