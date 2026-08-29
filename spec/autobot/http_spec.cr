@@ -69,11 +69,12 @@ describe Autobot::HTTP do
       port = server.local_address.port
 
       spawn do
-        if socket = server.accept?
+        while socket = server.accept?
           socket.close
         end
       end
 
+      open_fds = Dir.children("/dev/fd").size
       proxy_client = HTTP::Proxy::Client.new("127.0.0.1", port)
       tls_ctx = OpenSSL::SSL::Context::Client.new
 
@@ -88,6 +89,7 @@ describe Autobot::HTTP do
           write_timeout: 2.seconds
         )
       end
+      Dir.children("/dev/fd").size.should eq(open_fds)
     ensure
       server.close if server
     end
@@ -97,7 +99,7 @@ describe Autobot::HTTP do
       port = server.local_address.port
 
       spawn do
-        if socket = server.accept?
+        while socket = server.accept?
           while (line = socket.gets) && !line.empty?
           end
           socket << "HTTP/1.1 200 Connection established\r\n\r\n"
@@ -108,6 +110,7 @@ describe Autobot::HTTP do
         end
       end
 
+      open_fds = Dir.children("/dev/fd").size
       proxy_client = HTTP::Proxy::Client.new("127.0.0.1", port)
       tls_ctx = OpenSSL::SSL::Context::Client.new
 
@@ -122,6 +125,7 @@ describe Autobot::HTTP do
           write_timeout: 2.seconds
         )
       end
+      Dir.children("/dev/fd").size.should eq(open_fds)
     ensure
       server.close if server
     end
