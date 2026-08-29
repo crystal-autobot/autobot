@@ -297,9 +297,6 @@ module Autobot::Channels
     TYPING_INTERVAL   = 4.0
     MAX_IMAGE_SIZE    = 20 * 1024 * 1024 # 20 MB
 
-    REQUEST_CONNECT_TIMEOUT = 10.seconds
-    DEFAULT_READ_TIMEOUT    = 30.seconds
-
     @offset : Int64 = 0_i64
     @bot_username : String = ""
     @bot_mention_regex : Regex? = nil

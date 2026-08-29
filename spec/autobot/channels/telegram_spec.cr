@@ -17,8 +17,8 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
 
   protected def build_api_client : HTTP::Client
     client = TrackingClient.new(@target_uri)
-    client.connect_timeout = REQUEST_CONNECT_TIMEOUT
-    client.read_timeout = DEFAULT_READ_TIMEOUT
+    client.connect_timeout = Autobot::HTTP::REQUEST_CONNECT_TIMEOUT
+    client.read_timeout = Autobot::HTTP::DEFAULT_READ_TIMEOUT
     @created_clients << client
     client
   end
@@ -629,7 +629,7 @@ describe Autobot::Channels::TelegramChannel do
       port = server.local_address.port
 
       spawn do
-        if socket = server.accept?
+        while socket = server.accept?
           socket.close
         end
       end
@@ -648,7 +648,7 @@ describe Autobot::Channels::TelegramChannel do
       port = server.local_address.port
 
       spawn do
-        if socket = server.accept?
+        while socket = server.accept?
           socket.close
         end
       end
@@ -667,7 +667,7 @@ describe Autobot::Channels::TelegramChannel do
       port = server.local_address.port
 
       spawn do
-        if socket = server.accept?
+        while socket = server.accept?
           socket.close
         end
       end
@@ -687,7 +687,7 @@ describe Autobot::Channels::TelegramChannel do
       port = server.local_address.port
 
       spawn do
-        if socket = server.accept?
+        while socket = server.accept?
           socket.close
         end
       end

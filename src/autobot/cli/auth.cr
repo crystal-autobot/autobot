@@ -68,8 +68,8 @@ module Autobot
         # Channel carries the authorization code back from the callback fiber
         result_chan = Channel(String).new
 
-        server = HTTP::Server.new do |context|
-          params = HTTP::Params.parse(URI.parse(context.request.resource).query || "")
+        server = ::HTTP::Server.new do |context|
+          params = ::HTTP::Params.parse(URI.parse(context.request.resource).query || "")
           context.response.content_type = "text/html"
 
           code = params["code"]?
@@ -78,7 +78,7 @@ module Autobot
             flush_response(context.response) # deliver the page before the server is torn down
             result_chan.send(code)
           else
-            context.response.status = HTTP::Status::BAD_REQUEST
+            context.response.status = ::HTTP::Status::BAD_REQUEST
             context.response.print FAILURE_HTML
           end
         end
@@ -127,13 +127,13 @@ module Autobot
 
       # Best-effort: push the response to the browser before we signal success.
       # If the browser already disconnected, ignore it — the code still matters.
-      private def self.flush_response(response : HTTP::Server::Response) : Nil
+      private def self.flush_response(response : ::HTTP::Server::Response) : Nil
         response.close
       rescue ex
         Log.debug { "OAuth callback response flush failed: #{ex.message}" }
       end
 
-      private def self.close_callback_server(server : HTTP::Server) : Nil
+      private def self.close_callback_server(server : ::HTTP::Server) : Nil
         server.close
       rescue ex
         Log.debug { "Error closing OAuth callback server: #{ex.message}" }

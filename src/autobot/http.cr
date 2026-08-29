@@ -11,7 +11,6 @@ module Autobot
     alias Client = ::HTTP::Client
     alias Headers = ::HTTP::Headers
     alias Request = ::HTTP::Request
-    alias Response = ::HTTP::Client::Response
     alias Server = ::HTTP::Server
     alias WebSocket = ::HTTP::WebSocket
     alias Status = ::HTTP::Status
