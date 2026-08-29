@@ -76,7 +76,7 @@ module Autobot::Channels
       path = "/" if path.empty?
       tls = uri.scheme == "wss"
 
-      ws = HTTP::WebSocket.new(host: host, path: path, port: port, tls: tls)
+      ws = ::HTTP::WebSocket.new(host: host, path: path, port: port, tls: tls)
 
       ws.on_message do |raw|
         handle_bridge_message(raw, ws)
@@ -93,7 +93,7 @@ module Autobot::Channels
       ws.run
     end
 
-    private def handle_bridge_message(raw : String, ws : HTTP::WebSocket) : Nil
+    private def handle_bridge_message(raw : String, ws : ::HTTP::WebSocket) : Nil
       data = JSON.parse(raw)
       msg_type = data["type"]?.try(&.as_s)
 

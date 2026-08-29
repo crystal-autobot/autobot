@@ -1,12 +1,12 @@
 require "base64"
 require "http/client"
-require "http_proxy"
 require "json"
 require "uri"
 require "./base"
 require "../constants"
 require "../cron/formatter"
 require "../cron/service"
+require "../http"
 
 module Autobot::Channels
   # Converts Markdown to Telegram-safe HTML.
@@ -457,19 +457,22 @@ module Autobot::Channels
       body = build_media_multipart(chat_id, file_bytes, caption,
         field_name: field_name, filename: filename, content_type: content_type)
 
-      uri = URI.parse(TELEGRAM_API_BASE)
-      client = HTTP::Client.new(uri)
-      apply_proxy(client)
-
       headers = HTTP::Headers{
         "Content-Type" => "multipart/form-data; boundary=#{MULTIPART_BOUNDARY}",
       }
 
-      response = client.post("/bot#{@token}/#{api_method}", headers: headers, body: body)
-      client.close
+      fallback_needed = false
 
-      unless response.status_code == 200
-        Log.error { "#{api_method} failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
+      with_api_client do |client|
+        response = client.post("/bot#{@token}/#{api_method}", headers: headers, body: body)
+
+        unless response.status_code == 200
+          Log.error { "#{api_method} failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
+          fallback_needed = true
+        end
+      end
+
+      if fallback_needed
         send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
       end
     end
@@ -683,33 +686,21 @@ module Autobot::Channels
         return nil
       end
 
-      uri = URI.parse(TELEGRAM_API_BASE)
-      client = HTTP::Client.new(uri)
-      apply_proxy(client)
-
-      response = client.get("/file/bot#{@token}/#{file_path}")
-      client.close
-
-      if response.status_code == 200
-        response.body.to_slice.dup
-      else
-        Log.warn { "Failed to download file: HTTP #{response.status_code}" }
-        nil
+      with_api_client do |client|
+        client.get("/file/bot#{@token}/#{file_path}") do |response|
+          if response.status_code == 200
+            io = IO::Memory.new(file_size.to_i32)
+            IO.copy(response.body_io, io)
+            io.to_slice
+          else
+            Log.warn { "Failed to download file: HTTP #{response.status_code}" }
+            nil
+          end
+        end
       end
     rescue ex
       Log.error { "Error downloading telegram file: #{ex.message}" }
       nil
-    end
-
-    private def apply_proxy(client : HTTP::Client) : Nil
-      proxy_url = @proxy
-      return unless proxy_url
-
-      uri = URI.parse(proxy_url)
-      host = uri.host
-      return unless host
-
-      client.proxy = HTTP::Proxy::Client.new(host, uri.port || 8080)
     end
 
     private def transcribe_file(file_id : String) : String?
@@ -1058,24 +1049,35 @@ module Autobot::Channels
       end
     end
 
-    private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
-      uri = URI.parse(TELEGRAM_API_BASE)
-      client = HTTP::Client.new(uri)
-      apply_proxy(client)
-      response = client.post("/bot#{@token}/#{method}", form: URI::Params.encode(params))
+    protected def build_api_client : ::HTTP::Client
+      Autobot::HTTP.build_client(TELEGRAM_API_BASE)
+    end
 
-      if response.status_code == 200
-        data = JSON.parse(response.body)
-        if data["ok"]?.try(&.as_bool)
-          return data["result"]?
-        else
-          Log.warn { "Telegram API #{method} failed: #{data["description"]?.try(&.as_s)}" }
-        end
-      else
-        Log.error { "Telegram API #{method} HTTP #{response.status_code}: #{parse_error_description(response.body)}" }
+    private def with_api_client(read_timeout : Time::Span? = Autobot::HTTP::DEFAULT_READ_TIMEOUT, &)
+      client = build_api_client
+      client.read_timeout = read_timeout if read_timeout
+      Autobot::HTTP.with_client(client, proxy: @proxy) do |http_client|
+        yield http_client
       end
+    end
 
-      nil
+    private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
+      with_api_client do |client|
+        response = client.post("/bot#{@token}/#{method}", form: URI::Params.encode(params))
+
+        if response.status_code == 200
+          data = JSON.parse(response.body)
+          if data["ok"]?.try(&.as_bool)
+            return data["result"]?
+          else
+            Log.warn { "Telegram API #{method} failed: #{data["description"]?.try(&.as_s)}" }
+          end
+        else
+          Log.error { "Telegram API #{method} HTTP #{response.status_code}: #{parse_error_description(response.body)}" }
+        end
+
+        nil
+      end
     rescue ex
       Log.error { "Telegram API #{method} error: #{ex.message}" }
       nil
@@ -1088,23 +1090,19 @@ module Autobot::Channels
     end
 
     private def api_get(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
-      uri = URI.parse(TELEGRAM_API_BASE)
-      client = HTTP::Client.new(uri)
-      client.read_timeout = (POLL_TIMEOUT + 10).seconds
-      apply_proxy(client)
+      with_api_client(read_timeout: (POLL_TIMEOUT + 10).seconds) do |client|
+        query = URI::Params.encode(params)
+        response = client.get("/bot#{@token}/#{method}?#{query}")
 
-      query = URI::Params.encode(params)
-      response = client.get("/bot#{@token}/#{method}?#{query}")
-      client.close
-
-      if response.status_code == 200
-        data = JSON.parse(response.body)
-        if data["ok"]?.try(&.as_bool)
-          return data["result"]?
+        if response.status_code == 200
+          data = JSON.parse(response.body)
+          if data["ok"]?.try(&.as_bool)
+            return data["result"]?
+          end
         end
-      end
 
-      nil
+        nil
+      end
     rescue ex
       Log.error { "Telegram API GET #{method} error: #{ex.message}" }
       nil

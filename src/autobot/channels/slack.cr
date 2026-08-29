@@ -136,7 +136,7 @@ module Autobot::Channels
 
       Log.info { "Connecting to Slack WebSocket..." }
 
-      ws = HTTP::WebSocket.new(host: host, path: path, tls: true)
+      ws = ::HTTP::WebSocket.new(host: host, path: path, tls: true)
 
       ws.on_message do |raw|
         handle_socket_message(raw, ws)
@@ -149,7 +149,7 @@ module Autobot::Channels
       ws.run
     end
 
-    private def handle_socket_message(raw : String, ws : HTTP::WebSocket) : Nil
+    private def handle_socket_message(raw : String, ws : ::HTTP::WebSocket) : Nil
       data = JSON.parse(raw)
       acknowledge_envelope(data, ws)
 
@@ -183,7 +183,7 @@ module Autobot::Channels
       Log.error { "Error handling Slack event: #{ex.message}" }
     end
 
-    private def acknowledge_envelope(data : JSON::Any, ws : HTTP::WebSocket) : Nil
+    private def acknowledge_envelope(data : JSON::Any, ws : ::HTTP::WebSocket) : Nil
       if envelope_id = data["envelope_id"]?.try(&.as_s)
         ws.send({envelope_id: envelope_id}.to_json)
       end
@@ -310,25 +310,26 @@ module Autobot::Channels
       nil
     end
 
-    private def slack_api_get(method : String, params : Hash(String, String)) : String?
-      uri = URI.parse(SLACK_API_BASE)
-      client = HTTP::Client.new(uri)
-      client.read_timeout = REPLY_CONTEXT_TIMEOUT
+    protected def slack_api_base : String
+      SLACK_API_BASE
+    end
 
+    private def slack_api_get(method : String, params : Hash(String, String)) : String?
       query = URI::Params.encode(params)
-      headers = HTTP::Headers{
+      headers = ::HTTP::Headers{
         "Authorization" => "Bearer #{@bot_token}",
       }
 
-      response = client.get("/#{method}?#{query}", headers: headers)
-      client.close
+      Autobot::HTTP.with_client(slack_api_base, read_timeout: REPLY_CONTEXT_TIMEOUT) do |client|
+        response = client.get("/#{method}?#{query}", headers: headers)
 
-      if response.status.ok?
-        return response.body
+        if response.status.ok?
+          return response.body
+        end
+
+        Log.error { "Slack API GET #{method} HTTP #{response.status_code}" }
+        nil
       end
-
-      Log.error { "Slack API GET #{method} HTTP #{response.status_code}" }
-      nil
     rescue ex
       Log.error { "Slack API GET #{method} error: #{ex.message}" }
       nil
@@ -339,23 +340,25 @@ module Autobot::Channels
     end
 
     private def slack_api_with_token(method : String, token : String, body : String? = nil) : String?
-      headers = HTTP::Headers{
+      headers = ::HTTP::Headers{
         "Authorization" => "Bearer #{token}",
         "Content-Type"  => "application/json; charset=utf-8",
       }
 
-      response = if body
-                   HTTP::Client.post("#{SLACK_API_BASE}/#{method}", headers: headers, body: body)
-                 else
-                   HTTP::Client.post("#{SLACK_API_BASE}/#{method}", headers: headers)
-                 end
+      Autobot::HTTP.with_client(slack_api_base) do |client|
+        response = if body
+                     client.post("/#{method}", headers: headers, body: body)
+                   else
+                     client.post("/#{method}", headers: headers)
+                   end
 
-      if response.status.ok?
-        return response.body
+        if response.status.ok?
+          return response.body
+        end
+
+        Log.error { "Slack API #{method} HTTP #{response.status_code}" }
+        nil
       end
-
-      Log.error { "Slack API #{method} HTTP #{response.status_code}" }
-      nil
     rescue ex
       Log.error { "Slack API #{method} error: #{ex.message}" }
       nil
