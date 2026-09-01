@@ -7,6 +7,26 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    container:
+      image: crystallang/crystal:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: shards install
+
+      - name: Check formatting
+        run: crystal tool format --check src/ spec/
+
+      - name: Run linter
+        run: |
+          mkdir -p bin
+          crystal build -o bin/ameba lib/ameba/bin/ameba.cr
+          bin/ameba src/ spec/
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -20,15 +40,6 @@ jobs:
 
       - name: Install dependencies
         run: shards install
-
-      - name: Check formatting
-        run: crystal tool format --check src/ spec/
-
-      - name: Run linter
-        run: |
-          mkdir -p bin
-          crystal build -o bin/ameba lib/ameba/bin/ameba.cr
-          bin/ameba src/
 
       - name: Run tests
         run: crystal spec --progress
