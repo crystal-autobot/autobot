@@ -12,6 +12,7 @@ Browse all blueprints: [github.com/crystal-autobot/blueprints](https://github.co
 | **Bumblebee** | Training assistant with fitness integrations | Strava, Garmin MCP, workout tracking, progress charts |
 | **Blaster** | Language learning companion | Conversation practice, vocabulary tracking, quizzes, flashcards |
 | **Red Alert** | Smart home monitor connected to Home Assistant | Device control, sensor charts, automations |
+| **Rewind** | Voice memos turned into organized notes | Whisper transcription, Obsidian vault, Notion MCP, note search, digests |
 
 ## Quick start
 
