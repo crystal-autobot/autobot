@@ -117,6 +117,7 @@ module Autobot
           rate_limiter: rate_limiter,
           enabled_tools: config.tools.try(&.enabled) || [] of String,
           filesystem_roots: config.tools.try(&.filesystem.try(&.roots)) || [] of String,
+          web_allowed_domains: config.tools.try(&.web.try(&.allowed_domains)) || [] of String,
         )
 
         register_image_tool(config, tool_registry)

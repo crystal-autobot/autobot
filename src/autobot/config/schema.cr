@@ -237,6 +237,7 @@ module Autobot::Config
   class WebToolsConfig
     include YAML::Serializable
     property search : WebSearchConfig?
+    property allowed_domains : Array(String) = [] of String
 
     def initialize
     end

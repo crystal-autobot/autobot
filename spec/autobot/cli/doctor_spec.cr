@@ -753,6 +753,23 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_web_search with an egress allowlist" do
+    it "reports the allowed domains" do
+      config = make_config(<<-YAML
+      tools:
+        web:
+          allowed_domains: [example.com, "*.strava.com"]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_web_search(config)
+
+        io.to_s.should contain("✓ Web fetch limited to: example.com, *.strava.com")
+      end
+    end
+  end
+
   describe ".check_plugins" do
     it "reports enabled plugins with available dependencies" do
       config = make_config("{}")

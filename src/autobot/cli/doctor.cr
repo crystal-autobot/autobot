@@ -444,6 +444,9 @@ module Autobot
         else
           report(Status::Skip, "Web search (no BRAVE_API_KEY)")
         end
+
+        domains = config.tools.try(&.web.try(&.allowed_domains)) || [] of String
+        report(Status::Pass, "Web fetch limited to: #{domains.join(", ")}") unless domains.empty?
       end
 
       def self.check_gateway(config : Config::Config, warnings : Int32) : Int32
