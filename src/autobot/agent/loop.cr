@@ -172,7 +172,7 @@ module Autobot::Agent
       result = @executor.execute(messages, @tools, session_key: session.key)
       final_content = result.content || FALLBACK_RESPONSE
 
-      save_to_session(session, msg.content, final_content, result.tools_used)
+      save_to_session(session, @context.render_user_text(msg.content, msg.media?), final_content, result.tools_used)
 
       # Skip automatic text response if the message tool already sent during this turn
       return nil if @message_tool.try(&.last_sent_content)

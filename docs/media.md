@@ -71,6 +71,11 @@ note the sender recorded is not repeated in a block; its transcription is
 already the message text. Photos keep their image block and get a label block
 in front of it.
 
+The rendered text, blocks included, is what the session history stores, so a
+later turn can still answer questions about an earlier attachment. A transcript
+longer than 4,000 characters is cut in the block with a pointer to the full
+transcript file in the inbox, which the agent can read on demand.
+
 ## Vision
 
 ### How it works
