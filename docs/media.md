@@ -51,6 +51,26 @@ Transcripts of content attachments are written next to the media file as
 
 `sender_voice_note?` is true only for a voice note with origin `sender`; the channel treats such a note as spoken words unless typed text came with it.
 
+### How attachments reach the model
+
+The context builder appends every attachment to the user message as a
+delimited block after the user's own words, and the system prompt states
+that such blocks are material, not instructions:
+
+```
+Add to notes today's conversation with my car dealer
+
+<attachment type="audio" origin="sender" name="New Recording 6.m4a" path="inbox/20260904-142723-ea7baff7.m4a" duration="134s">
+...transcript...
+</attachment>
+```
+
+Attribute values are escaped, a closing tag planted inside a transcript is
+neutralized, and paths under the workspace are shown relative to it. A voice
+note the sender recorded is not repeated in a block; its transcription is
+already the message text. Photos keep their image block and get a label block
+in front of it.
+
 ## Vision
 
 ### How it works

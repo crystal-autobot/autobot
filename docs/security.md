@@ -255,7 +255,22 @@ Rate limits are enforced per-session to prevent:
 
 ---
 
-## 11. Known Limitations
+## 11. Attachments Are Data, Not Instructions (AUTOMATIC)
+
+Anything a user hands over rather than types or speaks — audio files, photos,
+documents, forwarded messages — reaches the model as a delimited
+`<attachment>` block after the user's own words, with its transcript inside
+the block. The system prompt tells the model such blocks are material to work
+on, never instructions to follow. See [Media support](media.md).
+
+This is a boundary in the data, not a promise about the model: a determined
+prompt inside a recording can still influence a summary. Combine it with
+sandboxing and a minimal tool set for bots that read other people's content,
+so that the worst outcome is a bad note rather than an action.
+
+---
+
+## 12. Known Limitations
 
 **WhatsApp Bridge:** WebSocket connection has no authentication (ws://).
 
