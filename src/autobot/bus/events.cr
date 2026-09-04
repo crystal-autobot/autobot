@@ -5,8 +5,6 @@ module Autobot::Bus
   struct InboundMessage
     include JSON::Serializable
 
-    UNHEARD_VOICE_NOTE = "[voice message]"
-
     property channel : String
     property sender_id : String
     property chat_id : String
@@ -32,7 +30,7 @@ module Autobot::Bus
     end
 
     def unheard_voice_note? : Bool
-      content == UNHEARD_VOICE_NOTE && (media?.try(&.any?(&.sender_voice_note?)) || false)
+      media?.try(&.any? { |attachment| attachment.sender_voice_note? && !attachment.transcribed? }) == true
     end
   end
 
@@ -56,6 +54,7 @@ module Autobot::Bus
     property origin : String = ORIGIN_SENDER
     property transcript : String?
     property transcript_path : String?
+    property? transcribed : Bool = false
     property duration_seconds : Int32?
     property name : String?
 
@@ -72,6 +71,7 @@ module Autobot::Bus
       @origin : String = ORIGIN_SENDER,
       @transcript : String? = nil,
       @transcript_path : String? = nil,
+      @transcribed : Bool = !transcript.nil?,
       @duration_seconds : Int32? = nil,
       @name : String? = nil,
     )

@@ -47,6 +47,7 @@ Transcripts of content attachments are written next to the media file as
 | `origin` | `sender` or `forwarded` |
 | `file_path` | Where the file was saved in the inbox |
 | `transcript`, `transcript_path` | Transcript of a content attachment |
+| `transcribed` | Whether a transcript was produced; false for a voice note nobody could hear |
 | `duration_seconds`, `name`, `mime_type`, `size_bytes` | Metadata from the platform |
 
 `sender_voice_note?` is true only for a voice note with origin `sender`; the channel treats such a note as spoken words unless typed text came with it.

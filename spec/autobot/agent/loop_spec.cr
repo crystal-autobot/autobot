@@ -299,7 +299,7 @@ describe Autobot::Agent::Loop do
         channel: "telegram",
         sender_id: "user1",
         chat_id: "chat1",
-        content: Autobot::Bus::InboundMessage::UNHEARD_VOICE_NOTE,
+        content: "Someone: [voice message]",
         media: [Autobot::Bus::MediaAttachment.new(type: "voice", file_path: "/inbox/note.ogg")],
         metadata: {"thread_ts" => "1"},
       )

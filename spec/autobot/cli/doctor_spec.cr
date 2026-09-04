@@ -438,6 +438,16 @@ describe Autobot::CLI::Doctor do
       end
     end
 
+    it "fails on an unknown provider" do
+      config = make_config("transcription:\n  provider: whisperx\n")
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("✗ Unknown transcription provider 'whisperx'")
+      end
+    end
+
     it "warns when the pinned provider has no key" do
       config = make_config(<<-YAML
       transcription:

@@ -200,7 +200,13 @@ describe Autobot::Config::Config do
       config.transcription.enabled?.should be_false
       config.transcription.provider.should eq("groq")
       config.transcription.own_key.should eq("gsk")
+      config.transcription.provider_known?.should be_true
+    end
+
+    it "ignores an empty or unexpanded own key" do
       Autobot::Config::Config.from_yaml("transcription:\n  api_key: \"\"\n").transcription.own_key.should be_nil
+      Autobot::Config::Config.from_yaml("transcription:\n  api_key: \"${WHISPER_KEY}\"\n").transcription.own_key.should be_nil
+      Autobot::Config::Config.from_yaml("transcription:\n  provider: whisperx\n").transcription.provider_known?.should be_false
     end
 
     it "defaults to all tools and the whole workspace" do
@@ -216,6 +222,37 @@ describe Autobot::Config::Config do
       path = config.workspace_path
       path.to_s.should_not contain("~")
       path.to_s.should contain("autobot")
+    end
+  end
+
+  describe "#transcription_source" do
+    it "prefers groq over openai when both chat providers have keys" do
+      source = Autobot::Config::Config.from_yaml("providers:\n  groq:\n    api_key: gsk\n  openai:\n    api_key: sk\n").transcription_source
+      source.should eq(Autobot::Config::TranscriptionConfig::Source.new("groq", "gsk", own_key: false))
+    end
+
+    it "is nil when no chat provider can transcribe or the key is unexpanded" do
+      Autobot::Config::Config.from_yaml("providers:\n  anthropic:\n    api_key: ant\n").transcription_source.should be_nil
+      Autobot::Config::Config.from_yaml("providers:\n  groq:\n    api_key: \"${GROQ_API_KEY}\"\n").transcription_source.should be_nil
+      Autobot::Config::Config.from_yaml("{}").transcription_source.should be_nil
+    end
+
+    it "is nil when transcription is disabled" do
+      Autobot::Config::Config.from_yaml("transcription:\n  enabled: false\nproviders:\n  groq:\n    api_key: gsk\n").transcription_source.should be_nil
+    end
+
+    it "uses only the pinned provider's chat key" do
+      both = "providers:\n  groq:\n    api_key: gsk\n  openai:\n    api_key: sk\n"
+      source = Autobot::Config::Config.from_yaml("transcription:\n  provider: openai\n" + both).transcription_source
+      source.should eq(Autobot::Config::TranscriptionConfig::Source.new("openai", "sk", own_key: false))
+      Autobot::Config::Config.from_yaml("transcription:\n  provider: openai\nproviders:\n  groq:\n    api_key: gsk\n").transcription_source.should be_nil
+    end
+
+    it "uses its own key ahead of the chat providers, on openai unless pinned" do
+      source = Autobot::Config::Config.from_yaml("transcription:\n  api_key: own\nproviders:\n  groq:\n    api_key: gsk\n").transcription_source
+      source.should eq(Autobot::Config::TranscriptionConfig::Source.new("openai", "own", own_key: true))
+      pinned = Autobot::Config::Config.from_yaml("transcription:\n  provider: groq\n  api_key: own\n").transcription_source
+      pinned.should eq(Autobot::Config::TranscriptionConfig::Source.new("groq", "own", own_key: true))
     end
   end
 

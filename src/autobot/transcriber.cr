@@ -24,47 +24,13 @@ module Autobot
 
     BOUNDARY = "----AutobotWhisperBoundary"
 
-    DEFAULT_PROVIDER = "openai"
-    PROVIDER_ORDER   = ["groq", "openai"]
-
-    record Source, provider : String, api_key : String, own_key : Bool
-
     getter provider : String
 
-    def initialize(@api_key : String, @provider : String = DEFAULT_PROVIDER)
+    def initialize(@api_key : String, @provider : String = "openai")
     end
 
     def self.from_config(config : Config::Config) : Transcriber?
-      source(config).try { |found| new(api_key: found.api_key, provider: found.provider) }
-    end
-
-    def self.source(config : Config::Config) : Source?
-      transcription = config.transcription
-      return nil unless transcription.enabled?
-
-      pinned = transcription.provider
-      return nil if pinned && !PROVIDERS.has_key?(pinned)
-      if own_key = transcription.own_key
-        return Source.new(pinned || DEFAULT_PROVIDER, own_key, own_key: true)
-      end
-
-      candidates = pinned ? [pinned] : PROVIDER_ORDER
-      candidates.each do |name|
-        key = provider_key(config, name)
-        return Source.new(name, key, own_key: false) if key
-      end
-      nil
-    end
-
-    private def self.provider_key(config : Config::Config, name : String) : String?
-      providers = config.providers
-      return nil unless providers
-
-      provider = case name
-                 when "groq"   then providers.groq
-                 when "openai" then providers.openai
-                 end
-      provider.try(&.api_key.presence)
+      config.transcription_source.try { |source| new(api_key: source.api_key, provider: source.provider) }
     end
 
     # Transcribe audio data to text.

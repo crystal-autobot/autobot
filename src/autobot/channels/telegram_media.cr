@@ -11,7 +11,7 @@ module Autobot::Channels
     alias Fetcher = Proc(String, Bytes?)
 
     FORWARD_KEYS  = %w[forward_origin forward_from forward_from_chat forward_sender_name forward_date]
-    VOICE_MISSING = Bus::InboundMessage::UNHEARD_VOICE_NOTE
+    VOICE_MISSING = "[voice message]"
 
     def initialize(@fetch : Fetcher, @transcriber : Transcriber? = nil, @inbox : Media::Inbox? = nil)
     end
@@ -51,7 +51,7 @@ module Autobot::Channels
       format = format_of(voice, Bus::MediaAttachment::TYPE_VOICE, "audio/ogg")
       transcript = transcribe(bytes, format[0])
       attachment = build(Bus::MediaAttachment::TYPE_VOICE, voice, origin, format, bytes,
-        transcript: spoken ? nil : transcript)
+        transcript: spoken ? nil : transcript, transcribed: !transcript.nil?)
       {attachment, spoken ? spoken_text(transcript) : nil}
     end
 
@@ -87,7 +87,8 @@ module Autobot::Channels
     end
 
     private def build(type : String, node : JSON::Any, origin : String, format : {String, String}, bytes : Bytes?,
-                      data : String? = nil, transcript : String? = nil, name : String? = nil) : Bus::MediaAttachment
+                      data : String? = nil, transcript : String? = nil, transcribed : Bool = !transcript.nil?,
+                      name : String? = nil) : Bus::MediaAttachment
       extension, mime = format
       path = bytes.try { |content| @inbox.try(&.store(content, extension)) }
       transcript_path = transcript && path ? @inbox.try(&.store_transcript(transcript, path)) : nil
@@ -102,6 +103,7 @@ module Autobot::Channels
         origin: origin,
         transcript: transcript,
         transcript_path: transcript_path.try(&.to_s),
+        transcribed: transcribed,
         duration_seconds: node["duration"]?.try(&.as_i?),
         name: name,
       )

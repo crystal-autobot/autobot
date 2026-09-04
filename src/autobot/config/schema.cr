@@ -316,6 +316,12 @@ module Autobot::Config
 
   class TranscriptionConfig
     include YAML::Serializable
+
+    PROVIDERS        = %w[groq openai]
+    DEFAULT_PROVIDER = "openai"
+
+    record Source, provider : String, api_key : String, own_key : Bool
+
     property? enabled : Bool = true
     property provider : String? = nil
     property api_key : String? = nil
@@ -324,7 +330,13 @@ module Autobot::Config
     end
 
     def own_key : String?
-      api_key.presence
+      key = api_key
+      key if key && !key.empty? && !key.includes?("${")
+    end
+
+    def provider_known? : Bool
+      name = provider
+      name.nil? || PROVIDERS.includes?(name)
     end
   end
 
@@ -426,6 +438,21 @@ module Autobot::Config
 
     def inbox_path : Path
       Path[media.inbox].expand(base: workspace_path, home: true)
+    end
+
+    def transcription_source : TranscriptionConfig::Source?
+      return nil unless transcription.enabled?
+
+      pinned = transcription.provider
+      if own_key = transcription.own_key
+        return TranscriptionConfig::Source.new(pinned || TranscriptionConfig::DEFAULT_PROVIDER, own_key, own_key: true)
+      end
+
+      (pinned ? [pinned] : TranscriptionConfig::PROVIDERS).each do |name|
+        key = provider_by_name(name).try(&.api_key.presence)
+        return TranscriptionConfig::Source.new(name, key, own_key: false) if key
+      end
+      nil
     end
 
     def default_model : String

@@ -407,8 +407,9 @@ module Autobot
       def self.check_voice_transcription(config : Config::Config) : Nil
         transcription = config.transcription
         return report(Status::Skip, "Voice transcription disabled") unless transcription.enabled?
+        return report(Status::Fail, "Unknown transcription provider '#{transcription.provider}'") unless transcription.provider_known?
 
-        if source = Transcriber.source(config)
+        if source = config.transcription_source
           key_note = source.own_key ? ", own key" : ""
           return report(Status::Pass, "Voice transcription available (#{source.provider}#{key_note})")
         end
