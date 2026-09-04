@@ -128,4 +128,41 @@ describe Autobot::Bus::MediaAttachment do
     media = Autobot::Bus::MediaAttachment.new(type: "photo")
     media.data.should be_nil
   end
+
+  it "defaults to the sender origin" do
+    media = Autobot::Bus::MediaAttachment.new(type: "voice")
+    media.origin.should eq("sender")
+    media.forwarded?.should be_false
+  end
+
+  it "treats only a sender's voice note as a spoken instruction" do
+    Autobot::Bus::MediaAttachment.new(type: "voice").spoken_instruction?.should be_true
+    Autobot::Bus::MediaAttachment.new(type: "voice", origin: "forwarded").spoken_instruction?.should be_false
+    Autobot::Bus::MediaAttachment.new(type: "audio").spoken_instruction?.should be_false
+    Autobot::Bus::MediaAttachment.new(type: "document").spoken_instruction?.should be_false
+  end
+
+  it "round-trips attachment details through JSON" do
+    media = Autobot::Bus::MediaAttachment.new(
+      type: "audio",
+      file_path: "/inbox/memo.m4a",
+      origin: "forwarded",
+      transcript: "spoken words",
+      transcript_path: "/inbox/memo.txt",
+      duration_seconds: 134,
+      name: "Car dealer"
+    )
+
+    parsed = Autobot::Bus::MediaAttachment.from_json(media.to_json)
+    parsed.origin.should eq("forwarded")
+    parsed.transcript.should eq("spoken words")
+    parsed.transcript_path.should eq("/inbox/memo.txt")
+    parsed.duration_seconds.should eq(134)
+    parsed.name.should eq("Car dealer")
+  end
+
+  it "parses attachments written before origin existed" do
+    parsed = Autobot::Bus::MediaAttachment.from_json(%({"type": "photo", "url": "f1"}))
+    parsed.origin.should eq("sender")
+  end
 end

@@ -8,6 +8,7 @@ require "../config/schema"
 require "../bus/queue"
 require "../cron/service"
 require "../transcriber"
+require "../media/inbox"
 
 module Autobot::Channels
   # Manages chat channels and coordinates message routing.
@@ -129,6 +130,7 @@ module Autobot::Channels
         session_manager: @session_manager,
         transcriber: @transcriber,
         cron_service: @cron_service,
+        inbox: Media::Inbox.new(@config.inbox_path),
       )
       Log.info { "Telegram channel enabled" }
     end

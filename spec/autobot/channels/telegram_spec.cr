@@ -30,8 +30,18 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     super
   end
 
+  property stubbed_file_bytes : Bytes? = nil
+
+  private def download_telegram_file_bytes(file_id : String) : Bytes?
+    @stubbed_file_bytes || super
+  end
+
   def test_access_denied_message(sender_id : String) : String
     access_denied_message(sender_id)
+  end
+
+  def test_build_content_and_media(msg : JSON::Any) : {String, Array(Autobot::Bus::MediaAttachment)}
+    build_content_and_media(msg)
   end
 
   def test_command_description(entry : Autobot::Config::CustomCommandEntry, name : String) : String
@@ -285,6 +295,37 @@ describe Autobot::Channels::TelegramChannel do
       result = channel.test_prepend_reply_context("ok", exact_text)
       result.should_not contain("...")
       result.should contain(exact_text)
+    end
+  end
+
+  describe "#build_content_and_media" do
+    it "uses typed text as the message and keeps a captioned file as an attachment" do
+      channel = build_channel
+      channel.stubbed_file_bytes = "bytes".to_slice
+      msg = JSON.parse(%({"caption": "Add to notes", "audio": {"file_id": "a1", "mime_type": "audio/mp4", "title": "Memo"}}))
+
+      content, media = channel.test_build_content_and_media(msg)
+
+      content.should eq("Add to notes")
+      media.size.should eq(1)
+      media.first.type.should eq("audio")
+      media.first.spoken_instruction?.should be_false
+    end
+
+    it "labels media when nothing was typed" do
+      channel = build_channel
+      channel.stubbed_file_bytes = "bytes".to_slice
+      msg = JSON.parse(%({"document": {"file_id": "d1", "file_name": "report.pdf"}}))
+
+      content, _ = channel.test_build_content_and_media(msg)
+
+      content.should eq("[document: report.pdf]")
+    end
+
+    it "reports an empty message when there is neither text nor media" do
+      content, media = build_channel.test_build_content_and_media(JSON.parse("{}"))
+      content.should eq("[empty message]")
+      media.should be_empty
     end
   end
 

@@ -99,9 +99,10 @@ channels:
 
 - **Long polling** — no webhook or public IP needed
 - **Reply context** — when replying to a message, the original text is included as context so the bot understands what you're referring to
-- **Voice messages** — auto-transcribed via Whisper (requires Groq or OpenAI provider)
-- **Photos** — sent as image attachments to the LLM
-- **Documents** — attached to the message context
+- **Voice notes** — a note recorded in the chat is auto-transcribed via Whisper into the message text (requires Groq or OpenAI provider)
+- **Audio files and forwarded voice notes** — saved to the inbox as attachments; the transcript stays on the attachment, never in the message text
+- **Photos** — sent as image attachments to the LLM and saved to the inbox
+- **Documents** — saved to the inbox and attached to the message context
 - **Typing indicators** — shows "typing..." while the LLM responds
 - **Markdown rendering** — LLM responses are converted to Telegram HTML
 - **Group chats** — the bot only replies when addressed: mentioned by `@username` or replied to. Other group messages are ignored (no response, no access-denied notice).

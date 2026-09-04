@@ -295,6 +295,14 @@ module Autobot::Config
     end
   end
 
+  class MediaConfig
+    include YAML::Serializable
+    property inbox : String = "inbox"
+
+    def initialize
+    end
+  end
+
   class CronConfig
     include YAML::Serializable
     property? enabled : Bool = true
@@ -380,6 +388,7 @@ module Autobot::Config
     property cron : CronConfig?
     property mcp : McpConfig?
     property plugins : PluginsConfig?
+    property media : MediaConfig?
 
     def initialize
     end
@@ -387,6 +396,11 @@ module Autobot::Config
     def workspace_path : Path
       workspace_str = agents.try(&.defaults.try(&.workspace)) || "./workspace"
       Path[workspace_str].expand(home: true)
+    end
+
+    def inbox_path : Path
+      inbox = media.try(&.inbox) || "inbox"
+      Path[inbox].expand(base: workspace_path, home: true)
     end
 
     def default_model : String
