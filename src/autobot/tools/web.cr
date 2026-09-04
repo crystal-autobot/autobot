@@ -103,8 +103,6 @@ module Autobot
       IPV6_LOOPBACK_PATTERN = /\[::1\]/
       IPV6_PRIVATE_PATTERN  = /\[(fc|fd)[0-9a-f]{2}:/i
 
-      getter allowed_domains : DomainAllowlist
-
       def initialize(@max_chars : Int32 = DEFAULT_MAX_CHARS, allowed_domains : Array(String) = [] of String)
         @allowed_domains = DomainAllowlist.new(allowed_domains)
       end
@@ -131,10 +129,6 @@ module Autobot
         url_str = params["url"].as_s
         max_chars = params["maxChars"]?.try(&.as_i) || @max_chars
 
-        if error = check_allowed_domain(URI.parse(url_str).host)
-          return ToolResult.access_denied(error)
-        end
-
         if error = validate_url(url_str)
           return ToolResult.access_denied("URL validation failed: #{error}")
         end
@@ -142,7 +136,6 @@ module Autobot
         Log.info { "Fetching: #{url_str}" }
 
         uri = URI.parse(url_str)
-
         response = fetch_with_redirects(uri)
 
         content_type = response.headers["Content-Type"]? || ""
@@ -175,11 +168,7 @@ module Autobot
           return "Missing domain"
         end
 
-        if error = check_ssrf(host)
-          return error
-        end
-
-        nil
+        check_host(host)
       rescue
         "Invalid URL"
       end
@@ -309,11 +298,15 @@ module Autobot
         host = uri.host
         return "Redirect missing host" if host.nil? || host.empty?
 
+        check_host(host)
+      end
+
+      private def check_host(host : String) : String?
         check_allowed_domain(host) || check_ssrf(host)
       end
 
-      private def check_allowed_domain(host : String?) : String?
-        return nil if host.nil? || @allowed_domains.allows?(host)
+      private def check_allowed_domain(host : String) : String?
+        return nil if @allowed_domains.allows?(host)
         "Host is not in tools.web.allowed_domains (#{@allowed_domains.entries.join(", ")}): #{host}"
       end
 

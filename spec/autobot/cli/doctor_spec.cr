@@ -648,6 +648,20 @@ describe Autobot::CLI::Doctor do
         io.to_s.should contain("✓ Filesystem tools limited to: notes, inbox")
       end
     end
+
+    it "reports the web fetch domains" do
+      config = make_config(<<-YAML
+      tools:
+        web:
+          allowed_domains: [example.com, "*.strava.com"]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0).should eq(0)
+        io.to_s.should contain("✓ Web fetch limited to: example.com, *.strava.com")
+      end
+    end
   end
 
   describe ".check_web_search" do
@@ -749,23 +763,6 @@ describe Autobot::CLI::Doctor do
 
         warnings.should eq(0)
         io.to_s.should contain("✓ Gateway bound to 127.0.0.1")
-      end
-    end
-  end
-
-  describe ".check_web_search with an egress allowlist" do
-    it "reports the allowed domains" do
-      config = make_config(<<-YAML
-      tools:
-        web:
-          allowed_domains: [example.com, "*.strava.com"]
-      YAML
-      )
-
-      with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_web_search(config)
-
-        io.to_s.should contain("✓ Web fetch limited to: example.com, *.strava.com")
       end
     end
   end

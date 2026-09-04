@@ -2,9 +2,7 @@ require "../../spec_helper"
 
 describe Autobot::Tools::DomainAllowlist do
   it "allows every host when empty" do
-    list = Autobot::Tools::DomainAllowlist.new([] of String)
-    list.restricted?.should be_false
-    list.allows?("anything.example").should be_true
+    Autobot::Tools::DomainAllowlist.new([] of String).allows?("anything.example").should be_true
   end
 
   it "matches exact hosts case-insensitively" do
@@ -25,6 +23,6 @@ describe Autobot::Tools::DomainAllowlist do
   end
 
   it "ignores blank entries" do
-    Autobot::Tools::DomainAllowlist.new(["", " "]).restricted?.should be_false
+    Autobot::Tools::DomainAllowlist.new(["", " "]).allows?("anything.example").should be_true
   end
 end

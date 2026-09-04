@@ -50,12 +50,6 @@ describe Autobot::Tools::WebFetchTool do
       tool.test_validate_redirect_uri(URI.parse("https://evil.example/x")).to_s.should contain("not in tools.web.allowed_domains")
       tool.test_validate_redirect_uri(URI.parse("https://1.1.1.1/x")).should be_nil
     end
-
-    it "allows every public host when no domains are configured" do
-      tool = WebFetchToolTest.new
-
-      tool.test_validate_redirect_uri(URI.parse("https://1.1.1.1/x")).should be_nil
-    end
   end
 
   describe "#name" do
