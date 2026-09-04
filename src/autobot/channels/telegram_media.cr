@@ -2,6 +2,7 @@ require "base64"
 require "json"
 require "../bus/events"
 require "../media/inbox"
+require "../media/types"
 require "../transcriber"
 
 module Autobot::Channels
@@ -38,7 +39,7 @@ module Autobot::Channels
       return nil unless photo
 
       bytes = fetch(photo)
-      build(Bus::MediaAttachment::TYPE_PHOTO, photo, origin, "image/jpeg", bytes,
+      build(Bus::MediaAttachment::TYPE_PHOTO, photo, origin, {".jpg", "image/jpeg"}, bytes,
         data: bytes.try { |data| Base64.strict_encode(data) })
     end
 
@@ -47,9 +48,9 @@ module Autobot::Channels
       return {nil, nil} unless voice
 
       bytes = fetch(voice)
-      mime = mime_of(voice, "audio/ogg")
-      transcript = transcribe(bytes, mime)
-      attachment = build(Bus::MediaAttachment::TYPE_VOICE, voice, origin, mime, bytes,
+      format = format_of(voice, Bus::MediaAttachment::TYPE_VOICE, "audio/ogg")
+      transcript = transcribe(bytes, format[0])
+      attachment = build(Bus::MediaAttachment::TYPE_VOICE, voice, origin, format, bytes,
         transcript: spoken ? nil : transcript)
       {attachment, spoken ? spoken_text(transcript) : nil}
     end
@@ -59,9 +60,9 @@ module Autobot::Channels
       return nil unless audio
 
       bytes = fetch(audio)
-      mime = mime_of(audio, "audio/mpeg")
-      build(Bus::MediaAttachment::TYPE_AUDIO, audio, origin, mime, bytes,
-        transcript: transcribe(bytes, mime),
+      format = format_of(audio, Bus::MediaAttachment::TYPE_AUDIO, "audio/mpeg")
+      build(Bus::MediaAttachment::TYPE_AUDIO, audio, origin, format, bytes,
+        transcript: transcribe(bytes, format[0]),
         name: string_of(audio, "title") || string_of(audio, "file_name"))
     end
 
@@ -69,13 +70,26 @@ module Autobot::Channels
       document = msg["document"]?
       return nil unless document
 
-      build(Bus::MediaAttachment::TYPE_DOCUMENT, document, origin, string_of(document, "mime_type"), fetch(document),
+      build(Bus::MediaAttachment::TYPE_DOCUMENT, document, origin,
+        format_of(document, Bus::MediaAttachment::TYPE_DOCUMENT, Media::Types::DEFAULT[1]), fetch(document),
         name: string_of(document, "file_name"))
     end
 
-    private def build(type : String, node : JSON::Any, origin : String, mime : String?, bytes : Bytes?,
+    # The platform file name is the most reliable source of the format; Telegram
+    # often omits mime_type, and Whisper rejects a mislabelled extension.
+    private def format_of(node : JSON::Any, type : String, default_mime : String) : {String, String}
+      name_extension = File.extname(string_of(node, "file_name") || "").downcase
+      mime = string_of(node, "mime_type")
+      return {name_extension, mime || Media::Types.for_extension(name_extension)[1]} unless name_extension.empty?
+
+      mime ||= default_mime
+      {Media::Types.extension_for(mime, ".#{type}"), mime}
+    end
+
+    private def build(type : String, node : JSON::Any, origin : String, format : {String, String}, bytes : Bytes?,
                       data : String? = nil, transcript : String? = nil, name : String? = nil) : Bus::MediaAttachment
-      path = bytes.try { |content| @inbox.try(&.store(content, mime, ".#{type}")) }
+      extension, mime = format
+      path = bytes.try { |content| @inbox.try(&.store(content, extension)) }
       transcript_path = transcript && path ? @inbox.try(&.store_transcript(transcript, path)) : nil
 
       Bus::MediaAttachment.new(
@@ -110,18 +124,14 @@ module Autobot::Channels
       transcript ? "[voice transcription]: #{transcript}" : VOICE_MISSING
     end
 
-    private def transcribe(bytes : Bytes?, mime : String) : String?
+    private def transcribe(bytes : Bytes?, extension : String) : String?
       transcriber = @transcriber
       return nil unless transcriber && bytes
-      transcriber.transcribe(bytes, "audio#{Media::Types.extension_for(mime, ".ogg")}")
+      transcriber.transcribe(bytes, "audio#{extension}")
     end
 
     private def fetch(node : JSON::Any) : Bytes?
       @fetch.call(node["file_id"].as_s)
-    end
-
-    private def mime_of(node : JSON::Any, fallback : String) : String
-      string_of(node, "mime_type") || fallback
     end
 
     private def string_of(node : JSON::Any, key : String) : String?

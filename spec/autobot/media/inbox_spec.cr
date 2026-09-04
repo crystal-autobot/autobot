@@ -9,9 +9,9 @@ end
 
 describe Autobot::Media::Inbox do
   describe "#store" do
-    it "writes the bytes with an extension from the mime type and private permissions" do
+    it "writes the bytes with the given extension and private permissions" do
       with_inbox do |inbox, dir|
-        path = inbox.store("hello".to_slice, "audio/ogg")
+        path = inbox.store("hello".to_slice, ".ogg")
 
         path.parent.should eq(dir)
         path.extension.should eq(".ogg")
@@ -23,23 +23,16 @@ describe Autobot::Media::Inbox do
     it "creates the directory with private permissions" do
       dir = TestHelper.tmp_dir("inbox")
       begin
-        Autobot::Media::Inbox.new(dir / "inbox").store("x".to_slice, "image/png")
+        Autobot::Media::Inbox.new(dir / "inbox").store("x".to_slice, ".png")
         File.info(dir / "inbox").permissions.value.should eq(0o700)
       ensure
         FileUtils.rm_rf(dir)
       end
     end
 
-    it "falls back to the given extension for unknown mime types" do
-      with_inbox do |inbox, _|
-        inbox.store("x".to_slice, "application/x-unknown", ".voice").extension.should eq(".voice")
-        inbox.store("x".to_slice, nil).extension.should eq(".bin")
-      end
-    end
-
     it "gives every file a distinct name" do
       with_inbox do |inbox, _|
-        inbox.store("a".to_slice, "image/jpeg").should_not eq(inbox.store("b".to_slice, "image/jpeg"))
+        inbox.store("a".to_slice, ".jpg").should_not eq(inbox.store("b".to_slice, ".jpg"))
       end
     end
   end
@@ -47,7 +40,7 @@ describe Autobot::Media::Inbox do
   describe "#store_transcript" do
     it "writes the transcript next to the media file" do
       with_inbox do |inbox, dir|
-        media = inbox.store("x".to_slice, "audio/mpeg")
+        media = inbox.store("x".to_slice, ".mp3")
         transcript = inbox.store_transcript("spoken words", media)
 
         transcript.should eq(dir / "#{media.stem}.txt")

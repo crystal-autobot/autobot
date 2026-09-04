@@ -1,5 +1,4 @@
 require "random/secure"
-require "./types"
 
 module Autobot
   module Media
@@ -11,9 +10,9 @@ module Autobot
       def initialize(@dir : Path)
       end
 
-      def store(bytes : Bytes, mime_type : String?, fallback_extension : String = ".bin") : Path
+      def store(bytes : Bytes, extension : String) : Path
         Dir.mkdir_p(@dir, DIR_MODE)
-        path = @dir / "#{unique_name}#{Types.extension_for(mime_type, fallback_extension)}"
+        path = @dir / "#{unique_name}#{extension}"
         File.write(path, bytes, perm: FILE_MODE)
         path
       end

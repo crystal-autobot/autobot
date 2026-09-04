@@ -112,6 +112,27 @@ describe Autobot::Channels::TelegramMedia do
       transcriber.calls.should eq(["audio.m4a"])
     end
 
+    it "takes the format from the file name when the platform sends no mime type" do
+      transcriber = FakeTranscriber.new
+      media = build_media(transcriber)
+      msg = message(%({"audio": {"file_id": "a2", "file_name": "New Recording 6.m4a"}}))
+
+      _, attachments = media.extract(msg, typed_text: false)
+
+      attachments.first.mime_type.should eq("audio/mp4")
+      attachments.first.name.should eq("New Recording 6.m4a")
+      transcriber.calls.should eq(["audio.m4a"])
+    end
+
+    it "prefers the file name extension over a conflicting mime type" do
+      transcriber = FakeTranscriber.new
+      msg = message(%({"audio": {"file_id": "a3", "file_name": "memo.m4a", "mime_type": "audio/mpeg"}}))
+
+      build_media(transcriber).extract(msg, typed_text: false)
+
+      transcriber.calls.should eq(["audio.m4a"])
+    end
+
     it "adds no text when a caption was typed" do
       media = build_media(FakeTranscriber.new)
 
@@ -174,6 +195,14 @@ describe Autobot::Channels::TelegramMedia do
 
         attachments.first.file_path.to_s.should end_with(".ogg")
         attachments.first.transcript_path.should be_nil
+      end
+    end
+
+    it "names the saved file after the platform file name's extension" do
+      with_inbox do |inbox|
+        msg = message(%({"audio": {"file_id": "a2", "file_name": "New Recording 6.m4a"}}))
+        _, attachments = build_media(nil, inbox).extract(msg, typed_text: false)
+        attachments.first.file_path.to_s.should end_with(".m4a")
       end
     end
 
