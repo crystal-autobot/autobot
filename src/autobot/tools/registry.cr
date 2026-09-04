@@ -1,3 +1,4 @@
+require "./allowlist"
 require "./base"
 require "./rate_limiter"
 require "./sandbox_executor"
@@ -12,14 +13,19 @@ module Autobot::Tools
     @session_key : String
     @sandbox_executor : SandboxExecutor?
 
-    def initialize(@session_key : String = "default", rate_limiter : RateLimiter? = nil)
+    getter allowlist : Allowlist
+
+    def initialize(@session_key : String = "default", rate_limiter : RateLimiter? = nil, @allowlist : Allowlist = Allowlist.all)
       @tools = {} of String => Tool
       @rate_limiter = rate_limiter || RateLimiter.new
       @sandbox_executor = nil
     end
 
-    # Register a tool
     def register(tool : Tool) : Nil
+      unless @allowlist.allows?(tool.name)
+        Log.info { "Tool not registered (not in tools.enabled): #{tool.name}" }
+        return
+      end
       @tools[tool.name] = tool
     end
 

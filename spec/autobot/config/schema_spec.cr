@@ -168,6 +168,25 @@ describe Autobot::Config::Config do
       config.tools.try(&.exec.try(&.timeout)).should eq(120)
       config.tools.try(&.sandbox).should eq("bubblewrap")
     end
+
+    it "parses the tool allowlist and filesystem roots" do
+      yaml = <<-YAML
+      tools:
+        enabled: [read_file, "ha_*"]
+        filesystem:
+          roots: [notes, inbox]
+      YAML
+
+      config = Autobot::Config::Config.from_yaml(yaml)
+      config.tools.try(&.enabled).should eq(["read_file", "ha_*"])
+      config.tools.try(&.filesystem.try(&.roots)).should eq(["notes", "inbox"])
+    end
+
+    it "defaults to all tools and the whole workspace" do
+      config = Autobot::Config::Config.from_yaml("tools:\n  sandbox: none\n")
+      config.tools.try(&.enabled).should eq([] of String)
+      config.tools.try(&.filesystem).should be_nil
+    end
   end
 
   describe "#workspace_path" do

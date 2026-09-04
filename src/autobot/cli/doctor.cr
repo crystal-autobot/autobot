@@ -74,6 +74,9 @@ module Autobot
         # Security settings
         errors = check_security_settings(config, errors)
 
+        # Tools
+        warnings = check_tools(config, warnings)
+
         # Workspace
         errors, warnings = check_workspace(config, config_file, errors, warnings)
 
@@ -165,6 +168,44 @@ module Autobot
         errors = check_sandbox_availability(config, errors)
 
         errors
+      end
+
+      BUILTIN_TOOLS = %w[read_file write_file edit_file list_dir exec web_search web_fetch message spawn cron generate_image]
+
+      def self.check_tools(config : Config::Config, warnings : Int32) : Int32
+        allowlist = Tools::Allowlist.new(config.tools.try(&.enabled) || [] of String)
+
+        if allowlist.restricted?
+          builtin = BUILTIN_TOOLS.select { |name| allowlist.allows?(name) }
+          report(Status::Pass, "Tools limited to: #{builtin.empty? ? "none of the built-in tools" : builtin.join(", ")}")
+          extra = allowlist.patterns.reject { |pattern| BUILTIN_TOOLS.any? { |name| Tools::Allowlist.new([pattern]).allows?(name) } }
+          hint("Patterns for skills, plugins or MCP tools: #{extra.join(", ")}") unless extra.empty?
+        else
+          report(Status::Pass, "Tools: all built-in tools, plus skills, plugins and MCP servers")
+          hint("Set tools.enabled to limit this bot to the tools it needs")
+        end
+
+        check_filesystem_roots(config, warnings)
+      end
+
+      def self.check_filesystem_roots(config : Config::Config, warnings : Int32) : Int32
+        roots = config.tools.try(&.filesystem.try(&.roots)) || [] of String
+        return warnings if roots.empty?
+
+        workspace = config.workspace_path
+        outside = roots.reject do |root|
+          resolved = Path[root].expand(base: workspace, home: true)
+          resolved == workspace || resolved.to_s.starts_with?("#{workspace}/")
+        end
+
+        if outside.empty?
+          report(Status::Pass, "Filesystem tools limited to: #{roots.join(", ")}")
+          return warnings
+        end
+
+        report(Status::Warn, "Filesystem root outside the workspace: #{outside.join(", ")}")
+        hint("Roots are resolved relative to the workspace and must stay inside it")
+        warnings + 1
       end
 
       def self.check_sandbox_availability(config : Config::Config, errors : Int32) : Int32

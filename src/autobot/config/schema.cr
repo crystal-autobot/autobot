@@ -281,8 +281,18 @@ module Autobot::Config
     end
   end
 
+  class FilesystemToolsConfig
+    include YAML::Serializable
+    property roots : Array(String) = [] of String
+
+    def initialize
+    end
+  end
+
   class ToolsConfig
     include YAML::Serializable
+    property enabled : Array(String) = [] of String
+    property filesystem : FilesystemToolsConfig?
     property web : WebToolsConfig?
     property exec : ExecToolConfig?
     property image : ImageConfig?

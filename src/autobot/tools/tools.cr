@@ -30,8 +30,10 @@ module Autobot
       web_fetch_max_chars : Int32 = WebFetchTool::DEFAULT_MAX_CHARS,
       skills_dirs : Array(String) = [] of String,
       rate_limiter : RateLimiter? = nil,
+      enabled_tools : Array(String) = [] of String,
+      filesystem_roots : Array(String) = [] of String,
     ) : Registry
-      registry = Registry.new(rate_limiter: rate_limiter)
+      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
       # Determine sandbox configuration
       sandboxed = sandbox_config.downcase != "none"
@@ -45,7 +47,7 @@ module Autobot
       end
 
       # Create centralized sandbox executor
-      executor = SandboxExecutor.new(workspace, sandboxed)
+      executor = SandboxExecutor.new(workspace, sandboxed, resolve_roots(filesystem_roots, workspace))
 
       # Register tools
       register_filesystem_tools(registry, executor)
@@ -72,11 +74,13 @@ module Autobot
       sandbox_config : String = "auto",
       brave_api_key : String? = nil,
       rate_limiter : RateLimiter? = nil,
+      enabled_tools : Array(String) = [] of String,
+      filesystem_roots : Array(String) = [] of String,
     ) : Registry
-      registry = Registry.new(rate_limiter: rate_limiter)
+      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
       sandboxed = sandbox_config.downcase != "none"
-      executor = SandboxExecutor.new(workspace, sandboxed)
+      executor = SandboxExecutor.new(workspace, sandboxed, resolve_roots(filesystem_roots, workspace))
 
       register_filesystem_tools(registry, executor)
       register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
@@ -90,6 +94,11 @@ module Autobot
       ::Log.for("Tools").info { "Registered #{registry.size} tools: #{registry.tool_names.join(", ")}" }
 
       registry
+    end
+
+    def self.resolve_roots(roots : Array(String), workspace : Path?) : Array(Path)
+      base = workspace || Path[Dir.current]
+      roots.map { |root| Path[root].expand(base: base, home: true) }
     end
 
     private def self.log_sandbox_configuration(sandbox_type : Sandbox::Type) : Nil

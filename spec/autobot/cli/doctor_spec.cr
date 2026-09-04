@@ -531,6 +531,67 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_tools" do
+    it "reports all tools with a hint when no allowlist is set" do
+      with_doctor_io do |io|
+        warnings = Autobot::CLI::Doctor.check_tools(make_config("{}"), 0)
+
+        warnings.should eq(0)
+        io.to_s.should contain("✓ Tools: all built-in tools")
+        io.to_s.should contain("Set tools.enabled")
+      end
+    end
+
+    it "lists the effective built-in tools and the remaining patterns" do
+      config = make_config(<<-YAML
+      tools:
+        enabled: [read_file, write_file, ha_*]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0)
+
+        io.to_s.should contain("✓ Tools limited to: read_file, write_file")
+        io.to_s.should contain("Patterns for skills, plugins or MCP tools: ha_*")
+      end
+    end
+
+    it "passes roots inside the workspace and warns about roots outside it" do
+      config = make_config(<<-YAML
+      agents:
+        defaults:
+          workspace: /srv/bot/workspace
+      tools:
+        filesystem:
+          roots: [notes, ../outside]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        warnings = Autobot::CLI::Doctor.check_tools(config, 0)
+
+        warnings.should eq(1)
+        io.to_s.should contain("! Filesystem root outside the workspace: ../outside")
+      end
+
+      inside = make_config(<<-YAML
+      agents:
+        defaults:
+          workspace: /srv/bot/workspace
+      tools:
+        filesystem:
+          roots: [notes, inbox]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(inside, 0).should eq(0)
+        io.to_s.should contain("✓ Filesystem tools limited to: notes, inbox")
+      end
+    end
+  end
+
   describe ".check_web_search" do
     it "skips when no tools configured" do
       config = make_config("{}")

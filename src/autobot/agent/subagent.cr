@@ -55,6 +55,8 @@ module Autobot
         @exec_allow_patterns : Array(Regex) = [] of Regex,
         @sandbox_config : String = "auto",
         @rate_limiter : Tools::RateLimiter? = nil,
+        @enabled_tools : Array(String) = [] of String,
+        @filesystem_roots : Array(String) = [] of String,
       )
         @context = Context::Builder.new(@workspace)
       end
@@ -120,6 +122,8 @@ module Autobot
             sandbox_config: @sandbox_config,
             brave_api_key: @brave_api_key,
             rate_limiter: @rate_limiter,
+            enabled_tools: @enabled_tools,
+            filesystem_roots: @filesystem_roots,
           )
 
           executor = ToolExecutor.new(

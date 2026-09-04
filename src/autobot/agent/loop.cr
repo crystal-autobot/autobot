@@ -66,6 +66,8 @@ module Autobot::Agent
       exec_allow_patterns : Array(Regex) = [] of Regex,
       sandbox_config : String = "auto",
       rate_limiter : Tools::RateLimiter? = nil,
+      enabled_tools : Array(String) = [] of String,
+      filesystem_roots : Array(String) = [] of String,
     )
       @model = model || @provider.default_model
       sandboxed = sandbox_config.downcase != "none"
@@ -86,7 +88,7 @@ module Autobot::Agent
         sessions: @sessions
       )
 
-      register_optional_tools(brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns, sandbox_config, rate_limiter)
+      register_optional_tools(brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns, sandbox_config, rate_limiter, enabled_tools, filesystem_roots)
       cache_tool_references
     end
 
@@ -293,6 +295,8 @@ module Autobot::Agent
       exec_allow_patterns : Array(Regex),
       sandbox_config : String,
       rate_limiter : Tools::RateLimiter?,
+      enabled_tools : Array(String),
+      filesystem_roots : Array(String),
     ) : Nil
       subagents = SubagentManager.new(
         provider: @provider,
@@ -304,7 +308,9 @@ module Autobot::Agent
         exec_deny_patterns: exec_deny_patterns,
         exec_allow_patterns: exec_allow_patterns,
         sandbox_config: sandbox_config,
-        rate_limiter: rate_limiter
+        rate_limiter: rate_limiter,
+        enabled_tools: enabled_tools,
+        filesystem_roots: filesystem_roots,
       )
       @tools.register(Tools::SpawnTool.new(subagents))
 

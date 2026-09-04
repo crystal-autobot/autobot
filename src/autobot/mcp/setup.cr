@@ -140,15 +140,7 @@ module Autobot
     # Empty allowlist means all tools are allowed.
     # Patterns ending with `*` match as prefixes.
     def self.tool_allowed?(name : String, allowlist : Array(String)) : Bool
-      return true if allowlist.empty?
-
-      allowlist.any? do |pattern|
-        if pattern.ends_with?("*")
-          name.starts_with?(pattern.rchop("*"))
-        else
-          name == pattern
-        end
-      end
+      Tools::Allowlist.new(allowlist).allows?(name)
     end
   end
 end
