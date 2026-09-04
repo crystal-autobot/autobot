@@ -224,6 +224,37 @@ describe Autobot::Agent::Loop do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "keeps attachment blocks in the session history" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      tools = Autobot::Tools::Registry.new
+      tools.register(Autobot::Tools::MessageTool.new)
+      loop_inst = TestableLoop.new(
+        bus: Autobot::Bus::MessageBus.new(capacity: 10),
+        provider: MockProvider.new,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        memory_window: 0,
+        sandbox_config: "none"
+      )
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "user1",
+        content: "Add to notes",
+        media: [Autobot::Bus::MediaAttachment.new(type: "audio", name: "memo", transcript: "the dealer offered a discount")]
+      )
+
+      loop_inst.test_process_message(msg)
+
+      user_turn = sessions.get_or_create("telegram:user1").get_history.first["content"]
+      user_turn.should start_with("Add to notes\n\n<attachment type=\"audio\"")
+      user_turn.should contain("the dealer offered a discount")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "returns outbound message for non-cron system messages" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)
