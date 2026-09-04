@@ -1,3 +1,4 @@
+require "./allowlist"
 require "./base"
 require "./rate_limiter"
 require "./sandbox_executor"
@@ -12,15 +13,30 @@ module Autobot::Tools
     @session_key : String
     @sandbox_executor : SandboxExecutor?
 
-    def initialize(@session_key : String = "default", rate_limiter : RateLimiter? = nil)
+    getter allowlist : Allowlist
+    @matched_patterns = Set(String).new
+    @warned_unmatched = false
+
+    def initialize(@session_key : String = "default", rate_limiter : RateLimiter? = nil, @allowlist : Allowlist = Allowlist.all)
       @tools = {} of String => Tool
       @rate_limiter = rate_limiter || RateLimiter.new
       @sandbox_executor = nil
     end
 
-    # Register a tool
     def register(tool : Tool) : Nil
+      if @allowlist.restricted?
+        pattern = @allowlist.matching_pattern(tool.name)
+        unless pattern
+          Log.info { "Tool not registered (not in tools.enabled): #{tool.name}" }
+          return
+        end
+        @matched_patterns << pattern
+      end
       @tools[tool.name] = tool
+    end
+
+    def unmatched_patterns : Array(String)
+      @allowlist.patterns.reject { |pattern| @matched_patterns.includes?(pattern) }
     end
 
     # Unregister a tool by name
@@ -49,6 +65,7 @@ module Autobot::Tools
       exclude : Array(String)? = nil,
       compact : Array(String)? = nil,
     ) : Array(Hash(String, JSON::Any))
+      warn_unmatched_once
       tools = @tools.values
       tools = tools.reject { |tool| exclude.try(&.includes?(tool.name)) } if exclude
 
@@ -59,6 +76,15 @@ module Autobot::Tools
           tool.to_schema
         end
       end
+    end
+
+    private def warn_unmatched_once : Nil
+      return if @warned_unmatched
+      @warned_unmatched = true
+
+      unmatched = unmatched_patterns
+      return if unmatched.empty?
+      Log.warn { "tools.enabled entries matched no tool: #{unmatched.join(", ")}" }
     end
 
     def execute(name : String, params : Hash(String, JSON::Any), session_key : String? = nil) : String

@@ -152,6 +152,8 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 
 **⚠️ Warnings (review recommended):**
 
+- Filesystem root configured outside the workspace
+- `tools.enabled` entry that matches no known tool
 - Gateway bound to 0.0.0.0 (network exposure)
 - Channel authorization not configured (empty `allow_from`)
 - Missing `.env` file
@@ -270,7 +272,22 @@ so that the worst outcome is a bad note rather than an action.
 
 ---
 
-## 12. Known Limitations
+## 12. Least Tools Per Bot
+
+A bot that reads other people's content should not be able to do much with it. Two settings make that a property of the config rather than of the prompt:
+
+```yaml
+tools:
+  enabled: [read_file, write_file, edit_file, list_dir, message]
+  filesystem:
+    roots: [notes, inbox]
+```
+
+`tools.enabled` is an allowlist applied at registration, so a tool that is not listed does not exist for the model, whether it is built in, a skill script, a plugin or an MCP tool. `tools.filesystem.roots` keeps the file tools inside the listed workspace subdirectories. With both in place, the worst a planted instruction inside an attachment can do is write a bad note. `autobot doctor` prints the effective tool list and reminds you to set the allowlist when it is missing.
+
+---
+
+## 13. Known Limitations
 
 **WhatsApp Bridge:** WebSocket connection has no authentication (ws://).
 

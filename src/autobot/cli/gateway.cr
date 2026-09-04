@@ -159,7 +159,9 @@ module Autobot
           exec_deny_patterns: deny_patterns,
           exec_allow_patterns: allow_patterns,
           sandbox_config: sandbox_config,
-          rate_limiter: rate_limiter
+          rate_limiter: rate_limiter,
+          enabled_tools: config.tools.try(&.enabled) || [] of String,
+          filesystem_roots: config.tools.try(&.filesystem.try(&.roots)) || [] of String,
         )
       end
 

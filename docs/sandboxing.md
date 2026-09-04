@@ -133,6 +133,18 @@ tools:
 - `docker_image` — Docker image to use for sandbox containers. Overrides `Dockerfile.sandbox` when set. Only applies when sandbox is `docker` or `auto` resolves to Docker.
 - `sandbox_env` — List of environment variable names to forward into Docker containers. Only listed variables are forwarded — empty by default for security. Useful when sandbox scripts need access to specific env vars (e.g. `HA_URL`, `MQTT_HOST`).
 
+### Filesystem roots
+
+Independently of the sandbox backend, `tools.filesystem.roots` narrows the file tools to workspace subdirectories:
+
+```yaml
+tools:
+  filesystem:
+    roots: [notes, inbox]
+```
+
+The check runs in the executor before any sandboxed or direct operation, so it applies in every sandbox mode including `none`. Relative paths resolve against the workspace, `..` is normalized before the check, and a path outside every root returns a tool error naming the allowed directories. The `exec` tool is not narrowed by roots; the sandbox keeps it inside the workspace.
+
 ### Custom sandbox image (Dockerfile.sandbox)
 
 When using Docker sandbox, the default `alpine:latest` image only includes basic shell tools. To add runtimes your bot needs (Python, SQLite, GitHub CLI, etc.), create a `Dockerfile.sandbox` in your bot folder:

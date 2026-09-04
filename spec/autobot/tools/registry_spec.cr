@@ -69,6 +69,23 @@ describe Autobot::Tools::Registry do
     registry.get("unknown").should be_nil
   end
 
+  it "registers only tools the allowlist permits" do
+    registry = Autobot::Tools::Registry.new(allowlist: Autobot::Tools::Allowlist.new(["other"]))
+    registry.register(DummyTool.new)
+    registry.has?("dummy").should be_false
+
+    permitted = Autobot::Tools::Registry.new(allowlist: Autobot::Tools::Allowlist.new(["dum*"]))
+    permitted.register(DummyTool.new)
+    permitted.has?("dummy").should be_true
+  end
+
+  it "reports allowlist entries that never matched a tool" do
+    registry = Autobot::Tools::Registry.new(allowlist: Autobot::Tools::Allowlist.new(["dummy", "read_flie"]))
+    registry.register(DummyTool.new)
+    registry.unmatched_patterns.should eq(["read_flie"])
+    Autobot::Tools::Registry.new.unmatched_patterns.should be_empty
+  end
+
   it "unregisters a tool" do
     registry = Autobot::Tools::Registry.new
     registry.register(DummyTool.new)

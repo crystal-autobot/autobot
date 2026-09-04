@@ -98,6 +98,15 @@ channels:
 
 ```yaml
 tools:
+  enabled:       # Optional allowlist; omit to register every tool
+    - read_file
+    - write_file
+    - edit_file
+    - list_dir
+    - message
+    - "ha_*"     # patterns ending in * match by prefix (skills, plugins, MCP tools)
+  filesystem:
+    roots: [notes, inbox]  # Optional; file tools may only touch these workspace subdirectories
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
   docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
   sandbox_env:   # env vars to forward into Docker sandbox (default: none)
@@ -129,6 +138,14 @@ tools:
 ```
 
 When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.
+
+### Tool Allowlist
+
+`tools.enabled` names the tools a bot may have. Anything not listed is never registered, whichever source it comes from: built-in tools, skill scripts, plugins and MCP servers all pass through the same check. A name ending in `*` matches by prefix, as in the MCP `tools:` list. Leave it out to keep today's behaviour of registering everything. `autobot doctor` prints the effective list and warns about an entry that matches no known tool, so a typo does not silently remove a tool; at startup the bot logs a warning for entries that matched nothing.
+
+### Filesystem Roots
+
+`tools.filesystem.roots` limits `read_file`, `write_file`, `edit_file` and `list_dir` to the listed workspace subdirectories. Paths resolve relative to the workspace and `..` cannot escape a root. Commands run by `exec` are not affected; they stay bound to the workspace by the sandbox.
 
 ### Safety Guard Overrides
 
@@ -289,7 +306,9 @@ tools:
     # provider: openai       # optional override (openai or gemini)
     # model: gpt-image-1     # optional, auto-detected from provider
     # size: 1024x1024
-  restrict_to_workspace: true  # Default: true (recommended for security)
+  enabled: [read_file, write_file, edit_file, list_dir, message]  # optional allowlist
+  filesystem:
+    roots: [notes, inbox]      # optional, workspace subdirectories the file tools may touch
 
 # Cron scheduler
 cron:

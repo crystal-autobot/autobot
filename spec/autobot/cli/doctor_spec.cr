@@ -531,6 +531,125 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_tools" do
+    it "reports all tools with a hint when no allowlist is set" do
+      with_doctor_io do |io|
+        warnings = Autobot::CLI::Doctor.check_tools(make_config("{}"), 0)
+
+        warnings.should eq(0)
+        io.to_s.should contain("✓ Tools: all built-in tools")
+        io.to_s.should contain("Set tools.enabled")
+      end
+    end
+
+    it "lists the effective built-in tools and the remaining patterns" do
+      config = make_config(<<-YAML
+      tools:
+        enabled: [read_file, write_file, ha_*]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0)
+
+        io.to_s.should contain("✓ Tools limited to: read_file, write_file")
+        io.to_s.should contain("match no known tool: ha_*")
+      end
+    end
+
+    it "warns about an allowlist entry that matches no known tool" do
+      config = make_config(<<-YAML
+      tools:
+        enabled: [read_flie, write_file]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        warnings = Autobot::CLI::Doctor.check_tools(config, 0)
+
+        warnings.should eq(1)
+        io.to_s.should contain("! tools.enabled entries match no known tool: read_flie")
+      end
+    end
+
+    it "accepts skill scripts, plugin tools and listed MCP tools as known" do
+      workspace = TestHelper.tmp_dir("doctor-skills")
+      Dir.mkdir_p(workspace / "skills")
+      File.write(workspace / "skills" / "deploy.sh", "#!/bin/sh")
+      config = make_config(<<-YAML
+      agents:
+        defaults:
+          workspace: "#{workspace}"
+      tools:
+        enabled: [bash_deploy, get_weather, ha_get_*, read_file]
+      mcp:
+        servers:
+          homeassistant:
+            command: uvx
+            tools: [ha_get_state, ha_call_service]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0).should eq(0)
+        io.to_s.should_not contain("match no known tool")
+      end
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "does not warn when an MCP server has no tool list" do
+      config = make_config(<<-YAML
+      tools:
+        enabled: [read_file, something_remote]
+      mcp:
+        servers:
+          remote:
+            command: uvx
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0).should eq(0)
+        io.to_s.should contain("Unverified tools.enabled entries: something_remote")
+      end
+    end
+
+    it "passes roots inside the workspace and warns about roots outside it" do
+      config = make_config(<<-YAML
+      agents:
+        defaults:
+          workspace: /srv/bot/workspace
+      tools:
+        filesystem:
+          roots: [notes, ../outside]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        warnings = Autobot::CLI::Doctor.check_tools(config, 0)
+
+        warnings.should eq(1)
+        io.to_s.should contain("! Filesystem root outside the workspace: ../outside")
+      end
+
+      inside = make_config(<<-YAML
+      agents:
+        defaults:
+          workspace: /srv/bot/workspace
+      tools:
+        filesystem:
+          roots: [notes, inbox]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(inside, 0).should eq(0)
+        io.to_s.should contain("✓ Filesystem tools limited to: notes, inbox")
+      end
+    end
+  end
+
   describe ".check_web_search" do
     it "skips when no tools configured" do
       config = make_config("{}")

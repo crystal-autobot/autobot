@@ -90,6 +90,31 @@ describe Autobot::CLI::SetupHelper do
       tool_registry.size.should be > 0
     end
 
+    it "registers only the tools listed in tools.enabled" do
+      workspace = TestHelper.tmp_dir("notes-bot")
+      config = Autobot::Config::Config.from_yaml(<<-YAML
+      agents:
+        defaults:
+          workspace: "#{workspace}"
+      providers:
+        anthropic:
+          api_key: "sk-test"
+      tools:
+        sandbox: "none"
+        enabled: [read_file, write_file, edit_file, list_dir]
+        filesystem:
+          roots: [notes, inbox]
+      YAML
+      )
+
+      tool_registry, _mcp_clients = Autobot::CLI::SetupHelper.setup_tools(config)
+
+      tool_registry.tool_names.sort.should eq(["edit_file", "list_dir", "read_file", "write_file"])
+      tool_registry.sandbox_executor.try(&.roots).should eq([workspace / "notes", workspace / "inbox"])
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
     it "registers expected tools" do
       config = SetupHelperSpecHelper.create_test_config
 
