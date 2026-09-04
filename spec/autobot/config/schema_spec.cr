@@ -188,6 +188,21 @@ describe Autobot::Config::Config do
       Autobot::Config::Config.from_yaml("tools:\n  web:\n    search:\n      api_key: x\n").tools.try(&.web.try(&.allowed_domains)).should eq([] of String)
     end
 
+    it "defaults transcription to enabled with no provider or key" do
+      config = Autobot::Config::Config.from_yaml("{}")
+      config.transcription.enabled?.should be_true
+      config.transcription.provider.should be_nil
+      config.transcription.own_key.should be_nil
+    end
+
+    it "parses the transcription section" do
+      config = Autobot::Config::Config.from_yaml("transcription:\n  enabled: false\n  provider: groq\n  api_key: gsk\n")
+      config.transcription.enabled?.should be_false
+      config.transcription.provider.should eq("groq")
+      config.transcription.own_key.should eq("gsk")
+      Autobot::Config::Config.from_yaml("transcription:\n  api_key: \"\"\n").transcription.own_key.should be_nil
+    end
+
     it "defaults to all tools and the whole workspace" do
       config = Autobot::Config::Config.from_yaml("tools:\n  sandbox: none\n")
       config.tools.try(&.enabled).should eq([] of String)

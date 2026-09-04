@@ -283,23 +283,26 @@ Audio file or forwarded note -> Download -> Transcriber -> transcript on the att
 
 ### Configuration
 
-No extra configuration needed. Voice transcription is auto-enabled when a Whisper-capable provider (Groq or OpenAI) is configured:
+Voice transcription is on by default and borrows the key of a Whisper-capable chat provider, Groq first, then OpenAI:
 
 ```yaml
 providers:
   groq:
-    api_key: "${GROQ_API_KEY}"  # Voice transcription auto-enabled via Groq Whisper
+    api_key: "${GROQ_API_KEY}"  # Voice transcription enabled via Groq Whisper
 ```
 
-Or:
+The `transcription` section overrides that per bot:
 
 ```yaml
-providers:
-  openai:
-    api_key: "${OPENAI_API_KEY}"  # Voice transcription auto-enabled via OpenAI Whisper
+transcription:
+  enabled: true                   # false turns transcription off for this bot
+  provider: openai                # pin openai or groq instead of the groq-then-openai default
+  api_key: "${TRANSCRIPTION_KEY}" # a key of its own, so audio never touches the chat provider's account
 ```
 
-Groq is preferred when both are configured (faster, has free tier). If neither is configured, voice notes fall back to `[voice message]` text with no errors, and audio files arrive as attachments without a transcript.
+`api_key` without `provider` uses OpenAI. A pinned provider without any key leaves transcription unavailable, and `autobot doctor` says so.
+
+When transcription is off or unavailable, a voice note the sender recorded is still saved to the inbox as an attachment without a transcript, but it is not sent to the model: the bot answers with a fixed reply that it could not hear the note and asks for typed text. Audio files and forwarded voice notes arrive as attachments without a transcript and the model is told so.
 
 ### Supported providers
 
@@ -314,10 +317,13 @@ Run `autobot doctor` to check voice transcription status:
 
 ```
 ✓ Voice transcription available (groq)
+✓ Voice transcription available (openai, own key)
 ```
 
-Or if no provider is configured:
+Or when it is off, or no provider is configured:
 
 ```
+— Voice transcription disabled
 — Voice transcription (no openai/groq provider)
+! Voice transcription enabled but no api key for openai
 ```

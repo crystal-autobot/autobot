@@ -11,7 +11,7 @@ module Autobot::Channels
     alias Fetcher = Proc(String, Bytes?)
 
     FORWARD_KEYS  = %w[forward_origin forward_from forward_from_chat forward_sender_name forward_date]
-    VOICE_MISSING = "[voice message]"
+    VOICE_MISSING = Bus::InboundMessage::UNHEARD_VOICE_NOTE
 
     def initialize(@fetch : Fetcher, @transcriber : Transcriber? = nil, @inbox : Media::Inbox? = nil)
     end

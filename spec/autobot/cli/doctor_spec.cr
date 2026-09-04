@@ -406,6 +406,56 @@ describe Autobot::CLI::Doctor do
       end
     end
 
+    it "skips when transcription is disabled" do
+      config = make_config(<<-YAML
+      transcription:
+        enabled: false
+      providers:
+        groq:
+          api_key: "gsk-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("— Voice transcription disabled")
+      end
+    end
+
+    it "shows a dedicated key" do
+      config = make_config(<<-YAML
+      transcription:
+        provider: groq
+        api_key: "gsk-own-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("✓ Voice transcription available (groq, own key)")
+      end
+    end
+
+    it "warns when the pinned provider has no key" do
+      config = make_config(<<-YAML
+      transcription:
+        provider: openai
+      providers:
+        groq:
+          api_key: "gsk-test-key"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_voice_transcription(config)
+
+        io.to_s.should contain("! Voice transcription enabled but no api key for openai")
+        io.to_s.should contain("transcription.api_key or providers.openai.api_key")
+      end
+    end
+
     it "prefers groq over openai" do
       config = make_config(<<-YAML
       providers:

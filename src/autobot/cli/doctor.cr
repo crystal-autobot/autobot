@@ -405,25 +405,20 @@ module Autobot
       end
 
       def self.check_voice_transcription(config : Config::Config) : Nil
-        providers = config.providers
-        unless providers
+        transcription = config.transcription
+        return report(Status::Skip, "Voice transcription disabled") unless transcription.enabled?
+
+        if source = Transcriber.source(config)
+          key_note = source.own_key ? ", own key" : ""
+          return report(Status::Pass, "Voice transcription available (#{source.provider}#{key_note})")
+        end
+
+        if provider = transcription.provider
+          report(Status::Warn, "Voice transcription enabled but no api key for #{provider}")
+          hint("Set transcription.api_key or providers.#{provider}.api_key")
+        else
           report(Status::Skip, "Voice transcription (no openai/groq provider)")
-          return
         end
-
-        Channels::Manager::WHISPER_PROVIDERS.each do |name|
-          provider = case name
-                     when "groq"   then providers.groq
-                     when "openai" then providers.openai
-                     else               nil
-                     end
-          if provider && !provider.api_key.empty?
-            report(Status::Pass, "Voice transcription available (#{name})")
-            return
-          end
-        end
-
-        report(Status::Skip, "Voice transcription (no openai/groq provider)")
       end
 
       def self.check_image_generation(config : Config::Config) : Nil

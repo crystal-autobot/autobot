@@ -5,6 +5,8 @@ module Autobot::Bus
   struct InboundMessage
     include JSON::Serializable
 
+    UNHEARD_VOICE_NOTE = "[voice message]"
+
     property channel : String
     property sender_id : String
     property chat_id : String
@@ -27,6 +29,10 @@ module Autobot::Bus
     # Session key for persistence
     def session_key : String
       "#{channel}:#{chat_id}"
+    end
+
+    def unheard_voice_note? : Bool
+      content == UNHEARD_VOICE_NOTE && (media?.try(&.any?(&.sender_voice_note?)) || false)
     end
   end
 

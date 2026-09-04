@@ -1,5 +1,6 @@
 require "./schema"
 require "./validator_common"
+require "../transcriber"
 
 module Autobot::Config
   # Configuration validator
@@ -14,7 +15,20 @@ module Autobot::Config
       issues.concat(check_provider_config(config))
       issues.concat(check_channel_auth(config))
       issues.concat(check_gateway_binding(config))
+      issues.concat(check_transcription(config))
 
+      issues
+    end
+
+    private def self.check_transcription(config : Config) : Array(Issue)
+      issues = [] of Issue
+      provider = config.transcription.provider
+      return issues if provider.nil? || Transcriber::PROVIDERS.has_key?(provider)
+
+      issues << Issue.new(
+        severity: Severity::Error,
+        message: "Unknown transcription provider '#{provider}'. Use one of: #{Transcriber::PROVIDERS.keys.join(", ")}."
+      )
       issues
     end
 

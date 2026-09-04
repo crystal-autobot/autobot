@@ -314,6 +314,20 @@ module Autobot::Config
     end
   end
 
+  class TranscriptionConfig
+    include YAML::Serializable
+    property? enabled : Bool = true
+    property provider : String? = nil
+    property api_key : String? = nil
+
+    def initialize
+    end
+
+    def own_key : String?
+      api_key.presence
+    end
+  end
+
   class CronConfig
     include YAML::Serializable
     property? enabled : Bool = true
@@ -400,6 +414,7 @@ module Autobot::Config
     property mcp : McpConfig?
     property plugins : PluginsConfig?
     property media : MediaConfig = MediaConfig.new
+    property transcription : TranscriptionConfig = TranscriptionConfig.new
 
     def initialize
     end

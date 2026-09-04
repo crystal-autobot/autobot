@@ -1,5 +1,9 @@
 require "../../spec_helper"
 
+private def inbound(content : String, media : Array(Autobot::Bus::MediaAttachment)?) : Autobot::Bus::InboundMessage
+  Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "u1", chat_id: "c1", content: content, media: media)
+end
+
 describe Autobot::Bus::InboundMessage do
   it "creates an inbound message" do
     msg = Autobot::Bus::InboundMessage.new(
@@ -138,6 +142,17 @@ describe Autobot::Bus::MediaAttachment do
     Autobot::Bus::MediaAttachment.new(type: "voice", origin: "forwarded").sender_voice_note?.should be_false
     Autobot::Bus::MediaAttachment.new(type: "audio").sender_voice_note?.should be_false
     Autobot::Bus::MediaAttachment.new(type: "document").sender_voice_note?.should be_false
+  end
+
+  it "knows a sender voice note nobody transcribed" do
+    voice = Autobot::Bus::MediaAttachment.new(type: "voice")
+    forwarded = Autobot::Bus::MediaAttachment.new(type: "voice", origin: "forwarded")
+    unheard = Autobot::Bus::InboundMessage::UNHEARD_VOICE_NOTE
+
+    inbound(unheard, [voice]).unheard_voice_note?.should be_true
+    inbound(unheard, [forwarded]).unheard_voice_note?.should be_false
+    inbound("[voice transcription]: hi", [voice]).unheard_voice_note?.should be_false
+    inbound(unheard, nil).unheard_voice_note?.should be_false
   end
 
   it "round-trips attachment details through JSON" do

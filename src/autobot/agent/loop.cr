@@ -38,6 +38,7 @@ module Autobot::Agent
 
     GENERIC_ERROR_MESSAGE = "Sorry, I encountered an unexpected error. Please try again."
     FALLBACK_RESPONSE     = "I've completed processing but have no response to give."
+    VOICE_NOTE_NOT_HEARD  = "I could not hear that voice note. Voice transcription is not available here, so please type it instead."
 
     @running : Bool = false
     @cron_service : Cron::Service?
@@ -152,6 +153,7 @@ module Autobot::Agent
       return process_system_message(msg) if msg.channel == Constants::CHANNEL_SYSTEM
 
       log_incoming_message(msg)
+      return build_response(msg.channel, msg.chat_id, VOICE_NOTE_NOT_HEARD, msg.metadata) if msg.unheard_voice_note?
 
       session = @sessions.get_or_create(session_key || msg.session_key)
 
