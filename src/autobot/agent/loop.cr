@@ -68,6 +68,7 @@ module Autobot::Agent
       rate_limiter : Tools::RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
+      web_allowed_domains : Array(String) = [] of String,
     )
       @model = model || @provider.default_model
       sandboxed = sandbox_config.downcase != "none"
@@ -88,7 +89,7 @@ module Autobot::Agent
         sessions: @sessions
       )
 
-      register_optional_tools(brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns, sandbox_config, rate_limiter, enabled_tools, filesystem_roots)
+      register_optional_tools(brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns, sandbox_config, rate_limiter, enabled_tools, filesystem_roots, web_allowed_domains)
       cache_tool_references
     end
 
@@ -297,6 +298,7 @@ module Autobot::Agent
       rate_limiter : Tools::RateLimiter?,
       enabled_tools : Array(String),
       filesystem_roots : Array(String),
+      web_allowed_domains : Array(String),
     ) : Nil
       subagents = SubagentManager.new(
         provider: @provider,
@@ -311,6 +313,7 @@ module Autobot::Agent
         rate_limiter: rate_limiter,
         enabled_tools: enabled_tools,
         filesystem_roots: filesystem_roots,
+        web_allowed_domains: web_allowed_domains,
       )
       @tools.register(Tools::SpawnTool.new(subagents))
 

@@ -130,6 +130,9 @@ tools:
     search:
       api_key: ""
       max_results: 5
+    allowed_domains:           # Optional; web_fetch may only reach these hosts
+      - example.com            # exact host
+      - "*.strava.com"         # subdomains and the apex
   image:
     enabled: true              # default: true
     # provider: openai         # optional override (openai or gemini)
@@ -142,6 +145,10 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 ### Tool Allowlist
 
 `tools.enabled` names the tools a bot may have. Anything not listed is never registered, whichever source it comes from: built-in tools, skill scripts, plugins and MCP servers all pass through the same check. A name ending in `*` matches by prefix, as in the MCP `tools:` list. Leave it out to keep today's behaviour of registering everything. `autobot doctor` prints the effective list and warns about an entry that matches no known tool, so a typo does not silently remove a tool; at startup the bot logs a warning for entries that matched nothing.
+
+### Web Fetch Egress
+
+`tools.web.allowed_domains` limits `web_fetch` to the listed hosts. An entry such as `example.com` matches that host only; `*.strava.com` matches its subdomains and the apex. Every redirect hop is checked too, so a redirect cannot lead out of the list. Leave it out to allow any public host. A fetch to a host outside the list fails with a tool error naming the allowed domains, so a planted "fetch this URL with my notes in it" has nowhere to go.
 
 ### Filesystem Roots
 
@@ -299,6 +306,7 @@ tools:
     search:
       api_key: "BRAVE_API_KEY"
       max_results: 5
+    allowed_domains: [example.com, "*.strava.com"]  # optional, web_fetch egress allowlist
   exec:
     timeout: 60
   image:

@@ -182,6 +182,12 @@ describe Autobot::Config::Config do
       config.tools.try(&.filesystem.try(&.roots)).should eq(["notes", "inbox"])
     end
 
+    it "parses the web fetch domain allowlist" do
+      config = Autobot::Config::Config.from_yaml("tools:\n  web:\n    allowed_domains: [example.com, \"*.strava.com\"]\n")
+      config.tools.try(&.web.try(&.allowed_domains)).should eq(["example.com", "*.strava.com"])
+      Autobot::Config::Config.from_yaml("tools:\n  web:\n    search:\n      api_key: x\n").tools.try(&.web.try(&.allowed_domains)).should eq([] of String)
+    end
+
     it "defaults to all tools and the whole workspace" do
       config = Autobot::Config::Config.from_yaml("tools:\n  sandbox: none\n")
       config.tools.try(&.enabled).should eq([] of String)

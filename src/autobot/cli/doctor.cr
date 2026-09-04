@@ -179,12 +179,18 @@ module Autobot
         unless allowlist.restricted?
           report(Status::Pass, "Tools: all built-in tools, plus skills, plugins and MCP servers")
           hint("Set tools.enabled to limit this bot to the tools it needs")
-          return check_filesystem_roots(config, warnings)
+          return check_tool_limits(config, warnings)
         end
 
         builtin = BUILTIN_TOOLS.select { |name| allowlist.allows?(name) }
         report(Status::Pass, "Tools limited to: #{builtin.empty? ? "none of the built-in tools" : builtin.join(", ")}")
         warnings = check_unknown_tools(config, allowlist, warnings)
+        check_tool_limits(config, warnings)
+      end
+
+      def self.check_tool_limits(config : Config::Config, warnings : Int32) : Int32
+        domains = config.tools.try(&.web.try(&.allowed_domains)) || [] of String
+        report(Status::Pass, "Web fetch limited to: #{domains.join(", ")}") unless domains.empty?
         check_filesystem_roots(config, warnings)
       end
 

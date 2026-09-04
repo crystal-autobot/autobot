@@ -32,6 +32,7 @@ module Autobot
       rate_limiter : RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
+      web_allowed_domains : Array(String) = [] of String,
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
@@ -53,7 +54,7 @@ module Autobot
       register_filesystem_tools(registry, executor)
       register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
         exec_allow_patterns, sandbox_config, workspace)
-      register_web_tools(registry, executor, brave_api_key, web_fetch_max_chars)
+      register_web_tools(registry, executor, brave_api_key, web_fetch_max_chars, web_allowed_domains)
       register_bash_tools(registry, executor, skills_dirs)
 
       # Store reference in registry for plugin access
@@ -76,6 +77,7 @@ module Autobot
       rate_limiter : RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
+      web_allowed_domains : Array(String) = [] of String,
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
@@ -87,7 +89,7 @@ module Autobot
         exec_allow_patterns, sandbox_config, workspace)
 
       registry.register(WebSearchTool.new(api_key: brave_api_key))
-      registry.register(WebFetchTool.new)
+      registry.register(WebFetchTool.new(allowed_domains: web_allowed_domains))
 
       registry.sandbox_executor = executor
 
@@ -146,6 +148,7 @@ module Autobot
       executor : SandboxExecutor,
       brave_api_key : String?,
       web_fetch_max_chars : Int32,
+      web_allowed_domains : Array(String),
     )
       has_search_key = brave_api_key && !brave_api_key.empty?
       if has_search_key
@@ -155,7 +158,7 @@ module Autobot
       end
 
       registry.register(WebSearchTool.new(api_key: brave_api_key))
-      registry.register(WebFetchTool.new(max_chars: web_fetch_max_chars))
+      registry.register(WebFetchTool.new(max_chars: web_fetch_max_chars, allowed_domains: web_allowed_domains))
       registry.register(MessageTool.new(executor: executor))
     end
 

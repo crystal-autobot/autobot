@@ -103,7 +103,8 @@ module Autobot
       IPV6_LOOPBACK_PATTERN = /\[::1\]/
       IPV6_PRIVATE_PATTERN  = /\[(fc|fd)[0-9a-f]{2}:/i
 
-      def initialize(@max_chars : Int32 = DEFAULT_MAX_CHARS)
+      def initialize(@max_chars : Int32 = DEFAULT_MAX_CHARS, allowed_domains : Array(String) = [] of String)
+        @allowed_domains = DomainAllowlist.new(allowed_domains)
       end
 
       def name : String
@@ -167,11 +168,7 @@ module Autobot
           return "Missing domain"
         end
 
-        if error = check_ssrf(host)
-          return error
-        end
-
-        nil
+        check_host(host)
       rescue
         "Invalid URL"
       end
@@ -301,8 +298,16 @@ module Autobot
         host = uri.host
         return "Redirect missing host" if host.nil? || host.empty?
 
-        # Check for SSRF in redirect target
-        check_ssrf(host)
+        check_host(host)
+      end
+
+      private def check_host(host : String) : String?
+        check_allowed_domain(host) || check_ssrf(host)
+      end
+
+      private def check_allowed_domain(host : String) : String?
+        return nil if @allowed_domains.allows?(host)
+        "Host is not in tools.web.allowed_domains (#{@allowed_domains.entries.join(", ")}): #{host}"
       end
 
       private def extract_content(body : String, content_type : String) : {String, String}

