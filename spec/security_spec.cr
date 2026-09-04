@@ -242,6 +242,15 @@ describe "Security Tests" do
       sanitized.should contain("user=john") # Non-sensitive params should remain
     end
 
+    it "redacts credentials without touching long identifiers" do
+      text = "api_key: BSAxyz123 sha 3f2a9c1d8e7b6a5f4c3d2e1f0a9b8c7d6e5f4a3b"
+
+      redacted = Autobot::LogSanitizer.redact_credentials(text)
+
+      redacted.should eq("api_key=[REDACTED] sha 3f2a9c1d8e7b6a5f4c3d2e1f0a9b8c7d6e5f4a3b")
+      Autobot::LogSanitizer.sanitize(text).should contain("[REDACTED_KEY]")
+    end
+
     it "detects sensitive data in text" do
       Autobot::LogSanitizer.contains_sensitive_data?("sk-ant-123456").should be_true
       Autobot::LogSanitizer.contains_sensitive_data?("Hello world").should be_false

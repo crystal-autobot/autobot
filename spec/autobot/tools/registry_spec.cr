@@ -24,6 +24,29 @@ class DummyTool < Autobot::Tools::Tool
   end
 end
 
+class LeakyTool < Autobot::Tools::Tool
+  def name : String
+    "leaky"
+  end
+
+  def description : String
+    "Returns whatever it is given"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new(
+      properties: {
+        "text" => Autobot::Tools::PropertySchema.new(type: "string", description: "Text to return"),
+      },
+      required: ["text"]
+    )
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.success(params["text"].as_s)
+  end
+end
+
 class FailingTool < Autobot::Tools::Tool
   def name : String
     "failing"
@@ -188,5 +211,25 @@ describe Autobot::Tools::Registry do
 
     defs = registry.definitions(compact: nil)
     defs[0]["function"]["description"].as_s.should eq("A dummy tool for testing")
+  end
+
+  describe "credential redaction" do
+    it "redacts keys and tokens from every tool result" do
+      registry = Autobot::Tools::Registry.new
+      registry.register(LeakyTool.new)
+      leaked = "OPENAI_API_KEY=sk-abcdefghijklmnop123456\nTELEGRAM_BOT_TOKEN=123456:AbC-dEf\nBRAVE_API_KEY=BSAxyz"
+
+      output = registry.execute("leaky", {"text" => JSON::Any.new(leaked)})
+
+      output.should eq("OPENAI_API_KEY=[REDACTED]\nTELEGRAM_BOT_token=[REDACTED]\nBRAVE_API_KEY=[REDACTED]")
+    end
+
+    it "leaves hashes and encoded content alone" do
+      registry = Autobot::Tools::Registry.new
+      registry.register(LeakyTool.new)
+      content = "commit 3f2a9c1d8e7b6a5f4c3d2e1f0a9b8c7d6e5f4a3b\naW1hZ2VieXRlc2FyZWxvbmdlcnRoYW50d2VudHk="
+
+      registry.execute("leaky", {"text" => JSON::Any.new(content)}).should eq(content)
+    end
   end
 end
