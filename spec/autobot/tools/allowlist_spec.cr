@@ -7,6 +7,12 @@ describe Autobot::Tools::Allowlist do
     list.allows?("anything").should be_true
   end
 
+  it "reports which pattern matched" do
+    list = Autobot::Tools::Allowlist.new(["read_file", "ha_*"])
+    list.matching_pattern("ha_get_state").should eq("ha_*")
+    list.matching_pattern("exec").should be_nil
+  end
+
   it "matches exact names and prefix patterns only" do
     list = Autobot::Tools::Allowlist.new(["read_file", "ha_*"])
 

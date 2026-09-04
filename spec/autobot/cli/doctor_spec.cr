@@ -553,7 +553,65 @@ describe Autobot::CLI::Doctor do
         Autobot::CLI::Doctor.check_tools(config, 0)
 
         io.to_s.should contain("✓ Tools limited to: read_file, write_file")
-        io.to_s.should contain("Patterns for skills, plugins or MCP tools: ha_*")
+        io.to_s.should contain("match no known tool: ha_*")
+      end
+    end
+
+    it "warns about an allowlist entry that matches no known tool" do
+      config = make_config(<<-YAML
+      tools:
+        enabled: [read_flie, write_file]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        warnings = Autobot::CLI::Doctor.check_tools(config, 0)
+
+        warnings.should eq(1)
+        io.to_s.should contain("! tools.enabled entries match no known tool: read_flie")
+      end
+    end
+
+    it "accepts skill scripts, plugin tools and listed MCP tools as known" do
+      workspace = TestHelper.tmp_dir("doctor-skills")
+      Dir.mkdir_p(workspace / "skills")
+      File.write(workspace / "skills" / "deploy.sh", "#!/bin/sh")
+      config = make_config(<<-YAML
+      agents:
+        defaults:
+          workspace: "#{workspace}"
+      tools:
+        enabled: [bash_deploy, get_weather, ha_get_*, read_file]
+      mcp:
+        servers:
+          homeassistant:
+            command: uvx
+            tools: [ha_get_state, ha_call_service]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0).should eq(0)
+        io.to_s.should_not contain("match no known tool")
+      end
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "does not warn when an MCP server has no tool list" do
+      config = make_config(<<-YAML
+      tools:
+        enabled: [read_file, something_remote]
+      mcp:
+        servers:
+          remote:
+            command: uvx
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0).should eq(0)
+        io.to_s.should contain("Unverified tools.enabled entries: something_remote")
       end
     end
 

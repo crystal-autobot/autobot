@@ -153,6 +153,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 **⚠️ Warnings (review recommended):**
 
 - Filesystem root configured outside the workspace
+- `tools.enabled` entry that matches no known tool
 - Gateway bound to 0.0.0.0 (network exposure)
 - Channel authorization not configured (empty `allow_from`)
 - Missing `.env` file

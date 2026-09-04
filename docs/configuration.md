@@ -141,7 +141,7 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 
 ### Tool Allowlist
 
-`tools.enabled` names the tools a bot may have. Anything not listed is never registered, whichever source it comes from: built-in tools, skill scripts, plugins and MCP servers all pass through the same check. A name ending in `*` matches by prefix, as in the MCP `tools:` list. Leave it out to keep today's behaviour of registering everything. `autobot doctor` prints the effective list.
+`tools.enabled` names the tools a bot may have. Anything not listed is never registered, whichever source it comes from: built-in tools, skill scripts, plugins and MCP servers all pass through the same check. A name ending in `*` matches by prefix, as in the MCP `tools:` list. Leave it out to keep today's behaviour of registering everything. `autobot doctor` prints the effective list and warns about an entry that matches no known tool, so a typo does not silently remove a tool; at startup the bot logs a warning for entries that matched nothing.
 
 ### Filesystem Roots
 

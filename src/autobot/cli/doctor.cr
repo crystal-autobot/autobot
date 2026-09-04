@@ -171,21 +171,56 @@ module Autobot
       end
 
       BUILTIN_TOOLS = %w[read_file write_file edit_file list_dir exec web_search web_fetch message spawn cron generate_image]
+      PLUGIN_TOOLS  = %w[sqlite github get_weather get_recent_chat_log text_to_speech get_system_info]
 
       def self.check_tools(config : Config::Config, warnings : Int32) : Int32
         allowlist = Tools::Allowlist.new(config.tools.try(&.enabled) || [] of String)
 
-        if allowlist.restricted?
-          builtin = BUILTIN_TOOLS.select { |name| allowlist.allows?(name) }
-          report(Status::Pass, "Tools limited to: #{builtin.empty? ? "none of the built-in tools" : builtin.join(", ")}")
-          extra = allowlist.patterns.reject { |pattern| BUILTIN_TOOLS.any? { |name| Tools::Allowlist.new([pattern]).allows?(name) } }
-          hint("Patterns for skills, plugins or MCP tools: #{extra.join(", ")}") unless extra.empty?
-        else
+        unless allowlist.restricted?
           report(Status::Pass, "Tools: all built-in tools, plus skills, plugins and MCP servers")
           hint("Set tools.enabled to limit this bot to the tools it needs")
+          return check_filesystem_roots(config, warnings)
         end
 
+        builtin = BUILTIN_TOOLS.select { |name| allowlist.allows?(name) }
+        report(Status::Pass, "Tools limited to: #{builtin.empty? ? "none of the built-in tools" : builtin.join(", ")}")
+        warnings = check_unknown_tools(config, allowlist, warnings)
         check_filesystem_roots(config, warnings)
+      end
+
+      def self.check_unknown_tools(config : Config::Config, allowlist : Tools::Allowlist, warnings : Int32) : Int32
+        known = BUILTIN_TOOLS + PLUGIN_TOOLS + skill_tool_names(config) + mcp_tool_patterns(config)
+        unknown = allowlist.patterns.reject { |pattern| known.any? { |candidate| overlap?(pattern, candidate) } }
+        return warnings if unknown.empty?
+
+        if mcp_servers_without_tool_list?(config)
+          report(Status::Pass, "Unverified tools.enabled entries: #{unknown.join(", ")}")
+          hint("An MCP server without a tools list may provide them; a typo here silently disables the tool")
+          return warnings
+        end
+
+        report(Status::Warn, "tools.enabled entries match no known tool: #{unknown.join(", ")}")
+        hint("Check the spelling; a tool that matches nothing is silently missing from the bot")
+        warnings + 1
+      end
+
+      private def self.skill_tool_names(config : Config::Config) : Array(String)
+        [config.workspace_path / "skills", Config::Loader.skills_dir].flat_map do |dir|
+          next [] of String unless Dir.exists?(dir)
+          Dir.children(dir).select(&.ends_with?(".sh")).map { |file| "bash_#{file.rchop(".sh")}" }
+        end
+      end
+
+      private def self.mcp_tool_patterns(config : Config::Config) : Array(String)
+        config.mcp.try(&.servers.values.flat_map(&.tools)) || [] of String
+      end
+
+      private def self.mcp_servers_without_tool_list?(config : Config::Config) : Bool
+        config.mcp.try(&.servers.values.any?(&.tools.empty?)) || false
+      end
+
+      private def self.overlap?(pattern : String, candidate : String) : Bool
+        Tools::Allowlist.matches?(pattern, candidate.rchop("*")) || Tools::Allowlist.matches?(candidate, pattern.rchop("*"))
       end
 
       def self.check_filesystem_roots(config : Config::Config, warnings : Int32) : Int32

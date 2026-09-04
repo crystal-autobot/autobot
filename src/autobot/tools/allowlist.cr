@@ -15,11 +15,15 @@ module Autobot::Tools
     end
 
     def allows?(name : String) : Bool
-      return true unless restricted?
+      !restricted? || !matching_pattern(name).nil?
+    end
 
-      @patterns.any? do |pattern|
-        pattern.ends_with?("*") ? name.starts_with?(pattern.rchop("*")) : name == pattern
-      end
+    def matching_pattern(name : String) : String?
+      @patterns.find { |pattern| Allowlist.matches?(pattern, name) }
+    end
+
+    def self.matches?(pattern : String, name : String) : Bool
+      pattern.ends_with?("*") ? name.starts_with?(pattern.rchop("*")) : name == pattern
     end
   end
 end
