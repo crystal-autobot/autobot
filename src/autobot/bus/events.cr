@@ -34,11 +34,24 @@ module Autobot::Bus
   struct MediaAttachment
     include JSON::Serializable
 
-    property type : String # "photo", "voice", "document", "video"
+    TYPE_PHOTO    = "photo"
+    TYPE_VOICE    = "voice"
+    TYPE_AUDIO    = "audio"
+    TYPE_DOCUMENT = "document"
+
+    ORIGIN_SENDER    = "sender"
+    ORIGIN_FORWARDED = "forwarded"
+
+    property type : String
     property url : String?
     property file_path : String?
     property mime_type : String?
     property size_bytes : Int64?
+    property origin : String = ORIGIN_SENDER
+    property transcript : String?
+    property transcript_path : String?
+    property duration_seconds : Int32?
+    property name : String?
 
     @[JSON::Field(ignore: true)]
     property data : String?
@@ -50,7 +63,16 @@ module Autobot::Bus
       @mime_type : String? = nil,
       @size_bytes : Int64? = nil,
       @data : String? = nil,
+      @origin : String = ORIGIN_SENDER,
+      @transcript : String? = nil,
+      @transcript_path : String? = nil,
+      @duration_seconds : Int32? = nil,
+      @name : String? = nil,
     )
+    end
+
+    def sender_voice_note? : Bool
+      type == TYPE_VOICE && origin == ORIGIN_SENDER
     end
   end
 

@@ -4,7 +4,52 @@ Autobot handles media in three directions:
 
 - **Vision (inbound)** — photos sent by users are downloaded, base64-encoded, and forwarded to the LLM as multimodal content blocks
 - **Image generation (outbound)** — the LLM can create images via the `generate_image` tool and send them back to users
-- **Voice transcription (inbound)** — voice messages are transcribed to text via the Whisper API before reaching the LLM
+- **Voice transcription (inbound)** — voice notes are transcribed to text via the Whisper API before reaching the LLM
+
+## Spoken is instruction, attached is content
+
+Every incoming media message is classified before the agent sees it:
+
+| What arrives | Treated as | Why |
+|--------------|------------|-----|
+| Typed text | instruction | The user's words |
+| Voice note recorded in the chat by the sender | instruction | The user's words, spoken. Transcribed into the message text |
+| Audio file, photo, document | content | Something handed over. Becomes an attachment |
+| Anything forwarded, voice notes included | content | The words are not the sender's. Becomes an attachment |
+| Typed text with media | text is the instruction, media is content | A caption or a message with a file |
+
+Content never enters the message text. An audio file is transcribed when a
+transcriber is available, but the transcript lives on the attachment
+(`transcript`, `transcript_path`), not in `content`, so nothing inside a
+recording can pass as an instruction from the user.
+
+### The inbox
+
+Incoming media files are saved under the workspace so agents and tools can
+read them by path:
+
+```yaml
+media:
+  inbox: inbox   # relative to the workspace, default
+```
+
+Each file gets a unique timestamped name and the extension of its MIME type.
+Transcripts of content attachments are written next to the media file as
+`.txt`. The directory is created with mode `0700` and files with `0600`.
+
+### Attachment fields
+
+`MediaAttachment` carries what the classification needs:
+
+| Field | Meaning |
+|-------|---------|
+| `type` | `photo`, `voice`, `audio`, `document` |
+| `origin` | `sender` or `forwarded` |
+| `file_path` | Where the file was saved in the inbox |
+| `transcript`, `transcript_path` | Transcript of a content attachment |
+| `duration_seconds`, `name`, `mime_type`, `size_bytes` | Metadata from the platform |
+
+`sender_voice_note?` is true only for a voice note with origin `sender`; the channel treats such a note as spoken words unless typed text came with it.
 
 ## Vision
 
@@ -181,7 +226,8 @@ LLM generates file (exec tool) -> message(content, file_path) -> Read & base64 e
 | `.mp4` | video | `sendDocument` |
 | `.pdf` | document | `sendDocument` |
 | `.ogg` | voice | `sendVoice` |
-| `.mp3`, `.wav` | audio | `sendAudio` |
+| `.mp3`, `.m4a`, `.wav`, `.webm` | audio | `sendAudio` |
+| `.txt` | document | `sendDocument` |
 | Other | document | `sendDocument` |
 
 ### Supported channels
@@ -196,18 +242,19 @@ LLM generates file (exec tool) -> message(content, file_path) -> Read & base64 e
 
 ## Voice transcription
 
-Voice and audio messages received via Telegram are automatically transcribed to text using the Whisper API before being sent to the LLM.
+Voice notes and audio files received via Telegram are transcribed using the Whisper API. Where the text ends up depends on the classification above.
 
 ### How it works
 
 ```
-Telegram voice -> Download OGG -> Transcriber (Whisper API) -> Text in message content -> LLM
+Voice note from the sender -> Download -> Transcriber -> "[voice transcription]: ..." in message content -> LLM
+Audio file or forwarded note -> Download -> Transcriber -> transcript on the attachment            -> LLM
 ```
 
-1. **Channel** receives a voice/audio message and downloads the file bytes
+1. **Channel** receives a voice note or audio file and downloads the file bytes
 2. **Transcriber** sends the audio to the Whisper API (OpenAI or Groq) and receives text
-3. The transcribed text replaces the `[voice message]` placeholder as `[voice transcription]: {text}`
-4. The LLM receives the transcription as regular text content
+3. For a voice note the sender recorded, with no typed text, the transcript becomes the message content as `[voice transcription]: {text}`
+4. For an audio file, a forwarded voice note, or a voice note with typed text, the transcript is stored on the attachment and the message content only carries a label such as `[audio: title]`
 
 ### Configuration
 
@@ -227,7 +274,7 @@ providers:
     api_key: "${OPENAI_API_KEY}"  # Voice transcription auto-enabled via OpenAI Whisper
 ```
 
-Groq is preferred when both are configured (faster, has free tier). If neither is configured, voice messages fall back to `[voice message]` text with no errors.
+Groq is preferred when both are configured (faster, has free tier). If neither is configured, voice notes fall back to `[voice message]` text with no errors, and audio files arrive as attachments without a transcript.
 
 ### Supported providers
 

@@ -179,6 +179,34 @@ describe Autobot::Config::Config do
     end
   end
 
+  describe "#inbox_path" do
+    it "defaults to inbox under the workspace" do
+      config = Autobot::Config::Config.from_yaml("agents:\n  defaults:\n    workspace: /srv/bot/workspace\n")
+      config.inbox_path.should eq(Path["/srv/bot/workspace/inbox"])
+    end
+
+    it "resolves a relative media.inbox against the workspace" do
+      yaml = <<-YAML
+      agents:
+        defaults:
+          workspace: /srv/bot/workspace
+      media:
+        inbox: incoming/files
+      YAML
+
+      Autobot::Config::Config.from_yaml(yaml).inbox_path.should eq(Path["/srv/bot/workspace/incoming/files"])
+    end
+
+    it "keeps an absolute media.inbox" do
+      yaml = <<-YAML
+      media:
+        inbox: /srv/shared/inbox
+      YAML
+
+      Autobot::Config::Config.from_yaml(yaml).inbox_path.should eq(Path["/srv/shared/inbox"])
+    end
+  end
+
   describe "#default_model" do
     it "returns default when no agents configured" do
       config = empty_config

@@ -3,6 +3,7 @@ require "http/client"
 require "json"
 require "uri"
 require "./base"
+require "./telegram_media"
 require "../constants"
 require "../cron/formatter"
 require "../cron/service"
@@ -297,11 +298,15 @@ module Autobot::Channels
     TYPING_INTERVAL   = 4.0
     MAX_IMAGE_SIZE    = 20 * 1024 * 1024 # 20 MB
 
+    MEDIA_LOG_LABEL     = "[media]"
+    EMPTY_MESSAGE_LABEL = "[empty message]"
+
     @offset : Int64 = 0_i64
     @bot_username : String = ""
     @bot_mention_regex : Regex? = nil
     @typing_channels : Set(String) = Set(String).new
     @chat_log_mutex : Mutex = Mutex.new
+    @media_extractor : TelegramMedia
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -312,8 +317,10 @@ module Autobot::Channels
       @session_manager : Session::Manager? = nil,
       @transcriber : Transcriber? = nil,
       @cron_service : Cron::Service? = nil,
+      @inbox : Media::Inbox? = nil,
     )
       super(Constants::CHANNEL_TELEGRAM, @bus, @allow_from)
+      @media_extractor = TelegramMedia.new(->(file_id : String) { download_telegram_file_bytes(file_id) }, @transcriber, @inbox)
     end
 
     GETME_MAX_ATTEMPTS = 5
@@ -561,16 +568,12 @@ module Autobot::Channels
         end
       end
 
-      content, media_attachments = build_content_and_media(msg)
-      content = prepend_reply_context(content, extract_reply_context(msg))
-
       display_name = sender[:username] ? "@#{sender[:username]}" : sender[:first_name]
-      content_to_process = sender[:is_group] ? "#{display_name}: #{content}" : content
 
       # Record every group message (regardless of allowlist or mention) so the
       # rolling chat log stays complete.
       if sender[:is_group]
-        record_chat_log(sender[:chat_id], display_name, content)
+        record_chat_log(sender[:chat_id], display_name, typed_text(msg) || MEDIA_LOG_LABEL)
       end
 
       # Stay silent for group messages that do not address the bot, before the
@@ -585,6 +588,10 @@ module Autobot::Channels
         send_reply(sender[:chat_id], access_denied_message(sender[:sender_id]))
         return
       end
+
+      content, media_attachments = build_content_and_media(msg)
+      content = prepend_reply_context(content, extract_reply_context(msg))
+      content_to_process = sender[:is_group] ? "#{display_name}: #{content}" : content
 
       Log.debug { "Message from #{sender[:sender_id]}: #{content_to_process}" }
       start_typing(sender[:chat_id])
@@ -629,48 +636,18 @@ module Autobot::Channels
       reply_msg["text"]?.try(&.as_s) || reply_msg["caption"]?.try(&.as_s)
     end
 
+    private def typed_text(msg : JSON::Any) : String?
+      parts = [msg["text"]?.try(&.as_s?), msg["caption"]?.try(&.as_s?)].compact
+      parts.empty? ? nil : parts.join("\n")
+    end
+
     private def build_content_and_media(msg : JSON::Any) : {String, Array(Bus::MediaAttachment)}
-      content_parts = [] of String
-      media_attachments = [] of Bus::MediaAttachment
+      typed = typed_text(msg)
+      media_parts, media_attachments = @media_extractor.extract(msg, !typed.nil?)
 
-      if text = msg["text"]?.try(&.as_s)
-        content_parts << text
-      end
-      if caption = msg["caption"]?.try(&.as_s)
-        content_parts << caption
-      end
-
-      append_media_attachments(msg, content_parts, media_attachments)
-
-      content = content_parts.empty? ? "[empty message]" : content_parts.join("\n")
+      content_parts = [typed].compact.concat(media_parts)
+      content = content_parts.empty? ? EMPTY_MESSAGE_LABEL : content_parts.join("\n")
       {content, media_attachments}
-    end
-
-    private def append_media_attachments(msg : JSON::Any, content_parts : Array(String), media_attachments : Array(Bus::MediaAttachment)) : Nil
-      append_photo_attachment(msg, content_parts, media_attachments)
-      append_voice_attachment(msg, content_parts, media_attachments)
-      append_audio_attachment(msg, content_parts, media_attachments)
-      append_document_attachment(msg, content_parts, media_attachments)
-    end
-
-    private def append_photo_attachment(msg : JSON::Any, content_parts : Array(String), media_attachments : Array(Bus::MediaAttachment)) : Nil
-      if photos = msg["photo"]?.try(&.as_a?)
-        if last_photo = photos.last?
-          file_id = last_photo["file_id"].as_s
-          image_data = download_telegram_file(file_id)
-          media_attachments << Bus::MediaAttachment.new(
-            type: "photo", url: file_id, mime_type: "image/jpeg", data: image_data,
-          )
-          content_parts << "[photo]" if content_parts.empty?
-        end
-      end
-    end
-
-    private def download_telegram_file(file_id : String) : String?
-      bytes = download_telegram_file_bytes(file_id)
-      return nil unless bytes
-
-      Base64.strict_encode(bytes)
     end
 
     private def download_telegram_file_bytes(file_id : String) : Bytes?
@@ -701,50 +678,6 @@ module Autobot::Channels
     rescue ex
       Log.error { "Error downloading telegram file: #{ex.message}" }
       nil
-    end
-
-    private def transcribe_file(file_id : String) : String?
-      transcriber = @transcriber
-      return nil unless transcriber
-
-      bytes = download_telegram_file_bytes(file_id)
-      return nil unless bytes
-
-      transcriber.transcribe(bytes)
-    end
-
-    private def append_voice_attachment(msg : JSON::Any, content_parts : Array(String), media_attachments : Array(Bus::MediaAttachment)) : Nil
-      if voice = msg["voice"]?
-        file_id = voice["file_id"].as_s
-        media_attachments << Bus::MediaAttachment.new(type: "voice", url: file_id, mime_type: voice["mime_type"]?.try(&.as_s) || "audio/ogg")
-
-        if content_parts.empty?
-          text = transcribe_file(file_id)
-          content_parts << (text ? "[voice transcription]: #{text}" : "[voice message]")
-        end
-      end
-    end
-
-    private def append_audio_attachment(msg : JSON::Any, content_parts : Array(String), media_attachments : Array(Bus::MediaAttachment)) : Nil
-      if audio = msg["audio"]?
-        file_id = audio["file_id"].as_s
-        media_attachments << Bus::MediaAttachment.new(type: "voice", url: file_id, mime_type: audio["mime_type"]?.try(&.as_s) || "audio/mpeg")
-
-        if content_parts.empty?
-          title = audio["title"]?.try(&.as_s) || "audio"
-          text = transcribe_file(file_id)
-          content_parts << (text ? "[voice transcription]: #{text}" : "[audio: #{title}]")
-        end
-      end
-    end
-
-    private def append_document_attachment(msg : JSON::Any, content_parts : Array(String), media_attachments : Array(Bus::MediaAttachment)) : Nil
-      if doc = msg["document"]?
-        file_id = doc["file_id"].as_s
-        file_name = doc["file_name"]?.try(&.as_s) || "unknown"
-        media_attachments << Bus::MediaAttachment.new(type: "document", url: file_id, mime_type: doc["mime_type"]?.try(&.as_s))
-        content_parts << "[document: #{file_name}]" if content_parts.empty?
-      end
     end
 
     private def build_metadata(msg : JSON::Any, sender : NamedTuple(chat_id: String, user_id: String, username: String?, first_name: String, sender_id: String, is_group: Bool)) : Hash(String, String)

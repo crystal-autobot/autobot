@@ -42,6 +42,17 @@ Voice messages are automatically transcribed using the Whisper API when a suppor
 
 If neither Groq nor OpenAI is configured, voice messages fall back to `[voice message]` text.
 
+## Media
+
+Incoming files are saved to an inbox under the workspace so tools can read them by path. Only the location is configurable:
+
+```yaml
+media:
+  inbox: inbox   # relative to the workspace (default), or an absolute path
+```
+
+A voice note recorded in the chat by the sender is treated as their spoken words. Audio files, photos, documents and anything forwarded become attachments and never enter the message text. See [Media support](media.md).
+
 ## Channels
 
 **Security Note:** `allow_from` is deny-by-default for security.
