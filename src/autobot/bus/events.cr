@@ -38,7 +38,6 @@ module Autobot::Bus
     TYPE_VOICE    = "voice"
     TYPE_AUDIO    = "audio"
     TYPE_DOCUMENT = "document"
-    TYPE_VIDEO    = "video"
 
     ORIGIN_SENDER    = "sender"
     ORIGIN_FORWARDED = "forwarded"
@@ -72,11 +71,7 @@ module Autobot::Bus
     )
     end
 
-    def forwarded? : Bool
-      origin == ORIGIN_FORWARDED
-    end
-
-    def spoken_instruction? : Bool
+    def sender_voice_note? : Bool
       type == TYPE_VOICE && origin == ORIGIN_SENDER
     end
   end

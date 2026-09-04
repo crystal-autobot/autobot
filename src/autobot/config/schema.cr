@@ -388,7 +388,7 @@ module Autobot::Config
     property cron : CronConfig?
     property mcp : McpConfig?
     property plugins : PluginsConfig?
-    property media : MediaConfig?
+    property media : MediaConfig = MediaConfig.new
 
     def initialize
     end
@@ -399,8 +399,7 @@ module Autobot::Config
     end
 
     def inbox_path : Path
-      inbox = media.try(&.inbox) || "inbox"
-      Path[inbox].expand(base: workspace_path, home: true)
+      Path[media.inbox].expand(base: workspace_path, home: true)
     end
 
     def default_model : String

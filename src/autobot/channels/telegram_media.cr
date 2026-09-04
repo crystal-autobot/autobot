@@ -9,27 +9,22 @@ module Autobot::Channels
   class TelegramMedia
     alias Fetcher = Proc(String, Bytes?)
 
-    FORWARD_KEYS = %w[forward_origin forward_from forward_from_chat forward_sender_name forward_date]
-
-    PHOTO_MIME    = "image/jpeg"
-    VOICE_MIME    = "audio/ogg"
-    AUDIO_MIME    = "audio/mpeg"
+    FORWARD_KEYS  = %w[forward_origin forward_from forward_from_chat forward_sender_name forward_date]
     VOICE_MISSING = "[voice message]"
-    PHOTO_LABEL   = "[photo]"
 
     def initialize(@fetch : Fetcher, @transcriber : Transcriber? = nil, @inbox : Media::Inbox? = nil)
     end
 
     def extract(msg : JSON::Any, typed_text : Bool) : {Array(String), Array(Bus::MediaAttachment)}
-      origin = forwarded?(msg) ? Bus::MediaAttachment::ORIGIN_FORWARDED : Bus::MediaAttachment::ORIGIN_SENDER
+      forwarded = forwarded?(msg)
+      origin = forwarded ? Bus::MediaAttachment::ORIGIN_FORWARDED : Bus::MediaAttachment::ORIGIN_SENDER
+      spoken = !typed_text && !forwarded
+
+      voice, spoken_text = extract_voice(msg, origin, spoken)
+      attachments = [extract_photo(msg, origin), voice, extract_audio(msg, origin), extract_document(msg, origin)].compact
+
       parts = [] of String
-      attachments = [] of Bus::MediaAttachment
-
-      extract_photo(msg, origin).try { |attachment| attachments << attachment }
-      extract_voice(msg, origin, typed_text, parts).try { |attachment| attachments << attachment }
-      extract_audio(msg, origin).try { |attachment| attachments << attachment }
-      extract_document(msg, origin).try { |attachment| attachments << attachment }
-
+      parts << spoken_text if spoken_text
       parts.concat(placeholders(attachments)) unless typed_text
       {parts, attachments}
     end
@@ -43,22 +38,20 @@ module Autobot::Channels
       return nil unless photo
 
       bytes = fetch(photo)
-      build(Bus::MediaAttachment::TYPE_PHOTO, photo, origin, PHOTO_MIME, bytes,
+      build(Bus::MediaAttachment::TYPE_PHOTO, photo, origin, "image/jpeg", bytes,
         data: bytes.try { |data| Base64.strict_encode(data) })
     end
 
-    private def extract_voice(msg : JSON::Any, origin : String, typed_text : Bool, parts : Array(String)) : Bus::MediaAttachment?
+    private def extract_voice(msg : JSON::Any, origin : String, spoken : Bool) : {Bus::MediaAttachment?, String?}
       voice = msg["voice"]?
-      return nil unless voice
+      return {nil, nil} unless voice
 
       bytes = fetch(voice)
-      mime = mime_of(voice, VOICE_MIME)
+      mime = mime_of(voice, "audio/ogg")
       transcript = transcribe(bytes, mime)
-      spoken = origin == Bus::MediaAttachment::ORIGIN_SENDER && !typed_text
-
-      parts << spoken_text(transcript) if spoken
-      build(Bus::MediaAttachment::TYPE_VOICE, voice, origin, mime, bytes,
+      attachment = build(Bus::MediaAttachment::TYPE_VOICE, voice, origin, mime, bytes,
         transcript: spoken ? nil : transcript)
+      {attachment, spoken ? spoken_text(transcript) : nil}
     end
 
     private def extract_audio(msg : JSON::Any, origin : String) : Bus::MediaAttachment?
@@ -66,7 +59,7 @@ module Autobot::Channels
       return nil unless audio
 
       bytes = fetch(audio)
-      mime = mime_of(audio, AUDIO_MIME)
+      mime = mime_of(audio, "audio/mpeg")
       build(Bus::MediaAttachment::TYPE_AUDIO, audio, origin, mime, bytes,
         transcript: transcribe(bytes, mime),
         name: string_of(audio, "title") || string_of(audio, "file_name"))
@@ -82,8 +75,8 @@ module Autobot::Channels
 
     private def build(type : String, node : JSON::Any, origin : String, mime : String?, bytes : Bytes?,
                       data : String? = nil, transcript : String? = nil, name : String? = nil) : Bus::MediaAttachment
-      path = bytes.try { |content| @inbox.try(&.store(content, mime, type)) }
-      transcript_path = store_transcript(transcript, path)
+      path = bytes.try { |content| @inbox.try(&.store(content, mime, ".#{type}")) }
+      transcript_path = transcript && path ? @inbox.try(&.store_transcript(transcript, path)) : nil
 
       Bus::MediaAttachment.new(
         type: type,
@@ -100,18 +93,13 @@ module Autobot::Channels
       )
     end
 
-    private def store_transcript(transcript : String?, media_path : Path?) : Path?
-      return nil unless transcript && media_path
-      @inbox.try(&.store_transcript(transcript, media_path))
-    end
-
     private def placeholders(attachments : Array(Bus::MediaAttachment)) : Array(String)
-      attachments.reject(&.spoken_instruction?).map { |attachment| placeholder(attachment) }
+      attachments.reject(&.sender_voice_note?).map { |attachment| placeholder(attachment) }
     end
 
     private def placeholder(attachment : Bus::MediaAttachment) : String
       case attachment.type
-      when Bus::MediaAttachment::TYPE_PHOTO then PHOTO_LABEL
+      when Bus::MediaAttachment::TYPE_PHOTO then "[photo]"
       when Bus::MediaAttachment::TYPE_VOICE then VOICE_MISSING
       when Bus::MediaAttachment::TYPE_AUDIO then "[audio: #{attachment.name || "audio"}]"
       else                                       "[document: #{attachment.name || "unknown"}]"
@@ -125,11 +113,7 @@ module Autobot::Channels
     private def transcribe(bytes : Bytes?, mime : String) : String?
       transcriber = @transcriber
       return nil unless transcriber && bytes
-      transcriber.transcribe(bytes, "audio.#{extension_for(mime)}")
-    end
-
-    private def extension_for(mime : String) : String
-      Media::Inbox.extension_for(mime, "ogg")
+      transcriber.transcribe(bytes, "audio#{Media::Types.extension_for(mime, ".ogg")}")
     end
 
     private def fetch(node : JSON::Any) : Bytes?

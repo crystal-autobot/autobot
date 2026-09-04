@@ -1,4 +1,5 @@
 require "../bus/events"
+require "../media/types"
 require "./result"
 require "./sandbox_executor"
 
@@ -17,20 +18,6 @@ module Autobot
     # media (images, GIFs, documents) from the workspace.
     class MessageTool < Tool
       Log = ::Log.for("tools.message")
-
-      MEDIA_TYPES = {
-        ".jpg"  => {"photo", "image/jpeg"},
-        ".jpeg" => {"photo", "image/jpeg"},
-        ".png"  => {"photo", "image/png"},
-        ".webp" => {"photo", "image/webp"},
-        ".bmp"  => {"photo", "image/bmp"},
-        ".gif"  => {"animation", "image/gif"},
-        ".mp4"  => {"video", "video/mp4"},
-        ".pdf"  => {"document", "application/pdf"},
-        ".ogg"  => {"voice", "audio/ogg"},
-        ".mp3"  => {"audio", "audio/mpeg"},
-        ".wav"  => {"audio", "audio/wav"},
-      }
 
       @send_callback : SendCallback?
       @default_channel : String
@@ -130,8 +117,7 @@ module Autobot
         result = executor.read_file_base64(file_path)
         return ToolResult.error("Cannot read file: #{result.content}") unless result.success?
 
-        ext = File.extname(file_path).downcase
-        media_type, mime_type = MEDIA_TYPES[ext]? || {"document", "application/octet-stream"}
+        media_type, mime_type = Media::Types.for_extension(File.extname(file_path))
 
         Log.info { "Attaching file: #{file_path} (#{media_type}, #{mime_type})" }
 

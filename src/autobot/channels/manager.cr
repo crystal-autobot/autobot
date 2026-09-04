@@ -24,6 +24,7 @@ module Autobot::Channels
 
     getter channels : Hash(String, Channel) = {} of String => Channel
     getter transcriber : Transcriber? = nil
+    @inbox : Media::Inbox
 
     def initialize(
       @config : Config::Config,
@@ -32,6 +33,7 @@ module Autobot::Channels
       @cron_service : Cron::Service? = nil,
     )
       @transcriber = detect_transcriber
+      @inbox = Media::Inbox.new(@config.inbox_path)
       init_channels
     end
 
@@ -130,7 +132,7 @@ module Autobot::Channels
         session_manager: @session_manager,
         transcriber: @transcriber,
         cron_service: @cron_service,
-        inbox: Media::Inbox.new(@config.inbox_path),
+        inbox: @inbox,
       )
       Log.info { "Telegram channel enabled" }
     end

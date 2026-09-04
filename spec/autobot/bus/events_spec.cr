@@ -130,16 +130,14 @@ describe Autobot::Bus::MediaAttachment do
   end
 
   it "defaults to the sender origin" do
-    media = Autobot::Bus::MediaAttachment.new(type: "voice")
-    media.origin.should eq("sender")
-    media.forwarded?.should be_false
+    Autobot::Bus::MediaAttachment.new(type: "voice").origin.should eq("sender")
   end
 
-  it "treats only a sender's voice note as a spoken instruction" do
-    Autobot::Bus::MediaAttachment.new(type: "voice").spoken_instruction?.should be_true
-    Autobot::Bus::MediaAttachment.new(type: "voice", origin: "forwarded").spoken_instruction?.should be_false
-    Autobot::Bus::MediaAttachment.new(type: "audio").spoken_instruction?.should be_false
-    Autobot::Bus::MediaAttachment.new(type: "document").spoken_instruction?.should be_false
+  it "recognizes only a sender's voice note" do
+    Autobot::Bus::MediaAttachment.new(type: "voice").sender_voice_note?.should be_true
+    Autobot::Bus::MediaAttachment.new(type: "voice", origin: "forwarded").sender_voice_note?.should be_false
+    Autobot::Bus::MediaAttachment.new(type: "audio").sender_voice_note?.should be_false
+    Autobot::Bus::MediaAttachment.new(type: "document").sender_voice_note?.should be_false
   end
 
   it "round-trips attachment details through JSON" do

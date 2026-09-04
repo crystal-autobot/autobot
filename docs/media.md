@@ -43,13 +43,13 @@ Transcripts of content attachments are written next to the media file as
 
 | Field | Meaning |
 |-------|---------|
-| `type` | `photo`, `voice`, `audio`, `document`, `video` |
+| `type` | `photo`, `voice`, `audio`, `document` |
 | `origin` | `sender` or `forwarded` |
 | `file_path` | Where the file was saved in the inbox |
 | `transcript`, `transcript_path` | Transcript of a content attachment |
 | `duration_seconds`, `name`, `mime_type`, `size_bytes` | Metadata from the platform |
 
-`spoken_instruction?` is true only for a voice note with origin `sender`.
+`sender_voice_note?` is true only for a voice note with origin `sender`; the channel treats such a note as spoken words unless typed text came with it.
 
 ## Vision
 
@@ -226,7 +226,8 @@ LLM generates file (exec tool) -> message(content, file_path) -> Read & base64 e
 | `.mp4` | video | `sendDocument` |
 | `.pdf` | document | `sendDocument` |
 | `.ogg` | voice | `sendVoice` |
-| `.mp3`, `.wav` | audio | `sendAudio` |
+| `.mp3`, `.m4a`, `.wav`, `.webm` | audio | `sendAudio` |
+| `.txt` | document | `sendDocument` |
 | Other | document | `sendDocument` |
 
 ### Supported channels

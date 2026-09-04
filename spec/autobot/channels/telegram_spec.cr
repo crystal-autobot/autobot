@@ -309,7 +309,7 @@ describe Autobot::Channels::TelegramChannel do
       content.should eq("Add to notes")
       media.size.should eq(1)
       media.first.type.should eq("audio")
-      media.first.spoken_instruction?.should be_false
+      media.first.sender_voice_note?.should be_false
     end
 
     it "labels media when nothing was typed" do

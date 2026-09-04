@@ -17,6 +17,17 @@ private def fetcher(bytes : Bytes? = "audio-bytes".to_slice) : Autobot::Channels
   ->(_file_id : String) : Bytes? { bytes }
 end
 
+private def build_media(transcriber : Autobot::Transcriber? = nil, inbox : Autobot::Media::Inbox? = nil, bytes : Bytes? = "audio-bytes".to_slice) : Autobot::Channels::TelegramMedia
+  Autobot::Channels::TelegramMedia.new(fetcher(bytes), transcriber, inbox)
+end
+
+private def with_inbox(&)
+  dir = TestHelper.tmp_dir("inbox")
+  yield Autobot::Media::Inbox.new(dir)
+ensure
+  FileUtils.rm_rf(dir) if dir
+end
+
 private def message(json : String) : JSON::Any
   JSON.parse(json)
 end
@@ -28,14 +39,14 @@ describe Autobot::Channels::TelegramMedia do
   describe "a voice note recorded by the sender" do
     it "becomes the message text when nothing was typed" do
       transcriber = FakeTranscriber.new
-      media = Autobot::Channels::TelegramMedia.new(fetcher, transcriber)
+      media = build_media(transcriber)
 
       parts, attachments = media.extract(message(VOICE_NOTE), typed_text: false)
 
       parts.should eq(["[voice transcription]: spoken words"])
       attachments.size.should eq(1)
       attachment = attachments.first
-      attachment.spoken_instruction?.should be_true
+      attachment.sender_voice_note?.should be_true
       attachment.transcript.should be_nil
       attachment.duration_seconds.should eq(7)
       attachment.size_bytes.should eq(512)
@@ -43,7 +54,7 @@ describe Autobot::Channels::TelegramMedia do
     end
 
     it "falls back to a placeholder without a transcriber" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher)
+      media = build_media
 
       parts, attachments = media.extract(message(VOICE_NOTE), typed_text: false)
 
@@ -52,32 +63,32 @@ describe Autobot::Channels::TelegramMedia do
     end
 
     it "is content when typed text accompanies it" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher, FakeTranscriber.new)
+      media = build_media(FakeTranscriber.new)
 
       parts, attachments = media.extract(message(VOICE_NOTE), typed_text: true)
 
       parts.should be_empty
-      attachments.first.spoken_instruction?.should be_true
+      attachments.first.sender_voice_note?.should be_true
       attachments.first.transcript.should eq("spoken words")
     end
   end
 
   describe "a forwarded voice note" do
     it "is content, with its transcript kept on the attachment" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher, FakeTranscriber.new)
+      media = build_media(FakeTranscriber.new)
       msg = message(%({"forward_origin": {"type": "user"}, "voice": {"file_id": "v2", "mime_type": "audio/ogg"}}))
 
       parts, attachments = media.extract(msg, typed_text: false)
 
       parts.should eq(["[voice message]"])
       attachment = attachments.first
-      attachment.forwarded?.should be_true
-      attachment.spoken_instruction?.should be_false
+      attachment.origin.should eq("forwarded")
+      attachment.sender_voice_note?.should be_false
       attachment.transcript.should eq("spoken words")
     end
 
     it "recognizes the legacy forward fields" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher)
+      media = build_media
       media.forwarded?(message(%({"forward_date": 1, "text": "hi"}))).should be_true
       media.forwarded?(message(%({"forward_sender_name": "Someone", "text": "hi"}))).should be_true
       media.forwarded?(message(%({"text": "hi"}))).should be_false
@@ -87,14 +98,14 @@ describe Autobot::Channels::TelegramMedia do
   describe "an audio file" do
     it "is content with its transcript on the attachment, never in the text" do
       transcriber = FakeTranscriber.new
-      media = Autobot::Channels::TelegramMedia.new(fetcher, transcriber)
+      media = build_media(transcriber)
 
       parts, attachments = media.extract(message(AUDIO_FILE), typed_text: false)
 
       parts.should eq(["[audio: Car dealer]"])
       attachment = attachments.first
       attachment.type.should eq("audio")
-      attachment.spoken_instruction?.should be_false
+      attachment.sender_voice_note?.should be_false
       attachment.transcript.should eq("spoken words")
       attachment.name.should eq("Car dealer")
       attachment.duration_seconds.should eq(134)
@@ -102,7 +113,7 @@ describe Autobot::Channels::TelegramMedia do
     end
 
     it "adds no text when a caption was typed" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher, FakeTranscriber.new)
+      media = build_media(FakeTranscriber.new)
 
       parts, attachments = media.extract(message(AUDIO_FILE), typed_text: true)
 
@@ -113,7 +124,7 @@ describe Autobot::Channels::TelegramMedia do
 
   describe "photos and documents" do
     it "keeps photo bytes for vision and labels the message" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher("img".to_slice))
+      media = build_media(bytes: "img".to_slice)
       msg = message(%({"photo": [{"file_id": "small"}, {"file_id": "large", "file_size": 3}]}))
 
       parts, attachments = media.extract(msg, typed_text: false)
@@ -126,7 +137,7 @@ describe Autobot::Channels::TelegramMedia do
     end
 
     it "labels documents by file name" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher)
+      media = build_media
       msg = message(%({"document": {"file_id": "d1", "file_name": "report.pdf", "mime_type": "application/pdf"}}))
 
       parts, attachments = media.extract(msg, typed_text: false)
@@ -137,7 +148,7 @@ describe Autobot::Channels::TelegramMedia do
     end
 
     it "returns nothing for a plain text message" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher)
+      media = build_media
       parts, attachments = media.extract(message(%({"text": "hello"})), typed_text: true)
       parts.should be_empty
       attachments.should be_empty
@@ -146,40 +157,28 @@ describe Autobot::Channels::TelegramMedia do
 
   describe "with an inbox" do
     it "saves the media and the transcript and records their paths" do
-      dir = TestHelper.tmp_dir("inbox")
-      begin
-        inbox = Autobot::Media::Inbox.new(dir)
-        media = Autobot::Channels::TelegramMedia.new(fetcher, FakeTranscriber.new, inbox)
-
-        _, attachments = media.extract(message(AUDIO_FILE), typed_text: true)
+      with_inbox do |inbox|
+        _, attachments = build_media(FakeTranscriber.new, inbox).extract(message(AUDIO_FILE), typed_text: true)
 
         attachment = attachments.first
         file_path = attachment.file_path.to_s
         File.read(file_path).should eq("audio-bytes")
         file_path.should end_with(".m4a")
         File.read(attachment.transcript_path.to_s).should eq("spoken words")
-      ensure
-        FileUtils.rm_rf(dir)
       end
     end
 
     it "saves a spoken voice note without a transcript file" do
-      dir = TestHelper.tmp_dir("inbox")
-      begin
-        inbox = Autobot::Media::Inbox.new(dir)
-        media = Autobot::Channels::TelegramMedia.new(fetcher, FakeTranscriber.new, inbox)
-
-        _, attachments = media.extract(message(VOICE_NOTE), typed_text: false)
+      with_inbox do |inbox|
+        _, attachments = build_media(FakeTranscriber.new, inbox).extract(message(VOICE_NOTE), typed_text: false)
 
         attachments.first.file_path.to_s.should end_with(".ogg")
         attachments.first.transcript_path.should be_nil
-      ensure
-        FileUtils.rm_rf(dir)
       end
     end
 
     it "records no path when the download failed" do
-      media = Autobot::Channels::TelegramMedia.new(fetcher(nil), FakeTranscriber.new, Autobot::Media::Inbox.new(Path["/nonexistent"]))
+      media = build_media(FakeTranscriber.new, Autobot::Media::Inbox.new(Path["/nonexistent"]), bytes: nil)
 
       parts, attachments = media.extract(message(VOICE_NOTE), typed_text: false)
 

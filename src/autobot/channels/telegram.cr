@@ -298,12 +298,15 @@ module Autobot::Channels
     TYPING_INTERVAL   = 4.0
     MAX_IMAGE_SIZE    = 20 * 1024 * 1024 # 20 MB
 
+    MEDIA_LOG_LABEL     = "[media]"
+    EMPTY_MESSAGE_LABEL = "[empty message]"
+
     @offset : Int64 = 0_i64
     @bot_username : String = ""
     @bot_mention_regex : Regex? = nil
     @typing_channels : Set(String) = Set(String).new
     @chat_log_mutex : Mutex = Mutex.new
-    @media_extractor : TelegramMedia?
+    @media_extractor : TelegramMedia
 
     def initialize(
       @bus : Bus::MessageBus,
@@ -317,6 +320,7 @@ module Autobot::Channels
       @inbox : Media::Inbox? = nil,
     )
       super(Constants::CHANNEL_TELEGRAM, @bus, @allow_from)
+      @media_extractor = TelegramMedia.new(->(file_id : String) { download_telegram_file_bytes(file_id) }, @transcriber, @inbox)
     end
 
     GETME_MAX_ATTEMPTS = 5
@@ -564,16 +568,12 @@ module Autobot::Channels
         end
       end
 
-      content, media_attachments = build_content_and_media(msg)
-      content = prepend_reply_context(content, extract_reply_context(msg))
-
       display_name = sender[:username] ? "@#{sender[:username]}" : sender[:first_name]
-      content_to_process = sender[:is_group] ? "#{display_name}: #{content}" : content
 
       # Record every group message (regardless of allowlist or mention) so the
       # rolling chat log stays complete.
       if sender[:is_group]
-        record_chat_log(sender[:chat_id], display_name, content)
+        record_chat_log(sender[:chat_id], display_name, typed_text(msg) || MEDIA_LOG_LABEL)
       end
 
       # Stay silent for group messages that do not address the bot, before the
@@ -588,6 +588,10 @@ module Autobot::Channels
         send_reply(sender[:chat_id], access_denied_message(sender[:sender_id]))
         return
       end
+
+      content, media_attachments = build_content_and_media(msg)
+      content = prepend_reply_context(content, extract_reply_context(msg))
+      content_to_process = sender[:is_group] ? "#{display_name}: #{content}" : content
 
       Log.debug { "Message from #{sender[:sender_id]}: #{content_to_process}" }
       start_typing(sender[:chat_id])
@@ -632,24 +636,18 @@ module Autobot::Channels
       reply_msg["text"]?.try(&.as_s) || reply_msg["caption"]?.try(&.as_s)
     end
 
-    private def build_content_and_media(msg : JSON::Any) : {String, Array(Bus::MediaAttachment)}
-      content_parts = [] of String
-      msg["text"]?.try(&.as_s?).try { |text| content_parts << text }
-      msg["caption"]?.try(&.as_s?).try { |caption| content_parts << caption }
-
-      media_parts, media_attachments = media_extractor.extract(msg, !content_parts.empty?)
-      content_parts.concat(media_parts)
-
-      content = content_parts.empty? ? "[empty message]" : content_parts.join("\n")
-      {content, media_attachments}
+    private def typed_text(msg : JSON::Any) : String?
+      parts = [msg["text"]?.try(&.as_s?), msg["caption"]?.try(&.as_s?)].compact
+      parts.empty? ? nil : parts.join("\n")
     end
 
-    private def media_extractor : TelegramMedia
-      @media_extractor ||= TelegramMedia.new(
-        ->(file_id : String) { download_telegram_file_bytes(file_id) },
-        @transcriber,
-        @inbox,
-      )
+    private def build_content_and_media(msg : JSON::Any) : {String, Array(Bus::MediaAttachment)}
+      typed = typed_text(msg)
+      media_parts, media_attachments = @media_extractor.extract(msg, !typed.nil?)
+
+      content_parts = [typed].compact.concat(media_parts)
+      content = content_parts.empty? ? EMPTY_MESSAGE_LABEL : content_parts.join("\n")
+      {content, media_attachments}
     end
 
     private def download_telegram_file_bytes(file_id : String) : Bytes?
