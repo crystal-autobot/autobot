@@ -1,5 +1,6 @@
 require "./allowlist"
 require "./base"
+require "./confirmation"
 require "./rate_limiter"
 require "./sandbox_executor"
 
@@ -14,13 +15,33 @@ module Autobot::Tools
     @sandbox_executor : SandboxExecutor?
 
     getter allowlist : Allowlist
+    getter confirm : Allowlist
     @matched_patterns = Set(String).new
     @warned_unmatched = false
 
-    def initialize(@session_key : String = "default", rate_limiter : RateLimiter? = nil, @allowlist : Allowlist = Allowlist.all)
+    def initialize(
+      @session_key : String = "default",
+      rate_limiter : RateLimiter? = nil,
+      @allowlist : Allowlist = Allowlist.all,
+      @confirm : Allowlist = Allowlist.all,
+      @confirmations : ConfirmationStore? = nil,
+    )
       @tools = {} of String => Tool
       @rate_limiter = rate_limiter || RateLimiter.new
       @sandbox_executor = nil
+    end
+
+    def gated?(name : String) : Bool
+      @confirm.restricted? && @confirm.allows?(name)
+    end
+
+    # Redeems a typed confirmation code; returns the tool outcome or nil when nothing matched.
+    def confirm(session_key : String, text : String) : String?
+      pending = @confirmations.try(&.take(session_key, text))
+      return nil unless pending
+
+      Log.info { "Confirmed tool #{pending.name} for #{session_key}" }
+      "Confirmed #{pending.name}.\nResult:\n#{execute(pending.name, pending.params, session_key, confirmed: true)}"
     end
 
     def register(tool : Tool) : Nil
@@ -78,6 +99,16 @@ module Autobot::Tools
       end
     end
 
+    private def request_confirmation(name : String, params : Hash(String, JSON::Any), session_key : String) : String
+      store = @confirmations
+      return "Error: #{name} requires the user's confirmation and cannot run in a background task" unless store
+
+      pending = store.request(session_key, name, params)
+      Log.info { "Confirmation requested for tool #{name} (#{session_key})" }
+      "Confirmation required: #{name} with #{params.to_json} will run only after the user types the code #{pending.code} " \
+      "(valid for 5 minutes, replaces any earlier pending code). Tell the user what will happen and ask them to type the code."
+    end
+
     private def warn_unmatched_once : Nil
       return if @warned_unmatched
       @warned_unmatched = true
@@ -87,7 +118,7 @@ module Autobot::Tools
       Log.warn { "tools.enabled entries matched no tool: #{unmatched.join(", ")}" }
     end
 
-    def execute(name : String, params : Hash(String, JSON::Any), session_key : String? = nil) : String
+    def execute(name : String, params : Hash(String, JSON::Any), session_key : String? = nil, confirmed : Bool = false) : String
       tool = @tools[name]?
 
       unless tool
@@ -96,6 +127,10 @@ module Autobot::Tools
 
       # Use provided session key or fall back to instance default
       effective_session_key = session_key || @session_key
+
+      if gated?(name) && !confirmed
+        return request_confirmation(name, params, effective_session_key)
+      end
 
       if error = @rate_limiter.check_limit(name, effective_session_key)
         Log.warn { "Rate limit exceeded for tool #{name}: #{error}" }

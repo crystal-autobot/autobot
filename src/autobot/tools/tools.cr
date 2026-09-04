@@ -32,8 +32,14 @@ module Autobot
       rate_limiter : RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
+      confirm_tools : Array(String) = [] of String,
     ) : Registry
-      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
+      registry = Registry.new(
+        rate_limiter: rate_limiter,
+        allowlist: Allowlist.new(enabled_tools),
+        confirm: Allowlist.new(confirm_tools),
+        confirmations: ConfirmationStore.new,
+      )
 
       # Determine sandbox configuration
       sandboxed = sandbox_config.downcase != "none"
@@ -76,8 +82,9 @@ module Autobot
       rate_limiter : RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
+      confirm_tools : Array(String) = [] of String,
     ) : Registry
-      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
+      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools), confirm: Allowlist.new(confirm_tools))
 
       sandboxed = sandbox_config.downcase != "none"
       executor = SandboxExecutor.new(workspace, sandboxed, resolve_roots(filesystem_roots, workspace))

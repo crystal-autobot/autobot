@@ -182,6 +182,12 @@ describe Autobot::Config::Config do
       config.tools.try(&.filesystem.try(&.roots)).should eq(["notes", "inbox"])
     end
 
+    it "parses the confirmation list" do
+      config = Autobot::Config::Config.from_yaml("tools:\n  confirm: [ha_call_service, exec]\n")
+      config.tools.try(&.confirm).should eq(["ha_call_service", "exec"])
+      Autobot::Config::Config.from_yaml("{}").tools.try(&.confirm).should be_nil
+    end
+
     it "defaults to all tools and the whole workspace" do
       config = Autobot::Config::Config.from_yaml("tools:\n  sandbox: none\n")
       config.tools.try(&.enabled).should eq([] of String)

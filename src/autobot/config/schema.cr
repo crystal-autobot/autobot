@@ -292,6 +292,7 @@ module Autobot::Config
   class ToolsConfig
     include YAML::Serializable
     property enabled : Array(String) = [] of String
+    property confirm : Array(String) = [] of String
     property filesystem : FilesystemToolsConfig?
     property web : WebToolsConfig?
     property exec : ExecToolConfig?

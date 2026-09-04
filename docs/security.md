@@ -153,7 +153,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 **⚠️ Warnings (review recommended):**
 
 - Filesystem root configured outside the workspace
-- `tools.enabled` entry that matches no known tool
+- `tools.enabled` or `tools.confirm` entry that matches no known tool
 - Gateway bound to 0.0.0.0 (network exposure)
 - Channel authorization not configured (empty `allow_from`)
 - Missing `.env` file
@@ -284,6 +284,15 @@ tools:
 ```
 
 `tools.enabled` is an allowlist applied at registration, so a tool that is not listed does not exist for the model, whether it is built in, a skill script, a plugin or an MCP tool. `tools.filesystem.roots` keeps the file tools inside the listed workspace subdirectories. With both in place, the worst a planted instruction inside an attachment can do is write a bad note. `autobot doctor` prints the effective tool list and reminds you to set the allowlist when it is missing.
+
+Some bots need a tool that changes the world, such as a Home Assistant service call. Put it in `tools.confirm`:
+
+```yaml
+tools:
+  confirm: [ha_call_service, ha_config_set_automation]
+```
+
+A gated call is held until the user types a four-character code in the chat, valid for five minutes. The code must be typed: spoken messages and attachment content never match it, and background tasks cannot confirm at all. This turns "the model decided to flip a switch" into "you decided", whatever the model was reading when it decided.
 
 ---
 

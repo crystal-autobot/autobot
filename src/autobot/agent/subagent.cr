@@ -57,6 +57,7 @@ module Autobot
         @rate_limiter : Tools::RateLimiter? = nil,
         @enabled_tools : Array(String) = [] of String,
         @filesystem_roots : Array(String) = [] of String,
+        @confirm_tools : Array(String) = [] of String,
       )
         @context = Context::Builder.new(@workspace)
       end
@@ -124,6 +125,7 @@ module Autobot
             rate_limiter: @rate_limiter,
             enabled_tools: @enabled_tools,
             filesystem_roots: @filesystem_roots,
+            confirm_tools: @confirm_tools,
           )
 
           executor = ToolExecutor.new(

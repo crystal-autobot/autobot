@@ -179,13 +179,23 @@ module Autobot
         unless allowlist.restricted?
           report(Status::Pass, "Tools: all built-in tools, plus skills, plugins and MCP servers")
           hint("Set tools.enabled to limit this bot to the tools it needs")
+          warnings = check_confirm_tools(config, warnings)
           return check_filesystem_roots(config, warnings)
         end
 
         builtin = BUILTIN_TOOLS.select { |name| allowlist.allows?(name) }
         report(Status::Pass, "Tools limited to: #{builtin.empty? ? "none of the built-in tools" : builtin.join(", ")}")
         warnings = check_unknown_tools(config, allowlist, warnings)
+        warnings = check_confirm_tools(config, warnings)
         check_filesystem_roots(config, warnings)
+      end
+
+      def self.check_confirm_tools(config : Config::Config, warnings : Int32) : Int32
+        confirm = Tools::Allowlist.new(config.tools.try(&.confirm) || [] of String)
+        return warnings unless confirm.restricted?
+
+        report(Status::Pass, "Confirmation required before: #{confirm.patterns.join(", ")}")
+        check_unknown_tools(config, confirm, warnings)
       end
 
       def self.check_unknown_tools(config : Config::Config, allowlist : Tools::Allowlist, warnings : Int32) : Int32

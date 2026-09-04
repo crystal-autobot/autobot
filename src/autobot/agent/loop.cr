@@ -68,6 +68,7 @@ module Autobot::Agent
       rate_limiter : Tools::RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
+      confirm_tools : Array(String) = [] of String,
     )
       @model = model || @provider.default_model
       sandboxed = sandbox_config.downcase != "none"
@@ -88,7 +89,7 @@ module Autobot::Agent
         sessions: @sessions
       )
 
-      register_optional_tools(brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns, sandbox_config, rate_limiter, enabled_tools, filesystem_roots)
+      register_optional_tools(brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns, sandbox_config, rate_limiter, enabled_tools, filesystem_roots, confirm_tools)
       cache_tool_references
     end
 
@@ -161,9 +162,10 @@ module Autobot::Agent
       end
 
       update_tool_contexts(msg.channel, msg.chat_id)
+      content = @tools.confirm(session.key, msg.content) || msg.content
       messages = @context.build_messages(
         history: session.get_history,
-        current_message: msg.content,
+        current_message: content,
         media: msg.media?,
         channel: msg.channel,
         chat_id: msg.chat_id,
@@ -174,7 +176,7 @@ module Autobot::Agent
       result = @executor.execute(messages, @tools, session_key: session.key)
       final_content = result.content || FALLBACK_RESPONSE
 
-      save_to_session(session, @context.render_user_text(msg.content, msg.media?), final_content, result.tools_used)
+      save_to_session(session, @context.render_user_text(content, msg.media?), final_content, result.tools_used)
 
       # Skip automatic text response if the message tool already sent during this turn
       return nil if @message_tool.try(&.last_sent_content)
@@ -297,6 +299,7 @@ module Autobot::Agent
       rate_limiter : Tools::RateLimiter?,
       enabled_tools : Array(String),
       filesystem_roots : Array(String),
+      confirm_tools : Array(String),
     ) : Nil
       subagents = SubagentManager.new(
         provider: @provider,
@@ -311,6 +314,7 @@ module Autobot::Agent
         rate_limiter: rate_limiter,
         enabled_tools: enabled_tools,
         filesystem_roots: filesystem_roots,
+        confirm_tools: confirm_tools,
       )
       @tools.register(Tools::SpawnTool.new(subagents))
 

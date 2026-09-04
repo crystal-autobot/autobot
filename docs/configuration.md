@@ -105,6 +105,9 @@ tools:
     - list_dir
     - message
     - "ha_*"     # patterns ending in * match by prefix (skills, plugins, MCP tools)
+  confirm:       # Optional; these tools run only after the user types a code
+    - exec
+    - ha_call_service
   filesystem:
     roots: [notes, inbox]  # Optional; file tools may only touch these workspace subdirectories
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
@@ -142,6 +145,10 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 ### Tool Allowlist
 
 `tools.enabled` names the tools a bot may have. Anything not listed is never registered, whichever source it comes from: built-in tools, skill scripts, plugins and MCP servers all pass through the same check. A name ending in `*` matches by prefix, as in the MCP `tools:` list. Leave it out to keep today's behaviour of registering everything. `autobot doctor` prints the effective list and warns about an entry that matches no known tool, so a typo does not silently remove a tool; at startup the bot logs a warning for entries that matched nothing.
+
+### Confirmation Gate
+
+`tools.confirm` names tools that must not run on the model's say-so alone. When the model calls one, the call is held, the model is told to describe it and ask the user for a four-character code, and nothing runs. Typing that code in the chat within five minutes runs the held call and hands the result back to the model; anything else is treated as a normal message. The code has to be typed: a spoken message carries the transcription prefix and does not match, and text inside attachments never reaches the check. Background tasks such as subagents cannot confirm, so gated tools are refused there. Names use the same `name` or `prefix*` syntax as `tools.enabled`, and MCP tools can be gated by name.
 
 ### Filesystem Roots
 
@@ -307,6 +314,7 @@ tools:
     # model: gpt-image-1     # optional, auto-detected from provider
     # size: 1024x1024
   enabled: [read_file, write_file, edit_file, list_dir, message]  # optional allowlist
+  confirm: [exec, ha_call_service]  # optional, held until the user types a code
   filesystem:
     roots: [notes, inbox]      # optional, workspace subdirectories the file tools may touch
 

@@ -162,6 +162,7 @@ module Autobot
           rate_limiter: rate_limiter,
           enabled_tools: config.tools.try(&.enabled) || [] of String,
           filesystem_roots: config.tools.try(&.filesystem.try(&.roots)) || [] of String,
+          confirm_tools: config.tools.try(&.confirm) || [] of String,
         )
       end
 

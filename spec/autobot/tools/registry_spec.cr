@@ -86,6 +86,44 @@ describe Autobot::Tools::Registry do
     Autobot::Tools::Registry.new.unmatched_patterns.should be_empty
   end
 
+  describe "confirmation gate" do
+    it "withholds a gated tool until the typed code arrives" do
+      registry = Autobot::Tools::Registry.new(
+        confirm: Autobot::Tools::Allowlist.new(["dum*"]),
+        confirmations: Autobot::Tools::ConfirmationStore.new
+      )
+      registry.register(DummyTool.new)
+      params = {"input" => JSON::Any.new("hi")}
+
+      reply = registry.execute("dummy", params, "telegram:1")
+      reply.should start_with("Confirmation required: dummy")
+      reply.should_not contain("echo: hi")
+      code = reply.match(/code ([A-Z2-9]{4})/).try(&.[1]).to_s
+
+      registry.confirm("telegram:1", "wrong").should be_nil
+      registry.confirm("telegram:1", code).should eq("Confirmed dummy.\nResult:\necho: hi")
+      registry.confirm("telegram:1", code).should be_nil
+    end
+
+    it "runs ungated tools directly" do
+      registry = Autobot::Tools::Registry.new(
+        confirm: Autobot::Tools::Allowlist.new(["exec"]),
+        confirmations: Autobot::Tools::ConfirmationStore.new
+      )
+      registry.register(DummyTool.new)
+
+      registry.execute("dummy", {"input" => JSON::Any.new("hi")}, "telegram:1").should eq("echo: hi")
+    end
+
+    it "refuses gated tools when nobody can confirm" do
+      registry = Autobot::Tools::Registry.new(confirm: Autobot::Tools::Allowlist.new(["dummy"]))
+      registry.register(DummyTool.new)
+
+      registry.execute("dummy", {"input" => JSON::Any.new("hi")}, "sub").should contain("cannot run in a background task")
+      registry.confirm("sub", "ABCD").should be_nil
+    end
+  end
+
   it "unregisters a tool" do
     registry = Autobot::Tools::Registry.new
     registry.register(DummyTool.new)

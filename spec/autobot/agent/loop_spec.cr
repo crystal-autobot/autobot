@@ -11,6 +11,27 @@ class MockProvider < Autobot::Providers::HttpProvider
   end
 end
 
+class GatedTool < Autobot::Tools::Tool
+  def name : String
+    "gated"
+  end
+
+  def description : String
+    "A tool that needs confirmation"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new(
+      properties: {"input" => Autobot::Tools::PropertySchema.new(type: "string", description: "Input")},
+      required: ["input"]
+    )
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.success("ran #{params["input"].as_s}")
+  end
+end
+
 # Testable subclass exposing private methods for unit testing.
 class TestableLoop < Autobot::Agent::Loop
   def test_build_cron_prompt(msg : Autobot::Bus::InboundMessage) : String
@@ -251,6 +272,38 @@ describe Autobot::Agent::Loop do
       user_turn = sessions.get_or_create("telegram:user1").get_history.first["content"]
       user_turn.should start_with("Add to notes\n\n<attachment type=\"audio\"")
       user_turn.should contain("the dealer offered a discount")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "runs a gated tool only when the user types its code" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      tools = Autobot::Tools::Registry.new(
+        confirm: Autobot::Tools::Allowlist.new(["gated"]),
+        confirmations: Autobot::Tools::ConfirmationStore.new
+      )
+      tools.register(Autobot::Tools::MessageTool.new)
+      tools.register(GatedTool.new)
+      loop_inst = TestableLoop.new(
+        bus: Autobot::Bus::MessageBus.new(capacity: 10),
+        provider: MockProvider.new,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        memory_window: 0,
+        sandbox_config: "none"
+      )
+      reply = tools.execute("gated", {"input" => JSON::Any.new("x")}, "telegram:user1")
+      code = reply.match(/code ([A-Z2-9]{4})/).try(&.[1]).to_s
+
+      spoken = Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "user1", chat_id: "user1", content: "[voice transcription]: #{code}")
+      loop_inst.test_process_message(spoken)
+      sessions.get_or_create("telegram:user1").get_history.first["content"].should eq("[voice transcription]: #{code}")
+
+      typed = Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "user1", chat_id: "user1", content: code)
+      loop_inst.test_process_message(typed)
+      sessions.get_or_create("telegram:user1").get_history.last(2).first["content"].should eq("Confirmed gated.\nResult:\nran x")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

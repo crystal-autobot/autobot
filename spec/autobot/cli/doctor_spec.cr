@@ -615,6 +615,27 @@ describe Autobot::CLI::Doctor do
       end
     end
 
+    it "reports gated tools and warns about an unknown one" do
+      config = make_config(<<-YAML
+      tools:
+        confirm: [exec, ha_cal_service]
+      mcp:
+        servers:
+          homeassistant:
+            command: uvx
+            tools: [ha_call_service]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        warnings = Autobot::CLI::Doctor.check_tools(config, 0)
+
+        warnings.should eq(1)
+        io.to_s.should contain("✓ Confirmation required before: exec, ha_cal_service")
+        io.to_s.should contain("match no known tool: ha_cal_service")
+      end
+    end
+
     it "passes roots inside the workspace and warns about roots outside it" do
       config = make_config(<<-YAML
       agents:
