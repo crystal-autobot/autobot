@@ -199,7 +199,7 @@ All filesystem and exec operations go through `SandboxExecutor`, which routes th
 ### What Sandboxing Does NOT Prevent
 
 - Network attacks (agent has network access)
-- API key theft (main process has keys)
+- API key theft (main process has keys; tool results are redacted before they reach the model, see [Security](security.md#secrets-in-tool-output))
 - DoS via API calls
 - Social engineering (user approves actions)
 

@@ -119,9 +119,17 @@ ANTHROPIC_API_KEY=sk-ant-your-secret-key
 - ✅ `./.env` (outside workspace)
 - ❌ `./workspace/.env` (inside workspace - BLOCKED by validation)
 
+### Secrets in Tool Output
+
+Whatever a tool returns becomes part of the next prompt. The sandbox limits what a command can read, not what a tool returns: a script that fails with its request headers in the stack trace, or an MCP server that echoes its configuration in an error, would hand a token you passed in through `sandbox_env` to the model and, depending on the provider, to its training data.
+
+**Credential redaction** runs on every tool result before it reaches the model, whether the tool is built in, a skill script, a plugin or an MCP server. Provider keys, bearer tokens, `token=`, `password=`, `*_api_key=` and `*_secret=` assignments and authorization headers are replaced with `[REDACTED]`. Long identifiers such as commit hashes and base64 content are left alone.
+
+This is defense in depth. Keep secrets outside the workspace and reference them from `config.yml` with `${VAR}` so there is nothing to leak in the first place.
+
 ### Log Sanitization
 
-**Automatic log sanitization** redacts:
+**Automatic log sanitization** redacts everything credential redaction does, plus any long alphanumeric token that looks like a key:
 
 - API keys (sk-ant-, sk-, AKIA, etc.)
 - Bearer tokens

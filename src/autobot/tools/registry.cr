@@ -127,7 +127,7 @@ module Autobot::Tools
 
         @rate_limiter.record_call(name, effective_session_key)
 
-        result.to_s
+        LogSanitizer.redact_credentials(result.to_s)
       rescue ex : Exception
         error_msg = "Error executing #{name}"
         Log.error { error_msg }
