@@ -170,6 +170,19 @@ describe Autobot::Channels::TelegramMedia do
       attachments.first.mime_type.should eq("application/pdf")
     end
 
+    it "keeps document bytes for vision when mime type is an image" do
+      media = build_media(bytes: "png-bytes".to_slice)
+      msg = message(%({"document": {"file_id": "d2", "file_name": "photo.png", "mime_type": "image/png"}}))
+
+      parts, attachments = media.extract(msg, typed_text: false)
+
+      parts.should eq(["[document: photo.png]"])
+      attachment = attachments.first
+      attachment.name.should eq("photo.png")
+      attachment.mime_type.should eq("image/png")
+      attachment.data.should eq(Base64.strict_encode("png-bytes"))
+    end
+
     it "returns nothing for a plain text message" do
       media = build_media
       parts, attachments = media.extract(message(%({"text": "hello"})), typed_text: true)
