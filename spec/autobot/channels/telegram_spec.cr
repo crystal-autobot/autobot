@@ -40,6 +40,16 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     extract_sender(msg)
   end
 
+  def test_bot_username=(name : String)
+    @bot_username = name
+  end
+
+  def test_command_for_me?(text : String, msg : JSON::Any) : Bool
+    sender = extract_sender(msg)
+    raise "no sender" unless sender
+    command_for_me?(text, msg, sender)
+  end
+
   def test_service_message?(msg : JSON::Any) : Bool
     service_message?(msg)
   end
@@ -161,6 +171,7 @@ end
 
 private TOPIC_MESSAGE   = %({"message_id": 9, "message_thread_id": 57, "is_topic_message": true, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
 private GENERAL_REPLY   = %({"message_id": 9, "message_thread_id": 3, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
+private PRIVATE_MESSAGE = %({"message_id": 1, "chat": {"id": 5, "type": "private"}, "from": {"id": 1, "first_name": "Ann"}, "text": "/help"})
 private GENERAL_MESSAGE = %({"message_id": 9, "chat": {"id": -1001, "type": "supergroup", "is_forum": true}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
 
 describe Autobot::Channels::TelegramChannel do
@@ -182,6 +193,17 @@ describe Autobot::Channels::TelegramChannel do
       channel.test_service_message?(JSON.parse(created)).should be_true
       channel.test_service_message?(JSON.parse(GENERAL_MESSAGE)).should be_false
       channel.test_service_message?(JSON.parse(TOPIC_MESSAGE)).should be_false
+    end
+
+    it "handles a group command only when it names this bot or lands in an owned topic" do
+      channel = TelegramChannelTest.new(bus: Autobot::Bus::MessageBus.new, token: "t", topics: [57_i64])
+      channel.test_bot_username = "mybot"
+      channel.test_command_for_me?("/help@mybot", JSON.parse(GENERAL_REPLY)).should be_true
+      channel.test_command_for_me?("/help@MyBot", JSON.parse(GENERAL_REPLY)).should be_true
+      channel.test_command_for_me?("/help@otherbot", JSON.parse(TOPIC_MESSAGE)).should be_false
+      channel.test_command_for_me?("/help", JSON.parse(TOPIC_MESSAGE)).should be_true
+      channel.test_command_for_me?("/help", JSON.parse(GENERAL_REPLY)).should be_false
+      channel.test_command_for_me?("/help", JSON.parse(PRIVATE_MESSAGE)).should be_true
     end
 
     it "owns the General topic of a forum as topic 1" do
