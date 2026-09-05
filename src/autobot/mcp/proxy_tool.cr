@@ -123,8 +123,7 @@ module Autobot
       end
 
       private def self.convert_property(prop : JSON::Any) : Tools::PropertySchema
-        type = prop["type"]?.try(&.as_s?) || "string"
-        type = "string" unless Tools::Tool::VALID_SCHEMA_TYPES.includes?(type)
+        type = resolve_type(prop)
         desc = prop["description"]?.try(&.as_s?) || ""
 
         enum_values = prop["enum"]?.try(&.as_a?.try(&.compact_map(&.as_s?)))
@@ -139,6 +138,24 @@ module Autobot
           enum_values: enum_values,
           items: items,
         )
+      end
+
+      private def self.resolve_type(prop : JSON::Any) : String
+        types = declared_types(prop).select { |type| Tools::Tool::VALID_SCHEMA_TYPES.includes?(type) }.uniq!
+        case types.size
+        when 0 then "string"
+        when 1 then types.first
+        else        Tools::PropertySchema::ANY
+        end
+      end
+
+      private def self.declared_types(prop : JSON::Any) : Array(String)
+        if type = prop["type"]?
+          return [type.as_s] if type.as_s?
+          return type.as_a.compact_map(&.as_s?) if type.as_a?
+        end
+        branches = prop["anyOf"]? || prop["oneOf"]?
+        branches.try(&.as_a?).try(&.flat_map { |branch| declared_types(branch) }) || [] of String
       end
     end
   end

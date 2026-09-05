@@ -136,6 +136,23 @@ describe Autobot::Mcp::ProxyTool do
       schema.properties["x"].type.should eq("string")
     end
 
+    it "uses the concrete type of a nullable property" do
+      raw = JSON.parse(%({"type":"object","properties":{"limit":{"anyOf":[{"type":"integer"},{"type":"null"}]},"name":{"type":["string","null"]}}}))
+      schema = Autobot::Mcp::ProxyTool.convert_schema(raw)
+      schema.properties["limit"].type.should eq("integer")
+      schema.properties["name"].type.should eq("string")
+    end
+
+    it "accepts any value for a union of several types" do
+      raw = JSON.parse(%({"type":"object","properties":{"domains":{"anyOf":[{"type":"string"},{"type":"array","items":{"type":"string"}},{"type":"null"}]}}}))
+      schema = Autobot::Mcp::ProxyTool.convert_schema(raw)
+      property = schema.properties["domains"]
+      property.untyped?.should be_true
+      property.validate(JSON.parse(%(["light","sensor"])), "domains").should be_empty
+      property.validate(JSON.parse(%("light")), "domains").should be_empty
+      property.to_json_any.as_h.has_key?("type").should be_false
+    end
+
     it "handles array type with items" do
       raw = JSON.parse(%({"type":"object","properties":{"ids":{"type":"array","items":{"type":"integer"}}}}))
       schema = Autobot::Mcp::ProxyTool.convert_schema(raw)
