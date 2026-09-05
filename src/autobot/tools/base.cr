@@ -92,6 +92,8 @@ module Autobot
 
     # Describes a single property in a tool's parameter schema.
     class PropertySchema
+      ANY = "any"
+
       getter type : String
       getter description : String
       getter enum_values : Array(String)?
@@ -132,6 +134,10 @@ module Autobot
         else
           [] of String
         end
+      end
+
+      def untyped? : Bool
+        @type == ANY
       end
 
       private def validate_string(value : JSON::Any, path : String) : Array(String)
@@ -212,7 +218,7 @@ module Autobot
 
       def to_json_any : JSON::Any
         obj = {} of String => JSON::Any
-        obj["type"] = JSON::Any.new(@type)
+        obj["type"] = JSON::Any.new(@type) unless untyped?
         obj["description"] = JSON::Any.new(@description) unless @description.empty?
 
         if ev = @enum_values
