@@ -146,6 +146,7 @@ channels:
 - Messages in a listed topic are treated as addressed to the bot; other topics still need a mention. The General topic is topic 1: `topics: [1]` gives a bot the General topic, and replies there carry no thread id, as Telegram expects.
 - The chat ID becomes `<group>:<topic>`, for example `-1001234567890:57`, so each topic has its own session, its own `/reset` and its own cron delivery target. Use that form as the `to` of a cron job or a message tool call to reach a topic.
 - The bot must see the topic's messages: turn off privacy mode for it in BotFather (`/setprivacy`), or make it a group admin, then remove and re-add it to the group.
+- Service messages, such as a member joining, a pinned message or a topic being created, are ignored, so owning a topic never makes the bot comment on them.
 
 ## Troubleshooting
 
