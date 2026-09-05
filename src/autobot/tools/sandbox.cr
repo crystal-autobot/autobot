@@ -129,6 +129,23 @@ module Autobot
         end
       end
 
+      # /usr/bin/python3 and friends are symlinks into /etc/alternatives on Debian-based hosts
+      SYSTEM_CONFIG_PATHS = [
+        "/etc/alternatives",
+        "/etc/ld.so.cache",
+        "/etc/ld.so.conf",
+        "/etc/ld.so.conf.d",
+        "/etc/resolv.conf",
+        "/etc/hosts",
+        "/etc/nsswitch.conf",
+        "/etc/ssl",
+        "/etc/ca-certificates",
+        "/etc/localtime",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/matplotlibrc", # Debian's python3-matplotlib keeps its only matplotlibrc here
+      ]
+
       private def self.run_in_bubblewrap(
         cmd_args : Array(String),
         workspace : Path,
@@ -151,11 +168,16 @@ module Autobot
           "--chdir", workspace_real,
         ]
         args.push("--ro-bind", "/lib64", "/lib64") if Dir.exists?("/lib64")
+        args.concat(system_config_binds)
         args.push("--tmpfs", "/tmp")
         args.push("--")
         args.concat(cmd_args)
 
         capture_command("bwrap", args, timeout, max_output_size)
+      end
+
+      def self.system_config_binds(paths : Array(String) = SYSTEM_CONFIG_PATHS) : Array(String)
+        paths.select { |path| File.exists?(path) }.flat_map { |path| ["--ro-bind", path, path] }
       end
 
       private def self.run_in_docker(
