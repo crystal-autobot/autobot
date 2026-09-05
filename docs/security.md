@@ -157,11 +157,13 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 - `.env` file permissions not 0600
 - `.env` file inside workspace directory
 - No LLM provider configured
+- Unknown transcription provider
 
 **⚠️ Warnings (review recommended):**
 
 - Filesystem root configured outside the workspace
 - `tools.enabled` entry that matches no known tool
+- Voice transcription pinned to a provider that has no api key
 - Gateway bound to 0.0.0.0 (network exposure)
 - Channel authorization not configured (empty `allow_from`)
 - Missing `.env` file

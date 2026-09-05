@@ -321,10 +321,11 @@ Run `autobot doctor` to check voice transcription status:
 ✓ Voice transcription available (openai, own key)
 ```
 
-Or when it is off, or no provider is configured:
+Or when it is off, no provider is configured, or the config names a provider it does not know:
 
 ```
 — Voice transcription disabled
 — Voice transcription (no openai/groq provider)
 ! Voice transcription enabled but no api key for openai
+✗ Unknown transcription provider 'whisperx'
 ```

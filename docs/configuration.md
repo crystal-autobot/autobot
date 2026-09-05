@@ -108,7 +108,7 @@ tools:
     - edit_file
     - list_dir
     - message
-    - "ha_*"     # patterns ending in * match by prefix (skills, plugins, MCP tools)
+    - "mcp_homeassistant_*"  # a trailing * matches by prefix; MCP tools are named mcp_<server>_<tool>
   filesystem:
     roots: [notes, inbox]  # Optional; file tools may only touch these workspace subdirectories
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)

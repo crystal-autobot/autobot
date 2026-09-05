@@ -139,4 +139,4 @@ LOG_LEVEL=DEBUG autobot agent
 
 **"Telegram bot token not configured"** — token is empty. Check `.env` file and `${TELEGRAM_BOT_TOKEN}` substitution.
 
-**Voice messages show `[voice message]`** — no Whisper provider configured. Add Groq or OpenAI provider.
+**Bot replies that it could not hear a voice note** — transcription is off or no Whisper key is available. Add a Groq or OpenAI provider, or set `transcription.api_key`; see [Voice transcription](configuration.md#voice-transcription). `autobot doctor` shows which provider is in use.
