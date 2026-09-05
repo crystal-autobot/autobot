@@ -370,7 +370,7 @@ describe Autobot::CLI::Doctor do
       config = make_config("{}")
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(0)
 
         io.to_s.should contain("— Voice transcription (no openai/groq provider)")
       end
@@ -385,7 +385,7 @@ describe Autobot::CLI::Doctor do
       )
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(0)
 
         io.to_s.should contain("✓ Voice transcription available (groq)")
       end
@@ -400,7 +400,7 @@ describe Autobot::CLI::Doctor do
       )
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(0)
 
         io.to_s.should contain("✓ Voice transcription available (openai)")
       end
@@ -417,7 +417,7 @@ describe Autobot::CLI::Doctor do
       )
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(0)
 
         io.to_s.should contain("— Voice transcription disabled")
       end
@@ -432,7 +432,7 @@ describe Autobot::CLI::Doctor do
       )
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(0)
 
         io.to_s.should contain("✓ Voice transcription available (groq, own key)")
       end
@@ -442,7 +442,7 @@ describe Autobot::CLI::Doctor do
       config = make_config("transcription:\n  provider: whisperx\n")
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(1)
 
         io.to_s.should contain("✗ Unknown transcription provider 'whisperx'")
       end
@@ -459,7 +459,7 @@ describe Autobot::CLI::Doctor do
       )
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(0)
 
         io.to_s.should contain("! Voice transcription enabled but no api key for openai")
         io.to_s.should contain("transcription.api_key or providers.openai.api_key")
@@ -477,7 +477,7 @@ describe Autobot::CLI::Doctor do
       )
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(0)
 
         io.to_s.should contain("✓ Voice transcription available (groq)")
       end
@@ -492,7 +492,7 @@ describe Autobot::CLI::Doctor do
       )
 
       with_doctor_io do |io|
-        Autobot::CLI::Doctor.check_voice_transcription(config)
+        Autobot::CLI::Doctor.check_voice_transcription(config, 0).should eq(0)
 
         io.to_s.should contain("— Voice transcription (no openai/groq provider)")
       end
