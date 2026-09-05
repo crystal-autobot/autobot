@@ -61,7 +61,7 @@ Voice messages are automatically transcribed when a supported provider is config
 - **Groq** (preferred) — uses `whisper-large-v3-turbo`, faster with free tier
 - **OpenAI** — uses `whisper-1`
 
-If neither is configured, voice messages fall back to `[voice message]` text. Transcription works regardless of which provider you use for chat — you can use DeepSeek for chat and Groq for voice transcription by configuring both.
+If neither is configured, the bot replies that it could not hear the voice note instead of sending it to the model; see [Voice transcription](configuration.md#voice-transcription) for the per-bot settings. Transcription works regardless of which provider you use for chat — you can use DeepSeek for chat and Groq for voice transcription by configuring both.
 
 ## Multiple providers
 

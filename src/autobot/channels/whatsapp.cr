@@ -11,7 +11,7 @@ module Autobot::Channels
   #
   # Features:
   # - QR code authentication (displayed in bridge terminal)
-  # - Message handling (text, voice message notices)
+  # - Message handling (text, voice notes as attachments)
   # - Connection state management
   # - Auto-reconnection with backoff
   # - Allow list for access control
@@ -19,6 +19,7 @@ module Autobot::Channels
     Log = ::Log.for("channels.whatsapp")
 
     RECONNECT_DELAY = 5
+    VOICE_MESSAGE   = "[Voice Message]"
 
     @connected : Bool = false
 
@@ -114,12 +115,11 @@ module Autobot::Channels
     private def handle_incoming_message(data : JSON::Any) : Nil
       sender = data["sender"]?.try(&.as_s) || ""
       sender_id = resolve_sender_id(data, sender)
-      content = build_content(data, sender_id)
-
       handle_message(
         sender_id: sender_id,
         chat_id: sender,
-        content: content,
+        content: build_content(data),
+        media: build_media(data),
         metadata: build_metadata(data),
       )
     end
@@ -130,15 +130,14 @@ module Autobot::Channels
       user_id.includes?('@') ? user_id.split('@').first : user_id
     end
 
-    private def build_content(data : JSON::Any, sender_id : String) : String
+    private def build_content(data : JSON::Any) : String
       content = data["content"]?.try(&.as_s) || ""
-
-      if content == "[Voice Message]"
-        Log.info { "Voice message from #{sender_id} (transcription not yet supported)" }
-        content = "[Voice Message: Transcription not available for WhatsApp yet]"
-      end
-
       prepend_reply_context(content, extract_reply_context(data))
+    end
+
+    private def build_media(data : JSON::Any) : Array(Bus::MediaAttachment)?
+      return nil unless data["content"]?.try(&.as_s?) == VOICE_MESSAGE
+      [Bus::MediaAttachment.new(type: Bus::MediaAttachment::TYPE_VOICE)]
     end
 
     private def build_metadata(data : JSON::Any) : Hash(String, String)

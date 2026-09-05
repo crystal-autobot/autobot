@@ -84,7 +84,7 @@ module Autobot
         warnings = check_channels(config, warnings)
 
         # Voice transcription
-        check_voice_transcription(config)
+        errors = check_voice_transcription(config, errors)
 
         # Image generation
         check_image_generation(config)
@@ -404,10 +404,21 @@ module Autobot
         end
       end
 
-      def self.check_voice_transcription(config : Config::Config) : Nil
+      def self.check_voice_transcription(config : Config::Config, errors : Int32) : Int32
+        transcription = config.transcription
+        unless transcription.provider_known?
+          report(Status::Fail, "Unknown transcription provider '#{transcription.provider}'")
+          hint("Use one of: #{Config::TranscriptionConfig::PROVIDERS.join(", ")}")
+          return errors + 1
+        end
+
+        report_transcription_status(config)
+        errors
+      end
+
+      private def self.report_transcription_status(config : Config::Config) : Nil
         transcription = config.transcription
         return report(Status::Skip, "Voice transcription disabled") unless transcription.enabled?
-        return report(Status::Fail, "Unknown transcription provider '#{transcription.provider}'") unless transcription.provider_known?
 
         if source = config.transcription_source
           key_note = source.own_key ? ", own key" : ""
