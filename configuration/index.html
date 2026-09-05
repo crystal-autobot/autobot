@@ -1,0 +1,2175 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Ultra-efficient personal AI assistant powered by Crystal">
+      
+      
+      
+        <link rel="canonical" href="https://crystal-autobot.github.io/autobot/configuration/">
+      
+      
+        <link rel="prev" href="../blueprints/">
+      
+      
+        <link rel="next" href="../providers/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon-32.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Configuration - Autobot</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Autobot" class="md-header__button md-logo" aria-label="Autobot" data-md-component="logo">
+      
+  <img src="../assets/icon-circuit-hex.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Autobot
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/crystal-autobot/autobot" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    crystal-autobot/autobot
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Autobot" class="md-nav__button md-logo" aria-label="Autobot" data-md-component="logo">
+      
+  <img src="../assets/icon-circuit-hex.svg" alt="logo">
+
+    </a>
+    Autobot
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/crystal-autobot/autobot" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    crystal-autobot/autobot
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../blueprints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Blueprints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#minimal-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Minimal Config
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#voice-transcription" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Voice Transcription
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#media" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Media
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tool-allowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool Allowlist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#web-fetch-egress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web Fetch Egress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filesystem-roots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filesystem Roots
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safety-guard-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety Guard Overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-model-context-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP (Model Context Protocol)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cron" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cron
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gateway
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gateway">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#full-config-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full config reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../anthropic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openai/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deepseek/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DeepSeek
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../groq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Groq
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gemini/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Gemini
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openrouter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenRouter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bedrock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AWS Bedrock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../duckai/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DuckAI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vllm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    vLLM / Local
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Channels
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Channels
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../slack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zulip/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zulip
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cron/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cron & Scheduling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../media/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Media & Voice
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../web-search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Servers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sandboxing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandboxing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#minimal-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Minimal Config
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#voice-transcription" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Voice Transcription
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#media" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Media
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tool-allowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool Allowlist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#web-fetch-egress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web Fetch Egress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filesystem-roots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filesystem Roots
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safety-guard-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety Guard Overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-model-context-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP (Model Context Protocol)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cron" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cron
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gateway
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gateway">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#full-config-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full config reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h1>
+<p>Default config path: <code>./config.yml</code></p>
+<p>Config precedence:</p>
+<ol>
+<li><code>--config &lt;path&gt;</code></li>
+<li><code>./config.yml</code></li>
+<li>Schema defaults</li>
+</ol>
+<h2 id="minimal-config">Minimal Config<a class="headerlink" href="#minimal-config" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">providers</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">anthropic</span><span class="p">:</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"${ANTHROPIC_API_KEY}"</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nt">agents</span><span class="p">:</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">defaults</span><span class="p">:</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="s">"anthropic/claude-sonnet-4-5"</span>
+</code></pre></div>
+<h2 id="providers">Providers<a class="headerlink" href="#providers" title="Permanent link">&para;</a></h2>
+<p>Supported provider blocks — see the <strong><a href="../providers/">Providers overview</a></strong> for a full comparison.</p>
+<ul>
+<li><strong><a href="../anthropic/"><code>anthropic</code></a></strong> — Claude models via Messages API</li>
+<li><strong><a href="../openai/"><code>openai</code></a></strong> — GPT-5 family, o3 models</li>
+<li><strong><a href="../deepseek/"><code>deepseek</code></a></strong> — DeepSeek-V3, R1</li>
+<li><strong><a href="../groq/"><code>groq</code></a></strong> — Ultra-fast inference (Llama, Mixtral, Gemma)</li>
+<li><strong><a href="../gemini/"><code>gemini</code></a></strong> — Google Gemini Pro, Flash</li>
+<li><strong><a href="../openrouter/"><code>openrouter</code></a></strong> — Gateway to hundreds of models</li>
+<li><strong><a href="../bedrock/"><code>bedrock</code></a></strong> — AWS Bedrock via Converse API</li>
+<li><strong><a href="../vllm/"><code>vllm</code></a></strong> — Local/hosted OpenAI-compatible endpoint</li>
+</ul>
+<h2 id="voice-transcription">Voice Transcription<a class="headerlink" href="#voice-transcription" title="Permanent link">&para;</a></h2>
+<p>Voice notes are transcribed with the Whisper API. By default the key is reused from the chat provider config, Groq first (<code>whisper-large-v3-turbo</code>), then OpenAI (<code>whisper-1</code>). The <code>transcription</code> section changes that per bot:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">transcription</span><span class="p">:</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">              </span><span class="c1"># false: voice notes are never transcribed</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">groq</span><span class="w">             </span><span class="c1"># openai or groq; default picks groq, then openai</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"${WHISPER_KEY}"</span><span class="w">  </span><span class="c1"># own key, separate from the chat provider</span>
+</code></pre></div>
+<p>With <code>enabled: false</code>, or when no key is available, a voice note is saved to the inbox without a transcript and the bot replies that it could not hear it, without a model turn. <code>autobot doctor</code> prints the provider in use, whether it runs on its own key, and warns when a pinned provider has no key.</p>
+<h2 id="media">Media<a class="headerlink" href="#media" title="Permanent link">&para;</a></h2>
+<p>Incoming files are saved to an inbox under the workspace so tools can read them by path. Only the location is configurable:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">media</span><span class="p">:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">inbox</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">inbox</span><span class="w">   </span><span class="c1"># relative to the workspace (default), or an absolute path</span>
+</code></pre></div>
+<p>A voice note recorded in the chat by the sender is treated as their spoken words. Audio files, photos, documents and anything forwarded become attachments and never enter the message text. See <a href="../media/">Media support</a>.</p>
+<h2 id="channels">Channels<a class="headerlink" href="#channels" title="Permanent link">&para;</a></h2>
+<p><strong>Security Note:</strong> <code>allow_from</code> is deny-by-default for security.</p>
+<p>Setup guides: <strong><a href="../telegram/">Telegram</a></strong> | <strong><a href="../slack/">Slack</a></strong> | <strong><a href="../zulip/">Zulip</a></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">channels</span><span class="p">:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">telegram</span><span class="p">:</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="c1"># allow_from options:</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="c1"># []              - DENY ALL (secure default)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="c1"># ["*"]           - Allow anyone (use with caution)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="c1"># ["@user", "id"] - Allowlist specific users (recommended)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">allow_from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">topics</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">     </span><span class="c1"># forum topic IDs the bot answers in without a mention</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span><span class="nt">slack</span><span class="p">:</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="nt">bot_token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">    </span><span class="nt">app_token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">    </span><span class="nt">allow_from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="s">"socket"</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span><span class="nt">group_policy</span><span class="p">:</span><span class="w"> </span><span class="s">"mention"</span><span class="w">  </span><span class="c1"># "mention" (secure) | "open" | "allowlist"</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">  </span><span class="nt">whatsapp</span><span class="p">:</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">    </span><span class="nt">bridge_url</span><span class="p">:</span><span class="w"> </span><span class="s">"ws://localhost:3001"</span><span class="w">  </span><span class="c1"># Prefer wss:// for production</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">    </span><span class="c1"># allow_from: []      - DENY ALL</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">    </span><span class="c1"># allow_from: ["*"]   - Allow anyone</span>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">    </span><span class="c1"># allow_from: ["num"] - Allowlist phone numbers</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">    </span><span class="nt">allow_from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>
+<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">  </span><span class="nt">zulip</span><span class="p">:</span>
+<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">    </span><span class="nt">site</span><span class="p">:</span><span class="w"> </span><span class="s">"https://zulip.example.com"</span>
+<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="w">    </span><span class="nt">email</span><span class="p">:</span><span class="w"> </span><span class="s">"bot@zulip.example.com"</span>
+<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a><span class="w">    </span><span class="nt">allow_from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+</code></pre></div>
+<h2 id="tools">Tools<a class="headerlink" href="#tools" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">tools</span><span class="p">:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w">       </span><span class="c1"># Optional allowlist; omit to register every tool</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">read_file</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">write_file</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">edit_file</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">list_dir</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">message</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"mcp_homeassistant_*"</span><span class="w">  </span><span class="c1"># a trailing * matches by prefix; MCP tools are named mcp_&lt;server&gt;_&lt;tool&gt;</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="nt">filesystem</span><span class="p">:</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span><span class="nt">roots</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">notes</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">inbox</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># Optional; file tools may only touch these workspace subdirectories</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span><span class="nt">sandbox</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span><span class="w">  </span><span class="c1"># auto | bubblewrap | docker | none (default: auto)</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span><span class="nt">docker_image</span><span class="p">:</span><span class="w"> </span><span class="s">"python:3.14-alpine"</span><span class="w">  </span><span class="c1"># optional, default: alpine:latest</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">  </span><span class="nt">sandbox_env</span><span class="p">:</span><span class="w">   </span><span class="c1"># env vars to forward into Docker sandbox (default: none)</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HA_URL</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MQTT_HOST</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">  </span><span class="nt">exec</span><span class="p">:</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">    </span><span class="nt">allow_patterns</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional regex allowlist</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"^ssh</span><span class="nv"> </span><span class="s">.*$"</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">    </span><span class="nt">deny_patterns</span><span class="p">:</span><span class="w">  </span><span class="c1"># Optional regex denylist (extends built-in)</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"^rm</span><span class="nv"> </span><span class="s">-rf</span><span class="nv"> </span><span class="s">/.*$"</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">  </span><span class="nt">rate_limit</span><span class="p">:</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span><span class="nt">global</span><span class="p">:</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">      </span><span class="nt">max_calls</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">      </span><span class="nt">window_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">    </span><span class="nt">per_tool</span><span class="p">:</span>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">      </span><span class="nt">exec</span><span class="p">:</span>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">        </span><span class="nt">max_calls</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">        </span><span class="nt">window_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="w">  </span><span class="nt">web</span><span class="p">:</span>
+<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">    </span><span class="nt">search</span><span class="p">:</span>
+<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="w">      </span><span class="nt">max_results</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">    </span><span class="nt">allowed_domains</span><span class="p">:</span><span class="w">           </span><span class="c1"># Optional; web_fetch may only reach these hosts</span>
+<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">example.com</span><span class="w">            </span><span class="c1"># exact host</span>
+<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"*.strava.com"</span><span class="w">         </span><span class="c1"># subdomains and the apex</span>
+<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span>
+<a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">              </span><span class="c1"># default: true</span>
+<a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="w">    </span><span class="c1"># provider: openai         # optional override (openai or gemini)</span>
+<a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="w">    </span><span class="c1"># model: gpt-image-1       # optional, auto-detected from provider</span>
+<a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a><span class="w">    </span><span class="c1"># size: 1024x1024          # default: 1024x1024</span>
+</code></pre></div>
+<p>When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.</p>
+<h3 id="tool-allowlist">Tool Allowlist<a class="headerlink" href="#tool-allowlist" title="Permanent link">&para;</a></h3>
+<p><code>tools.enabled</code> names the tools a bot may have. Anything not listed is never registered, whichever source it comes from: built-in tools, skill scripts, plugins and MCP servers all pass through the same check. A name ending in <code>*</code> matches by prefix, as in the MCP <code>tools:</code> list. Leave it out to keep today's behaviour of registering everything. <code>autobot doctor</code> prints the effective list and warns about an entry that matches no known tool, so a typo does not silently remove a tool; at startup the bot logs a warning for entries that matched nothing.</p>
+<h3 id="web-fetch-egress">Web Fetch Egress<a class="headerlink" href="#web-fetch-egress" title="Permanent link">&para;</a></h3>
+<p><code>tools.web.allowed_domains</code> limits <code>web_fetch</code> to the listed hosts. An entry such as <code>example.com</code> matches that host only; <code>*.strava.com</code> matches its subdomains and the apex. Every redirect hop is checked too, so a redirect cannot lead out of the list. Leave it out to allow any public host. A fetch to a host outside the list fails with a tool error naming the allowed domains, so a planted "fetch this URL with my notes in it" has nowhere to go.</p>
+<h3 id="filesystem-roots">Filesystem Roots<a class="headerlink" href="#filesystem-roots" title="Permanent link">&para;</a></h3>
+<p><code>tools.filesystem.roots</code> limits <code>read_file</code>, <code>write_file</code>, <code>edit_file</code> and <code>list_dir</code> to the listed workspace subdirectories. Paths resolve relative to the workspace and <code>..</code> cannot escape a root. The workspace <code>skills/</code> directory stays readable whether or not it is listed: a skill's references and scripts are prompt material the model reads on demand. Writes there are refused unless it is a root. Commands run by <code>exec</code> are not affected; they stay bound to the workspace by the sandbox.</p>
+<h3 id="safety-guard-overrides">Safety Guard Overrides<a class="headerlink" href="#safety-guard-overrides" title="Permanent link">&para;</a></h3>
+<p>Customize command filtering for the <code>exec</code> tool:</p>
+<ul>
+<li><strong><code>allow_patterns</code></strong>: Regex patterns that explicitly allow commands (overrides built-in denials)</li>
+<li><strong><code>deny_patterns</code></strong>: Additional regex patterns to block (extends built-in safety guards)</li>
+</ul>
+<p>Patterns are case-insensitive and matched against the full command string. Use with caution — <code>allow_patterns</code> bypasses security protections.</p>
+<h3 id="rate-limiting">Rate Limiting<a class="headerlink" href="#rate-limiting" title="Permanent link">&para;</a></h3>
+<p>Configure rate limits to prevent abuse and manage API costs:</p>
+<ul>
+<li><strong><code>global</code></strong>: Applies across all tools combined</li>
+<li><strong><code>per_tool</code></strong>: Tool-specific limits (e.g., <code>exec</code>, <code>web_search</code>)</li>
+</ul>
+<p>Each limit specifies:
+- <strong><code>max_calls</code></strong>: Maximum calls allowed in the window
+- <strong><code>window_seconds</code></strong>: Time window for counting calls</p>
+<p>When a limit is exceeded, the tool returns an error message that the LLM can see and respond to (e.g., "Rate limit exceeded for exec: max 20 calls per 60s").</p>
+<h2 id="mcp-model-context-protocol">MCP (Model Context Protocol)<a class="headerlink" href="#mcp-model-context-protocol" title="Permanent link">&para;</a></h2>
+<p>Connect to external MCP servers to give the LLM access to remote tools (Garmin, GitHub, etc.).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">mcp</span><span class="p">:</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">servers</span><span class="p">:</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">garmin</span><span class="p">:</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">      </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"uvx"</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"--python"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"3.12"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"--from"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"git+https://github.com/Taxuspt/garmin_mcp"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"garmin-mcp"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">      </span><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">        </span><span class="nt">GARMIN_EMAIL</span><span class="p">:</span><span class="w"> </span><span class="s">"${GARMIN_EMAIL}"</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="nt">github</span><span class="p">:</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">      </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"npx"</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"-y"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"@modelcontextprotocol/server-github"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">      </span><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">        </span><span class="nt">GITHUB_TOKEN</span><span class="p">:</span><span class="w"> </span><span class="s">"${GITHUB_TOKEN}"</span>
+</code></pre></div>
+<p>Tools are auto-discovered at startup and registered as <code>mcp_{server}_{tool}</code>. MCP servers run unsandboxed (they need network access) but with isolated env vars.</p>
+<p><strong>-&gt; <a href="../mcp/">MCP Documentation</a></strong></p>
+<h2 id="cron">Cron<a class="headerlink" href="#cron" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">cron</span><span class="p">:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">store_path</span><span class="p">:</span><span class="w"> </span><span class="s">"./cron.json"</span>
+</code></pre></div>
+<h2 id="gateway">Gateway<a class="headerlink" href="#gateway" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">gateway</span><span class="p">:</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="s">"127.0.0.1"</span><span class="w">  </span><span class="c1"># Default: localhost only (change to 0.0.0.0 for external access)</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">18790</span>
+</code></pre></div>
+<h3 id="full-config-reference">Full config reference<a class="headerlink" href="#full-config-reference" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># LLM providers (configure at least one)</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">providers</span><span class="p">:</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">anthropic</span><span class="p">:</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"sk-ant-..."</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="nt">openai</span><span class="p">:</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"sk-..."</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="nt">deepseek</span><span class="p">:</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span><span class="nt">groq</span><span class="p">:</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span><span class="nt">gemini</span><span class="p">:</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">  </span><span class="nt">openrouter</span><span class="p">:</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">  </span><span class="nt">vllm</span><span class="p">:</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">    </span><span class="nt">api_base</span><span class="p">:</span><span class="w"> </span><span class="s">"http://localhost:8000"</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"token"</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">  </span><span class="nt">bedrock</span><span class="p">:</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">    </span><span class="nt">access_key_id</span><span class="p">:</span><span class="w"> </span><span class="s">"${AWS_ACCESS_KEY_ID}"</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span><span class="nt">secret_access_key</span><span class="p">:</span><span class="w"> </span><span class="s">"${AWS_SECRET_ACCESS_KEY}"</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">    </span><span class="nt">region</span><span class="p">:</span><span class="w"> </span><span class="s">"${AWS_REGION}"</span>
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span><span class="c1"># guardrail_id: "abc123"</span>
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">    </span><span class="c1"># guardrail_version: "1"</span>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="c1"># Agent defaults</span>
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="nt">agents</span><span class="p">:</span>
+<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">  </span><span class="nt">defaults</span><span class="p">:</span>
+<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="s">"anthropic/claude-sonnet-4-5"</span>
+<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">    </span><span class="nt">max_tokens</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8192</span>
+<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="w">    </span><span class="nt">temperature</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.7</span>
+<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="w">    </span><span class="nt">max_tool_iterations</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="w">    </span><span class="nt">memory_window</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
+<a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a><span class="w">    </span><span class="nt">workspace</span><span class="p">:</span><span class="w"> </span><span class="s">"./workspace"</span>
+<a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>
+<a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a><span class="c1"># Chat channels</span>
+<a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a><span class="nt">channels</span><span class="p">:</span>
+<a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a><span class="w">  </span><span class="nt">telegram</span><span class="p">:</span>
+<a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a><span class="w">    </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">"BOT_TOKEN"</span>
+<a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a><span class="w">    </span><span class="nt">allow_from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"username1"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"username2"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a><span class="w">    </span><span class="nt">custom_commands</span><span class="p">:</span>
+<a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a><span class="w">      </span><span class="nt">macros</span><span class="p">:</span>
+<a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a><span class="w">        </span><span class="c1"># Simple format (command name used as description)</span>
+<a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a><span class="w">        </span><span class="nt">summarize</span><span class="p">:</span><span class="w"> </span><span class="s">"Summarize</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">last</span><span class="nv"> </span><span class="s">conversation</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">3</span><span class="nv"> </span><span class="s">bullet</span><span class="nv"> </span><span class="s">points"</span>
+<a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a><span class="w">        </span><span class="c1"># Rich format (with custom description shown in Telegram command menu)</span>
+<a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a><span class="w">        </span><span class="nt">translate</span><span class="p">:</span>
+<a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a><span class="w">          </span><span class="nt">prompt</span><span class="p">:</span><span class="w"> </span><span class="s">"Translate</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">following</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">English"</span>
+<a id="__codelineno-8-48" name="__codelineno-8-48" href="#__codelineno-8-48"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">"Translate</span><span class="nv"> </span><span class="s">text</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">English"</span>
+<a id="__codelineno-8-49" name="__codelineno-8-49" href="#__codelineno-8-49"></a><span class="w">      </span><span class="nt">scripts</span><span class="p">:</span>
+<a id="__codelineno-8-50" name="__codelineno-8-50" href="#__codelineno-8-50"></a><span class="w">        </span><span class="nt">deploy</span><span class="p">:</span>
+<a id="__codelineno-8-51" name="__codelineno-8-51" href="#__codelineno-8-51"></a><span class="w">          </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="s">"/home/user/scripts/deploy.sh"</span>
+<a id="__codelineno-8-52" name="__codelineno-8-52" href="#__codelineno-8-52"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">"Deploy</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">production"</span>
+<a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a><span class="w">        </span><span class="nt">status</span><span class="p">:</span><span class="w"> </span><span class="s">"/home/user/scripts/check_status.sh"</span>
+<a id="__codelineno-8-54" name="__codelineno-8-54" href="#__codelineno-8-54"></a>
+<a id="__codelineno-8-55" name="__codelineno-8-55" href="#__codelineno-8-55"></a><span class="w">  </span><span class="nt">slack</span><span class="p">:</span>
+<a id="__codelineno-8-56" name="__codelineno-8-56" href="#__codelineno-8-56"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-8-57" name="__codelineno-8-57" href="#__codelineno-8-57"></a><span class="w">    </span><span class="nt">bot_token</span><span class="p">:</span><span class="w"> </span><span class="s">"xoxb-..."</span>
+<a id="__codelineno-8-58" name="__codelineno-8-58" href="#__codelineno-8-58"></a><span class="w">    </span><span class="nt">app_token</span><span class="p">:</span><span class="w"> </span><span class="s">"xapp-..."</span>
+<a id="__codelineno-8-59" name="__codelineno-8-59" href="#__codelineno-8-59"></a><span class="w">    </span><span class="nt">allow_from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"U12345678"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-8-60" name="__codelineno-8-60" href="#__codelineno-8-60"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="s">"socket"</span>
+<a id="__codelineno-8-61" name="__codelineno-8-61" href="#__codelineno-8-61"></a><span class="w">    </span><span class="nt">group_policy</span><span class="p">:</span><span class="w"> </span><span class="s">"mention"</span>
+<a id="__codelineno-8-62" name="__codelineno-8-62" href="#__codelineno-8-62"></a><span class="w">    </span><span class="nt">dm</span><span class="p">:</span>
+<a id="__codelineno-8-63" name="__codelineno-8-63" href="#__codelineno-8-63"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-8-64" name="__codelineno-8-64" href="#__codelineno-8-64"></a><span class="w">      </span><span class="nt">policy</span><span class="p">:</span><span class="w"> </span><span class="s">"open"</span>
+<a id="__codelineno-8-65" name="__codelineno-8-65" href="#__codelineno-8-65"></a>
+<a id="__codelineno-8-66" name="__codelineno-8-66" href="#__codelineno-8-66"></a><span class="w">  </span><span class="nt">whatsapp</span><span class="p">:</span>
+<a id="__codelineno-8-67" name="__codelineno-8-67" href="#__codelineno-8-67"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-8-68" name="__codelineno-8-68" href="#__codelineno-8-68"></a><span class="w">    </span><span class="nt">bridge_url</span><span class="p">:</span><span class="w"> </span><span class="s">"ws://localhost:3001"</span>
+<a id="__codelineno-8-69" name="__codelineno-8-69" href="#__codelineno-8-69"></a><span class="w">    </span><span class="nt">allow_from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"1234567890"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-8-70" name="__codelineno-8-70" href="#__codelineno-8-70"></a>
+<a id="__codelineno-8-71" name="__codelineno-8-71" href="#__codelineno-8-71"></a><span class="w">  </span><span class="nt">zulip</span><span class="p">:</span>
+<a id="__codelineno-8-72" name="__codelineno-8-72" href="#__codelineno-8-72"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-8-73" name="__codelineno-8-73" href="#__codelineno-8-73"></a><span class="w">    </span><span class="nt">site</span><span class="p">:</span><span class="w"> </span><span class="s">"https://zulip.example.com"</span>
+<a id="__codelineno-8-74" name="__codelineno-8-74" href="#__codelineno-8-74"></a><span class="w">    </span><span class="nt">email</span><span class="p">:</span><span class="w"> </span><span class="s">"bot@zulip.example.com"</span>
+<a id="__codelineno-8-75" name="__codelineno-8-75" href="#__codelineno-8-75"></a><span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-8-76" name="__codelineno-8-76" href="#__codelineno-8-76"></a><span class="w">    </span><span class="nt">allow_from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"you@example.com"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-8-77" name="__codelineno-8-77" href="#__codelineno-8-77"></a>
+<a id="__codelineno-8-78" name="__codelineno-8-78" href="#__codelineno-8-78"></a><span class="c1"># Tool settings</span>
+<a id="__codelineno-8-79" name="__codelineno-8-79" href="#__codelineno-8-79"></a><span class="nt">tools</span><span class="p">:</span>
+<a id="__codelineno-8-80" name="__codelineno-8-80" href="#__codelineno-8-80"></a><span class="w">  </span><span class="nt">sandbox</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span><span class="w">  </span><span class="c1"># auto | bubblewrap | docker | none</span>
+<a id="__codelineno-8-81" name="__codelineno-8-81" href="#__codelineno-8-81"></a><span class="w">  </span><span class="nt">docker_image</span><span class="p">:</span><span class="w"> </span><span class="s">"python:3.14-alpine"</span><span class="w">  </span><span class="c1"># optional, default: alpine:latest</span>
+<a id="__codelineno-8-82" name="__codelineno-8-82" href="#__codelineno-8-82"></a><span class="w">  </span><span class="nt">sandbox_env</span><span class="p">:</span><span class="w">  </span><span class="c1"># env vars to forward into Docker sandbox (default: none)</span>
+<a id="__codelineno-8-83" name="__codelineno-8-83" href="#__codelineno-8-83"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HA_URL</span>
+<a id="__codelineno-8-84" name="__codelineno-8-84" href="#__codelineno-8-84"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MQTT_HOST</span>
+<a id="__codelineno-8-85" name="__codelineno-8-85" href="#__codelineno-8-85"></a><span class="w">  </span><span class="nt">web</span><span class="p">:</span>
+<a id="__codelineno-8-86" name="__codelineno-8-86" href="#__codelineno-8-86"></a><span class="w">    </span><span class="nt">search</span><span class="p">:</span>
+<a id="__codelineno-8-87" name="__codelineno-8-87" href="#__codelineno-8-87"></a><span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">"BRAVE_API_KEY"</span>
+<a id="__codelineno-8-88" name="__codelineno-8-88" href="#__codelineno-8-88"></a><span class="w">      </span><span class="nt">max_results</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<a id="__codelineno-8-89" name="__codelineno-8-89" href="#__codelineno-8-89"></a><span class="w">    </span><span class="nt">allowed_domains</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">example.com</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"*.strava.com"</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># optional, web_fetch egress allowlist</span>
+<a id="__codelineno-8-90" name="__codelineno-8-90" href="#__codelineno-8-90"></a><span class="w">  </span><span class="nt">exec</span><span class="p">:</span>
+<a id="__codelineno-8-91" name="__codelineno-8-91" href="#__codelineno-8-91"></a><span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+<a id="__codelineno-8-92" name="__codelineno-8-92" href="#__codelineno-8-92"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span>
+<a id="__codelineno-8-93" name="__codelineno-8-93" href="#__codelineno-8-93"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-8-94" name="__codelineno-8-94" href="#__codelineno-8-94"></a><span class="w">    </span><span class="c1"># provider: openai       # optional override (openai or gemini)</span>
+<a id="__codelineno-8-95" name="__codelineno-8-95" href="#__codelineno-8-95"></a><span class="w">    </span><span class="c1"># model: gpt-image-1     # optional, auto-detected from provider</span>
+<a id="__codelineno-8-96" name="__codelineno-8-96" href="#__codelineno-8-96"></a><span class="w">    </span><span class="c1"># size: 1024x1024</span>
+<a id="__codelineno-8-97" name="__codelineno-8-97" href="#__codelineno-8-97"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">read_file</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">write_file</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">edit_file</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">list_dir</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">message</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># optional allowlist</span>
+<a id="__codelineno-8-98" name="__codelineno-8-98" href="#__codelineno-8-98"></a><span class="w">  </span><span class="nt">filesystem</span><span class="p">:</span>
+<a id="__codelineno-8-99" name="__codelineno-8-99" href="#__codelineno-8-99"></a><span class="w">    </span><span class="nt">roots</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">notes</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">inbox</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># optional, workspace subdirectories the file tools may touch</span>
+<a id="__codelineno-8-100" name="__codelineno-8-100" href="#__codelineno-8-100"></a>
+<a id="__codelineno-8-101" name="__codelineno-8-101" href="#__codelineno-8-101"></a><span class="c1"># Cron scheduler</span>
+<a id="__codelineno-8-102" name="__codelineno-8-102" href="#__codelineno-8-102"></a><span class="nt">cron</span><span class="p">:</span>
+<a id="__codelineno-8-103" name="__codelineno-8-103" href="#__codelineno-8-103"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-8-104" name="__codelineno-8-104" href="#__codelineno-8-104"></a><span class="w">  </span><span class="nt">store_path</span><span class="p">:</span><span class="w"> </span><span class="s">"./cron.json"</span>
+<a id="__codelineno-8-105" name="__codelineno-8-105" href="#__codelineno-8-105"></a>
+<a id="__codelineno-8-106" name="__codelineno-8-106" href="#__codelineno-8-106"></a><span class="c1"># MCP servers (external tool providers)</span>
+<a id="__codelineno-8-107" name="__codelineno-8-107" href="#__codelineno-8-107"></a><span class="nt">mcp</span><span class="p">:</span>
+<a id="__codelineno-8-108" name="__codelineno-8-108" href="#__codelineno-8-108"></a><span class="w">  </span><span class="nt">servers</span><span class="p">:</span>
+<a id="__codelineno-8-109" name="__codelineno-8-109" href="#__codelineno-8-109"></a><span class="w">    </span><span class="nt">garmin</span><span class="p">:</span>
+<a id="__codelineno-8-110" name="__codelineno-8-110" href="#__codelineno-8-110"></a><span class="w">      </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"uvx"</span>
+<a id="__codelineno-8-111" name="__codelineno-8-111" href="#__codelineno-8-111"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"--python"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"3.12"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"--from"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"git+https://github.com/Taxuspt/garmin_mcp"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"garmin-mcp"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-8-112" name="__codelineno-8-112" href="#__codelineno-8-112"></a><span class="w">      </span><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-8-113" name="__codelineno-8-113" href="#__codelineno-8-113"></a><span class="w">        </span><span class="nt">GARMIN_EMAIL</span><span class="p">:</span><span class="w"> </span><span class="s">"${GARMIN_EMAIL}"</span>
+<a id="__codelineno-8-114" name="__codelineno-8-114" href="#__codelineno-8-114"></a><span class="w">    </span><span class="nt">github</span><span class="p">:</span>
+<a id="__codelineno-8-115" name="__codelineno-8-115" href="#__codelineno-8-115"></a><span class="w">      </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"npx"</span>
+<a id="__codelineno-8-116" name="__codelineno-8-116" href="#__codelineno-8-116"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"-y"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"@modelcontextprotocol/server-github"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-8-117" name="__codelineno-8-117" href="#__codelineno-8-117"></a><span class="w">      </span><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-8-118" name="__codelineno-8-118" href="#__codelineno-8-118"></a><span class="w">        </span><span class="nt">GITHUB_TOKEN</span><span class="p">:</span><span class="w"> </span><span class="s">"${GITHUB_TOKEN}"</span>
+<a id="__codelineno-8-119" name="__codelineno-8-119" href="#__codelineno-8-119"></a>
+<a id="__codelineno-8-120" name="__codelineno-8-120" href="#__codelineno-8-120"></a><span class="c1"># Gateway API server</span>
+<a id="__codelineno-8-121" name="__codelineno-8-121" href="#__codelineno-8-121"></a><span class="nt">gateway</span><span class="p">:</span>
+<a id="__codelineno-8-122" name="__codelineno-8-122" href="#__codelineno-8-122"></a><span class="w">  </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="s">"127.0.0.1"</span><span class="w">  </span><span class="c1"># Localhost only by default for security</span>
+<a id="__codelineno-8-123" name="__codelineno-8-123" href="#__codelineno-8-123"></a><span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">18790</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
