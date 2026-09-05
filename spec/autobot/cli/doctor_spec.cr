@@ -641,7 +641,7 @@ describe Autobot::CLI::Doctor do
         defaults:
           workspace: "#{workspace}"
       tools:
-        enabled: [bash_deploy, get_weather, ha_get_*, read_file]
+        enabled: [bash_deploy, get_weather, mcp_homeassistant_ha_get_*, mcp_homeassistant_ha_call_service, read_file]
       mcp:
         servers:
           homeassistant:

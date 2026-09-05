@@ -1,5 +1,6 @@
 require "../config/validator"
 require "../tools/sandbox"
+require "../mcp/proxy_tool"
 
 module Autobot
   module CLI
@@ -218,7 +219,8 @@ module Autobot
       end
 
       private def self.mcp_tool_patterns(config : Config::Config) : Array(String)
-        config.mcp.try(&.servers.values.flat_map(&.tools)) || [] of String
+        servers = config.mcp.try(&.servers) || {} of String => Config::McpServerConfig
+        servers.flat_map { |name, server| server.tools.map { |tool| Mcp::ProxyTool.build_name(name, tool) } }
       end
 
       private def self.mcp_servers_without_tool_list?(config : Config::Config) : Bool
