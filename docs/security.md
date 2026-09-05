@@ -295,7 +295,20 @@ tools:
 
 ---
 
-## 13. Known Limitations
+## 13. Transcription Per Bot
+
+Speech is the one kind of content that becomes instruction: a voice note the sender records is transcribed into the message text. The `transcription` section decides, per bot, whether that happens and with whose key:
+
+```yaml
+transcription:
+  enabled: false
+```
+
+A bot with transcription off never hears a voice note. The note is saved to the inbox as an attachment without a transcript and the bot answers with a fixed reply, with no model turn. A bot that should hear voice notes but must not share audio with the chat provider's account gets `transcription.api_key` of its own. `autobot doctor` prints the setting.
+
+---
+
+## 14. Known Limitations
 
 **WhatsApp Bridge:** WebSocket connection has no authentication (ws://).
 

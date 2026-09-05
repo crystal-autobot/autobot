@@ -253,6 +253,23 @@ describe Autobot::Config::Validator do
 end
 
 describe Autobot::Config::ConfigValidator do
+  describe "transcription validation" do
+    it "rejects an unknown transcription provider" do
+      config = Autobot::Config::Config.from_yaml("transcription:\n  provider: whisperx\n")
+      issues = Autobot::Config::ConfigValidator.validate(config)
+
+      errors = issues.select { |i| i.severity == Autobot::Config::ValidatorCommon::Severity::Error }
+      errors.any?(&.message.includes?("Unknown transcription provider 'whisperx'")).should be_true
+    end
+
+    it "accepts a known transcription provider" do
+      config = Autobot::Config::Config.from_yaml("transcription:\n  provider: groq\n")
+      issues = Autobot::Config::ConfigValidator.validate(config)
+
+      issues.any?(&.message.includes?("transcription provider")).should be_false
+    end
+  end
+
   describe "channel validation" do
     it "detects Telegram with empty allow_from" do
       config_yaml = <<-YAML

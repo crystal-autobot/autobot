@@ -35,12 +35,16 @@ Supported provider blocks — see the **[Providers overview](providers.md)** for
 
 ## Voice Transcription
 
-Voice messages are automatically transcribed using the Whisper API when a supported provider is configured. No extra settings needed — the API key is reused from the provider config.
+Voice notes are transcribed with the Whisper API. By default the key is reused from the chat provider config, Groq first (`whisper-large-v3-turbo`), then OpenAI (`whisper-1`). The `transcription` section changes that per bot:
 
-- **Groq** (preferred — faster, free tier): uses `whisper-large-v3-turbo`
-- **OpenAI**: uses `whisper-1`
+```yaml
+transcription:
+  enabled: true              # false: voice notes are never transcribed
+  provider: groq             # openai or groq; default picks groq, then openai
+  api_key: "${WHISPER_KEY}"  # own key, separate from the chat provider
+```
 
-If neither Groq nor OpenAI is configured, voice messages fall back to `[voice message]` text.
+With `enabled: false`, or when no key is available, a voice note is saved to the inbox without a transcript and the bot replies that it could not hear it, without a model turn. `autobot doctor` prints the provider in use, whether it runs on its own key, and warns when a pinned provider has no key.
 
 ## Media
 

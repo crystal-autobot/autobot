@@ -1,6 +1,21 @@
 require "../../spec_helper"
 
+private def inbound(content : String, media : Array(Autobot::Bus::MediaAttachment)?) : Autobot::Bus::InboundMessage
+  Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "u1", chat_id: "c1", content: content, media: media)
+end
+
 describe Autobot::Bus::InboundMessage do
+  it "knows a sender voice note nobody transcribed" do
+    unheard = Autobot::Bus::MediaAttachment.new(type: "voice")
+    heard = Autobot::Bus::MediaAttachment.new(type: "voice", transcribed: true)
+    forwarded = Autobot::Bus::MediaAttachment.new(type: "voice", origin: "forwarded")
+
+    inbound("[voice message]", [unheard]).unheard_voice_note?.should be_true
+    inbound("[voice transcription]: hi", [heard]).unheard_voice_note?.should be_false
+    inbound("[voice message]", [forwarded]).unheard_voice_note?.should be_false
+    inbound("hi", nil).unheard_voice_note?.should be_false
+  end
+
   it "creates an inbound message" do
     msg = Autobot::Bus::InboundMessage.new(
       channel: "telegram",
@@ -154,6 +169,7 @@ describe Autobot::Bus::MediaAttachment do
     parsed = Autobot::Bus::MediaAttachment.from_json(media.to_json)
     parsed.origin.should eq("forwarded")
     parsed.transcript.should eq("spoken words")
+    parsed.transcribed?.should be_true
     parsed.transcript_path.should eq("/inbox/memo.txt")
     parsed.duration_seconds.should eq(134)
     parsed.name.should eq("Car dealer")
@@ -162,5 +178,6 @@ describe Autobot::Bus::MediaAttachment do
   it "parses attachments written before origin existed" do
     parsed = Autobot::Bus::MediaAttachment.from_json(%({"type": "photo", "url": "f1"}))
     parsed.origin.should eq("sender")
+    parsed.transcribed?.should be_false
   end
 end

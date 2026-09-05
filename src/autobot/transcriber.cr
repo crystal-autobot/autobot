@@ -1,5 +1,6 @@
 require "http/client"
 require "json"
+require "./config/schema"
 
 module Autobot
   # Speech-to-text transcription via Whisper API (OpenAI or Groq).
@@ -26,6 +27,10 @@ module Autobot
     getter provider : String
 
     def initialize(@api_key : String, @provider : String = "openai")
+    end
+
+    def self.from_config(config : Config::Config) : Transcriber?
+      config.transcription_source.try { |source| new(api_key: source.api_key, provider: source.provider) }
     end
 
     # Transcribe audio data to text.

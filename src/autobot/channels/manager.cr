@@ -20,8 +20,6 @@ module Autobot::Channels
   class Manager
     Log = ::Log.for("channels.manager")
 
-    WHISPER_PROVIDERS = ["groq", "openai"]
-
     getter channels : Hash(String, Channel) = {} of String => Channel
     getter transcriber : Transcriber? = nil
     @inbox : Media::Inbox
@@ -91,23 +89,13 @@ module Autobot::Channels
     end
 
     private def detect_transcriber : Transcriber?
-      providers = @config.providers
-      return nil unless providers
-
-      WHISPER_PROVIDERS.each do |name|
-        provider = case name
-                   when "groq"   then providers.groq
-                   when "openai" then providers.openai
-                   else               nil
-                   end
-        if provider && !provider.api_key.empty?
-          Log.info { "Voice transcription enabled (#{name})" }
-          return Transcriber.new(api_key: provider.api_key, provider: name)
-        end
+      transcriber = Transcriber.from_config(@config)
+      if transcriber
+        Log.info { "Voice transcription enabled (#{transcriber.provider})" }
+      else
+        Log.info { "Voice transcription unavailable" }
       end
-
-      Log.info { "Voice transcription unavailable (no openai/groq provider)" }
-      nil
+      transcriber
     end
 
     private def init_channels : Nil

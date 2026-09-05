@@ -292,6 +292,26 @@ describe Autobot::Agent::Loop do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "answers an unheard voice note without a model turn" do
+      tmp = TestHelper.tmp_dir
+      loop_inst = create_test_loop(workspace: tmp)
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "Someone: [voice message]",
+        media: [Autobot::Bus::MediaAttachment.new(type: "voice", file_path: "/inbox/note.ogg")],
+        metadata: {"thread_ts" => "1"},
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.try(&.content).should eq(Autobot::Agent::Loop::VOICE_NOTE_NOT_HEARD)
+      response.try(&.metadata["thread_ts"]).should eq("1")
+      Autobot::Session::Manager.new(tmp).get_or_create("telegram:chat1").get_history.should be_empty
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "preserves inbound metadata in outbound response" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)

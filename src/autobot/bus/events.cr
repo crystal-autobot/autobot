@@ -28,6 +28,10 @@ module Autobot::Bus
     def session_key : String
       "#{channel}:#{chat_id}"
     end
+
+    def unheard_voice_note? : Bool
+      media?.try(&.any? { |attachment| attachment.sender_voice_note? && !attachment.transcribed? }) == true
+    end
   end
 
   # Media attachment (photo, voice, document, etc.)
@@ -50,6 +54,7 @@ module Autobot::Bus
     property origin : String = ORIGIN_SENDER
     property transcript : String?
     property transcript_path : String?
+    property? transcribed : Bool = false
     property duration_seconds : Int32?
     property name : String?
 
@@ -66,6 +71,7 @@ module Autobot::Bus
       @origin : String = ORIGIN_SENDER,
       @transcript : String? = nil,
       @transcript_path : String? = nil,
+      @transcribed : Bool = !transcript.nil?,
       @duration_seconds : Int32? = nil,
       @name : String? = nil,
     )

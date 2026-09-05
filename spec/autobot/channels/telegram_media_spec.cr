@@ -48,6 +48,7 @@ describe Autobot::Channels::TelegramMedia do
       attachment = attachments.first
       attachment.sender_voice_note?.should be_true
       attachment.transcript.should be_nil
+      attachment.transcribed?.should be_true
       attachment.duration_seconds.should eq(7)
       attachment.size_bytes.should eq(512)
       transcriber.calls.should eq(["audio.ogg"])
@@ -60,6 +61,7 @@ describe Autobot::Channels::TelegramMedia do
 
       parts.should eq(["[voice message]"])
       attachments.first.transcript.should be_nil
+      attachments.first.transcribed?.should be_false
     end
 
     it "is content when typed text accompanies it" do

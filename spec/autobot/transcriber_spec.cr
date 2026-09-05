@@ -27,6 +27,20 @@ describe Autobot::Transcriber do
     end
   end
 
+  describe ".from_config" do
+    it "builds a transcriber for the resolved source" do
+      config = Autobot::Config::Config.from_yaml("transcription:\n  provider: groq\n  api_key: own\n")
+
+      Autobot::Transcriber.from_config(config).try(&.provider).should eq("groq")
+    end
+
+    it "is nil when transcription is disabled" do
+      config = Autobot::Config::Config.from_yaml("transcription:\n  enabled: false\nproviders:\n  groq:\n    api_key: gsk\n")
+
+      Autobot::Transcriber.from_config(config).should be_nil
+    end
+  end
+
   describe "#transcribe" do
     it "returns nil for unknown provider" do
       t = Autobot::Transcriber.new(api_key: "test-key", provider: "unknown")

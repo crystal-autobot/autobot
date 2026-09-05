@@ -14,7 +14,19 @@ module Autobot::Config
       issues.concat(check_provider_config(config))
       issues.concat(check_channel_auth(config))
       issues.concat(check_gateway_binding(config))
+      issues.concat(check_transcription(config))
 
+      issues
+    end
+
+    private def self.check_transcription(config : Config) : Array(Issue)
+      issues = [] of Issue
+      return issues if config.transcription.provider_known?
+
+      issues << Issue.new(
+        severity: Severity::Error,
+        message: "Unknown transcription provider '#{config.transcription.provider}'. Use one of: #{TranscriptionConfig::PROVIDERS.join(", ")}."
+      )
       issues
     end
 
