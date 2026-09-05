@@ -155,8 +155,9 @@ private def build_channel(
   )
 end
 
-private TOPIC_MESSAGE = %({"message_id": 9, "message_thread_id": 57, "is_topic_message": true, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
-private GENERAL_REPLY = %({"message_id": 9, "message_thread_id": 3, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
+private TOPIC_MESSAGE   = %({"message_id": 9, "message_thread_id": 57, "is_topic_message": true, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
+private GENERAL_REPLY   = %({"message_id": 9, "message_thread_id": 3, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
+private GENERAL_MESSAGE = %({"message_id": 9, "chat": {"id": -1001, "type": "supergroup", "is_forum": true}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
 
 describe Autobot::Channels::TelegramChannel do
   describe "forum topics" do
@@ -166,6 +167,14 @@ describe Autobot::Channels::TelegramChannel do
       sender.try(&.[:chat_id]).should eq("-1001:57")
       sender.try(&.[:topic]).should eq(57)
       channel.test_extract_sender(JSON.parse(GENERAL_REPLY)).try(&.[:chat_id]).should eq("-1001")
+      channel.test_extract_sender(JSON.parse(GENERAL_MESSAGE)).try(&.[:chat_id]).should eq("-1001:1")
+    end
+
+    it "owns the General topic of a forum as topic 1" do
+      channel = TelegramChannelTest.new(bus: Autobot::Bus::MessageBus.new, token: "t", topics: [1_i64])
+      channel.test_addressed?(JSON.parse(GENERAL_MESSAGE)).should be_true
+      channel.test_addressed?(JSON.parse(TOPIC_MESSAGE)).should be_false
+      channel.test_chat_params("-1001:1").should eq({"chat_id" => "-1001"})
     end
 
     it "answers in its own topics without a mention and stays silent elsewhere" do
