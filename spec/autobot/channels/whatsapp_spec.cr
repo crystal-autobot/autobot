@@ -10,8 +10,12 @@ class WhatsAppChannelTest < Autobot::Channels::WhatsAppChannel
     resolve_sender_id(data, sender)
   end
 
-  def test_build_content(data : JSON::Any, sender_id : String) : String
-    build_content(data, sender_id)
+  def test_build_content(data : JSON::Any) : String
+    build_content(data)
+  end
+
+  def test_build_media(data : JSON::Any) : Array(Autobot::Bus::MediaAttachment)?
+    build_media(data)
   end
 
   def test_build_metadata(data : JSON::Any) : Hash(String, String)
@@ -84,23 +88,35 @@ describe Autobot::Channels::WhatsAppChannel do
     end
   end
 
+  describe "#build_media" do
+    it "marks a voice note as an unheard sender voice note" do
+      channel = build_whatsapp_channel
+      media = channel.test_build_media(JSON.parse(%({"content": "[Voice Message]"})))
+
+      media.try(&.size).should eq(1)
+      message = Autobot::Bus::InboundMessage.new(channel: "whatsapp", sender_id: "u", chat_id: "c", content: "[Voice Message]", media: media)
+      message.unheard_voice_note?.should be_true
+      channel.test_build_media(JSON.parse(%({"content": "hello"}))).should be_nil
+    end
+  end
+
   describe "#build_content" do
     it "returns plain text content" do
       data = JSON.parse(%({"content": "hello world"}))
       channel = build_whatsapp_channel
-      channel.test_build_content(data, "user1").should eq("hello world")
+      channel.test_build_content(data).should eq("hello world")
     end
 
-    it "replaces voice message placeholder" do
+    it "keeps the bridge placeholder for a voice note" do
       data = JSON.parse(%({"content": "[Voice Message]"}))
       channel = build_whatsapp_channel
-      channel.test_build_content(data, "user1").should contain("Transcription not available")
+      channel.test_build_content(data).should eq("[Voice Message]")
     end
 
     it "prepends reply context when quoted is present" do
       data = JSON.parse(%({"content": "yes please", "quoted": "Should I continue?"}))
       channel = build_whatsapp_channel
-      result = channel.test_build_content(data, "user1")
+      result = channel.test_build_content(data)
       result.should contain("[Replying to: \"Should I continue?\"]")
       result.should contain("yes please")
     end
@@ -108,7 +124,7 @@ describe Autobot::Channels::WhatsAppChannel do
     it "returns empty string when content is missing" do
       data = JSON.parse(%({}))
       channel = build_whatsapp_channel
-      channel.test_build_content(data, "user1").should eq("")
+      channel.test_build_content(data).should eq("")
     end
   end
 
