@@ -40,6 +40,10 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     extract_sender(msg)
   end
 
+  def test_service_message?(msg : JSON::Any) : Bool
+    service_message?(msg)
+  end
+
   def test_addressed?(msg : JSON::Any) : Bool
     sender = extract_sender(msg)
     sender ? addressed?(msg, sender) : false
@@ -168,6 +172,16 @@ describe Autobot::Channels::TelegramChannel do
       sender.try(&.[:topic]).should eq(57)
       channel.test_extract_sender(JSON.parse(GENERAL_REPLY)).try(&.[:chat_id]).should eq("-1001")
       channel.test_extract_sender(JSON.parse(GENERAL_MESSAGE)).try(&.[:chat_id]).should eq("-1001:1")
+    end
+
+    it "ignores service messages such as a member joining or a topic being created" do
+      channel = TelegramChannelTest.new(bus: Autobot::Bus::MessageBus.new, token: "t", topics: [1_i64])
+      joined = %({"message_id": 10, "chat": {"id": -1001, "type": "supergroup", "is_forum": true}, "from": {"id": 1, "first_name": "Ann"}, "new_chat_members": [{"id": 2, "is_bot": true, "first_name": "Bot"}]})
+      created = %({"message_id": 11, "message_thread_id": 5, "is_topic_message": true, "chat": {"id": -1001, "type": "supergroup", "is_forum": true}, "from": {"id": 1, "first_name": "Ann"}, "forum_topic_created": {"name": "memo", "icon_color": 1}})
+      channel.test_service_message?(JSON.parse(joined)).should be_true
+      channel.test_service_message?(JSON.parse(created)).should be_true
+      channel.test_service_message?(JSON.parse(GENERAL_MESSAGE)).should be_false
+      channel.test_service_message?(JSON.parse(TOPIC_MESSAGE)).should be_false
     end
 
     it "owns the General topic of a forum as topic 1" do
