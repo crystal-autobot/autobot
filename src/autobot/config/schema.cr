@@ -6,6 +6,7 @@ module Autobot::Config
     property? enabled : Bool = false
     property token : String = ""
     property allow_from : Array(String) = [] of String
+    property topics : Array(Int64) = [] of Int64
     property? proxy : String? = nil
     property custom_commands : CustomCommandsConfig?
 

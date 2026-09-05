@@ -294,9 +294,12 @@ module Autobot::Channels
     Log = ::Log.for("channels.telegram")
 
     TELEGRAM_API_BASE = "https://api.telegram.org"
-    POLL_TIMEOUT      =  30
-    TYPING_INTERVAL   = 4.0
-    MAX_IMAGE_SIZE    = 20 * 1024 * 1024 # 20 MB
+    TOPIC_SEPARATOR   = ':'
+
+    alias Sender = NamedTuple(chat_id: String, user_id: String, username: String?, first_name: String, sender_id: String, is_group: Bool, topic: Int64?)
+    POLL_TIMEOUT    =  30
+    TYPING_INTERVAL = 4.0
+    MAX_IMAGE_SIZE  = 20 * 1024 * 1024 # 20 MB
 
     MEDIA_LOG_LABEL     = "[media]"
     EMPTY_MESSAGE_LABEL = "[empty message]"
@@ -313,6 +316,7 @@ module Autobot::Channels
       @token : String,
       @allow_from : Array(String) = [] of String,
       @proxy : String? = nil,
+      @topics : Array(Int64) = [] of Int64,
       @custom_commands : Config::CustomCommandsConfig = Config::CustomCommandsConfig.new,
       @session_manager : Session::Manager? = nil,
       @transcriber : Transcriber? = nil,
@@ -494,10 +498,11 @@ module Autobot::Channels
     ) : String
       io = IO::Memory.new
 
-      # chat_id field
-      io << "--" << MULTIPART_BOUNDARY << "\r\n"
-      io << "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n"
-      io << chat_id << "\r\n"
+      chat_params(chat_id).each do |name, value|
+        io << "--" << MULTIPART_BOUNDARY << "\r\n"
+        io << "Content-Disposition: form-data; name=\"" << name << "\"\r\n\r\n"
+        io << value << "\r\n"
+      end
 
       # file field (binary)
       io << "--" << MULTIPART_BOUNDARY << "\r\n"
@@ -607,12 +612,13 @@ module Autobot::Channels
       Log.error { "Error processing message: #{ex.message}" }
     end
 
-    private def extract_sender(msg : JSON::Any) : NamedTuple(chat_id: String, user_id: String, username: String?, first_name: String, sender_id: String, is_group: Bool)?
+    private def extract_sender(msg : JSON::Any) : Sender?
       chat = msg["chat"]?
       from = msg["from"]?
       return nil unless chat && from
 
-      chat_id = chat["id"].as_i64.to_s
+      topic = msg["message_thread_id"]?.try(&.as_i64?) if msg["is_topic_message"]?.try(&.as_bool?)
+      chat_id = topic ? "#{chat["id"].as_i64}#{TOPIC_SEPARATOR}#{topic}" : chat["id"].as_i64.to_s
       user_id = from["id"].as_i64.to_s
       username = from["username"]?.try(&.as_s)
       first_name = from["first_name"]?.try(&.as_s) || "User"
@@ -626,6 +632,7 @@ module Autobot::Channels
         first_name: first_name,
         sender_id:  sender_id,
         is_group:   is_group,
+        topic:      topic,
       }
     end
 
@@ -680,13 +687,14 @@ module Autobot::Channels
       nil
     end
 
-    private def build_metadata(msg : JSON::Any, sender : NamedTuple(chat_id: String, user_id: String, username: String?, first_name: String, sender_id: String, is_group: Bool)) : Hash(String, String)
+    private def build_metadata(msg : JSON::Any, sender : Sender) : Hash(String, String)
       {
         "message_id" => msg["message_id"].as_i64.to_s,
         "user_id"    => sender[:user_id],
         "username"   => sender[:username] || "",
         "first_name" => sender[:first_name],
         "is_group"   => sender[:is_group].to_s,
+        "topic"      => sender[:topic].to_s,
       }
     end
 
@@ -995,6 +1003,7 @@ module Autobot::Channels
     end
 
     private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
+      params = params.merge(chat_params(params["chat_id"])) if params.has_key?("chat_id")
       with_api_client do |client|
         response = client.post("/bot#{@token}/#{method}", form: URI::Params.encode(params))
 
@@ -1072,9 +1081,17 @@ module Autobot::Channels
       })
     end
 
-    private def addressed?(msg : JSON::Any, sender : NamedTuple(chat_id: String, user_id: String, username: String?, first_name: String, sender_id: String, is_group: Bool)) : Bool
+    private def addressed?(msg : JSON::Any, sender : Sender) : Bool
       return true unless sender[:is_group]
+      return true if (topic = sender[:topic]) && @topics.includes?(topic)
       mentioned?(msg)
+    end
+
+    private def chat_params(chat_id : String) : Hash(String, String)
+      chat, _, topic = chat_id.partition(TOPIC_SEPARATOR)
+      params = {"chat_id" => chat}
+      params["message_thread_id"] = topic unless topic.empty?
+      params
     end
 
     private def mentioned?(msg : JSON::Any) : Bool
