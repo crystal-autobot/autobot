@@ -13,6 +13,7 @@ module Autobot
     #   result = executor.exec("ls -la")
     class SandboxExecutor
       MAX_FILE_SIZE = 1_048_576
+      SKILLS_DIR    = "skills"
 
       getter? sandboxed : Bool = true
       getter roots : Array(Path)
@@ -21,7 +22,7 @@ module Autobot
       end
 
       def read_file(path : String) : ToolResult
-        outside_roots(path).try { |error| return error }
+        outside_roots(path, reading: true).try { |error| return error }
 
         if @sandboxed && (workspace = @workspace)
           read_file_via_sandbox_exec(path, workspace)
@@ -35,7 +36,7 @@ module Autobot
       # Read a file and return base64-encoded contents.
       # Safe for binary files (images, GIFs, documents).
       def read_file_base64(path : String) : ToolResult
-        outside_roots(path).try { |error| return error }
+        outside_roots(path, reading: true).try { |error| return error }
 
         if @sandboxed && (workspace = @workspace)
           success, output = Sandbox.read_file_base64(path, workspace)
@@ -60,7 +61,7 @@ module Autobot
       end
 
       def list_dir(path : String) : ToolResult
-        outside_roots(path).try { |error| return error }
+        outside_roots(path, reading: true).try { |error| return error }
 
         if @sandboxed && (workspace = @workspace)
           list_dir_via_sandbox_exec(path, workspace)
@@ -92,15 +93,20 @@ module Autobot
       end
 
       # Sandbox.exec-based execution
-      private def outside_roots(path : String) : ToolResult?
+      private def outside_roots(path : String, reading : Bool = false) : ToolResult?
         return nil if @roots.empty?
 
         base = @workspace || Path[Dir.current]
         resolved = Path[path].expand(base: base, home: true)
-        return nil if @roots.any? { |root| resolved == root || resolved.to_s.starts_with?("#{root}/") }
+        return nil if @roots.any? { |root| inside?(resolved, root) }
+        return nil if reading && inside?(resolved, base / SKILLS_DIR)
 
         names = @roots.map(&.relative_to(base).to_s)
         ToolResult.error("Path is outside the allowed directories (#{names.join(", ")}): #{path}")
+      end
+
+      private def inside?(resolved : Path, root : Path) : Bool
+        resolved == root || resolved.to_s.starts_with?("#{root}/")
       end
 
       private def read_file_via_sandbox_exec(path : String, workspace : Path) : ToolResult

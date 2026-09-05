@@ -133,6 +133,7 @@ describe Autobot::Agent::SkillsLoader do
     summary.should contain("<skills>")
     summary.should contain("<name>test</name>")
     summary.should contain("</skills>")
+    loader.build_skills_summary(exclude: ["test"]).should eq("")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
