@@ -578,12 +578,7 @@ module Autobot::Channels
         return
       end
 
-      if text = msg["text"]?.try(&.as_s)
-        if text.starts_with?('/')
-          handle_command(text, sender[:chat_id], sender[:sender_id], sender[:first_name])
-          return
-        end
-      end
+      return if handle_command_message(msg, sender)
 
       display_name = sender[:username] ? "@#{sender[:username]}" : sender[:first_name]
 
@@ -838,7 +833,10 @@ module Autobot::Channels
       if entry = @custom_commands.scripts[command]?
         start_typing(chat_id)
         execute_script(entry.value, args, chat_id)
+        return
       end
+
+      send_reply(chat_id, "Unknown command /#{command}. Type /help to see the available commands.")
     end
 
     SCRIPT_OUTPUT_LIMIT = 4000
@@ -1096,6 +1094,21 @@ module Autobot::Channels
         "text"       => text,
         "parse_mode" => "HTML",
       })
+    end
+
+    private def handle_command_message(msg : JSON::Any, sender : Sender) : Bool
+      text = msg["text"]?.try(&.as_s)
+      return false unless text && text.starts_with?('/')
+      handle_command(text, sender[:chat_id], sender[:sender_id], sender[:first_name]) if command_for_me?(text, msg, sender)
+      true
+    end
+
+    private def command_for_me?(text : String, msg : JSON::Any, sender : Sender) : Bool
+      target = text.split(' ', 2)[0].split('@', 2)[1]?
+      if target && !target.empty?
+        return target.compare(@bot_username, case_insensitive: true) == 0
+      end
+      addressed?(msg, sender)
     end
 
     private def addressed?(msg : JSON::Any, sender : Sender) : Bool
