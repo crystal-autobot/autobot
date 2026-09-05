@@ -107,9 +107,9 @@ module Autobot
         parts.join("\n\n---\n\n")
       end
 
-      # Build an XML summary of all skills for progressive loading.
-      def build_skills_summary : String
-        all_skills = list_skills(filter_unavailable: false)
+      # Build an XML summary of the skills not already in context, for progressive loading.
+      def build_skills_summary(exclude : Array(String) = [] of String) : String
+        all_skills = list_skills(filter_unavailable: false).reject { |skill_info| exclude.includes?(skill_info.name) }
         return "" if all_skills.empty?
 
         lines = ["<skills>"]

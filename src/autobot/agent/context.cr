@@ -161,12 +161,12 @@ module Autobot::Agent
 
         unless auto_skills.empty?
           auto_content = @skills.load_skills_for_context(auto_skills)
-          parts << "# Active Skills\n\n#{auto_content}" unless auto_content.empty?
+          parts << "# Active Skills\n\nThese skills are loaded in full. A file one of them points to, such as a reference under its folder in skills/, can be read with the read_file tool.\n\n#{auto_content}" unless auto_content.empty?
         end
 
         # Available skills: show summary for progressive loading (skip for background)
         unless background
-          skills_summary = @skills.build_skills_summary
+          skills_summary = @skills.build_skills_summary(exclude: auto_skills)
           unless skills_summary.empty?
             parts << <<-SKILLS
             # Skills

@@ -5,7 +5,9 @@ private def with_roots(&)
   Dir.mkdir_p(workspace / "notes")
   Dir.mkdir_p(workspace / "inbox")
   Dir.mkdir_p(workspace / "memory")
+  Dir.mkdir_p(workspace / "skills" / "memo" / "references")
   File.write(workspace / "notes" / "a.md", "note")
+  File.write(workspace / "skills" / "memo" / "references" / "script.md", "commands")
   File.write(workspace / "memory" / "MEMORY.md", "secret")
   roots = Autobot::Tools.resolve_roots(["notes", "inbox"], workspace)
   yield Autobot::Tools::SandboxExecutor.new(workspace, false, roots), workspace
@@ -40,6 +42,17 @@ describe Autobot::Tools::SandboxExecutor do
         executor.write_file((workspace / "SOUL.md").to_s, "x").success?.should be_false
         executor.list_dir(workspace.to_s).success?.should be_false
         executor.read_file_base64("/etc/hosts").success?.should be_false
+      end
+    end
+
+    it "keeps the skills directory readable but not writable" do
+      with_roots do |executor, workspace|
+        reference = (workspace / "skills" / "memo" / "references" / "script.md").to_s
+        executor.read_file(reference).content.should eq("commands")
+        executor.list_dir((workspace / "skills" / "memo").to_s).content.should contain("references")
+        executor.read_file_base64(reference).success?.should be_true
+        executor.write_file("skills/memo/SKILL.md", "x").content.should contain("outside the allowed directories")
+        executor.read_file("skills/../memory/MEMORY.md").success?.should be_false
       end
     end
 

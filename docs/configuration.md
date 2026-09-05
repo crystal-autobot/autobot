@@ -157,7 +157,7 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 
 ### Filesystem Roots
 
-`tools.filesystem.roots` limits `read_file`, `write_file`, `edit_file` and `list_dir` to the listed workspace subdirectories. Paths resolve relative to the workspace and `..` cannot escape a root. Commands run by `exec` are not affected; they stay bound to the workspace by the sandbox.
+`tools.filesystem.roots` limits `read_file`, `write_file`, `edit_file` and `list_dir` to the listed workspace subdirectories. Paths resolve relative to the workspace and `..` cannot escape a root. The workspace `skills/` directory stays readable whether or not it is listed: a skill's references and scripts are prompt material the model reads on demand. Writes there are refused unless it is a root. Commands run by `exec` are not affected; they stay bound to the workspace by the sandbox.
 
 ### Safety Guard Overrides
 

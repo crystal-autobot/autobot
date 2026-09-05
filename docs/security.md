@@ -293,7 +293,7 @@ tools:
     roots: [notes, inbox]
 ```
 
-`tools.enabled` is an allowlist applied at registration, so a tool that is not listed does not exist for the model, whether it is built in, a skill script, a plugin or an MCP tool. `tools.filesystem.roots` keeps the file tools inside the listed workspace subdirectories. With both in place, the worst a planted instruction inside an attachment can do is write a bad note. `autobot doctor` prints the effective tool list and reminds you to set the allowlist when it is missing.
+`tools.enabled` is an allowlist applied at registration, so a tool that is not listed does not exist for the model, whether it is built in, a skill script, a plugin or an MCP tool. `tools.filesystem.roots` keeps the file tools inside the listed workspace subdirectories, with `skills/` readable on top so a skill's references can be read on demand. With both in place, the worst a planted instruction inside an attachment can do is write a bad note. `autobot doctor` prints the effective tool list and reminds you to set the allowlist when it is missing.
 
 ---
 
