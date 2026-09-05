@@ -42,14 +42,42 @@ Sandbox.exec("ls -1a #{shell_escape(path)} 2>&1", workspace, timeout: 10)
 ```bash
 bwrap \
   --ro-bind /usr /usr \
+  --ro-bind /lib /lib \
   --ro-bind /bin /bin \
+  --ro-bind /sbin /sbin \
   --bind /workspace /workspace \
-  --unshare-all \
   --proc /proc \
   --dev /dev \
+  --unshare-all \
+  --share-net \
+  --die-with-parent \
   --chdir /workspace \
+  --ro-bind /etc/alternatives /etc/alternatives \
+  --ro-bind /etc/ld.so.cache /etc/ld.so.cache \
+  --ro-bind /etc/resolv.conf /etc/resolv.conf \
+  --ro-bind /etc/ssl /etc/ssl \
+  --tmpfs /tmp \
   -- sh -c "cat file.txt"
 ```
+
+The `/etc` lines are a sample: every path in `Sandbox::SYSTEM_CONFIG_PATHS` that exists on the host is bound read-only the same way, and so is `/lib64` when present.
+
+**What the sandbox can see**
+
+| Path | Access | Why |
+|------|--------|-----|
+| `/usr`, `/lib`, `/lib64`, `/bin`, `/sbin` | read-only | host-installed tools and libraries |
+| `/etc/alternatives` | read-only | Debian-based hosts resolve `python3`, `awk`, `which`, `cc` and libraries such as `libblas.so.3` through it |
+| `/etc/ld.so.cache`, `/etc/ld.so.conf`, `/etc/ld.so.conf.d` | read-only | dynamic loader library lookup |
+| `/etc/resolv.conf`, `/etc/hosts`, `/etc/nsswitch.conf` | read-only | DNS resolution |
+| `/etc/ssl`, `/etc/ca-certificates` | read-only | TLS trust store for `curl`, Python and friends |
+| `/etc/localtime` | read-only | local time zone |
+| `/etc/passwd`, `/etc/group` | read-only | user and group names (`whoami`, `ls -l`) |
+| `/etc/matplotlibrc` | read-only | Debian's `python3-matplotlib` keeps its only config file here |
+| workspace | read-write | the bot's files |
+| `/proc`, `/dev`, `/tmp` | private | fresh per command, `/tmp` is an empty tmpfs |
+
+Each `/etc` entry is bound only when it exists on the host. Nothing else from the host is mounted: the rest of `/etc`, home directories, `/var`, `/opt` and `/srv` are not visible. The sandbox root is an empty tmpfs, so a command can create missing paths such as `$HOME`, but they vanish when it exits.
 
 ### Execution (macOS/Universal - Docker)
 
@@ -181,7 +209,7 @@ docker build -t autobot-sandbox -f Dockerfile.sandbox .
 
 ### What Sandboxing Prevents
 
-- Reading system files (`/etc/passwd`, `/etc/shadow`)
+- Reading host files outside the read-only system paths (`/etc/shadow`, the rest of `/etc`)
 - Reading home directory (`~/.ssh/`, `~/.aws/credentials`)
 - Writing outside workspace
 - Accessing secrets in parent directories
@@ -190,7 +218,7 @@ docker build -t autobot-sandbox -f Dockerfile.sandbox .
 
 ### How It Works
 
-All filesystem and exec operations go through `SandboxExecutor`, which routes them to `Sandbox.exec`. Each operation spawns a sandboxed process (bubblewrap or Docker) that **cannot access files outside the workspace** — enforced by the OS kernel, not application code.
+All filesystem and exec operations go through `SandboxExecutor`, which routes them to `Sandbox.exec`. Each operation spawns a sandboxed process (bubblewrap or Docker) that **cannot write outside the workspace and sees the host only through the read-only system paths listed above** — enforced by the OS kernel, not application code.
 
 **Shell escaping** (single-quote escaping, base64 encoding for file content) prevents command injection within sandboxed commands.
 

@@ -130,6 +130,36 @@ describe Autobot::Tools::Sandbox do
     end
   end
 
+  describe ".system_config_binds" do
+    it "binds existing paths read-only and skips missing ones" do
+      tmp = TestHelper.tmp_dir
+      existing = tmp.to_s
+      missing = (tmp / "missing").to_s
+
+      args = Autobot::Tools::Sandbox.system_config_binds([existing, missing])
+
+      args.should eq(["--ro-bind", existing, existing])
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "binds /etc/alternatives on hosts that have it" do
+      pending! "host has no /etc/alternatives" unless File.exists?("/etc/alternatives")
+
+      binds = Autobot::Tools::Sandbox.system_config_binds.each_slice(3).to_a
+
+      binds.should contain(["--ro-bind", "/etc/alternatives", "/etc/alternatives"])
+    end
+
+    it "binds only paths that exist on the host" do
+      Autobot::Tools::Sandbox.system_config_binds.each_slice(3) do |(flag, source, target)|
+        flag.should eq("--ro-bind")
+        target.should eq(source)
+        File.exists?(source).should be_true
+      end
+    end
+  end
+
   describe "constants" do
     it "has sandbox dockerfile name" do
       Autobot::Tools::Sandbox::SANDBOX_DOCKERFILE.should eq("Dockerfile.sandbox")
