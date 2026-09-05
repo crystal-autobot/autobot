@@ -295,6 +295,7 @@ module Autobot::Channels
 
     TELEGRAM_API_BASE = "https://api.telegram.org"
     TOPIC_SEPARATOR   = ':'
+    GENERAL_TOPIC     = 1_i64
 
     alias Sender = NamedTuple(chat_id: String, user_id: String, username: String?, first_name: String, sender_id: String, is_group: Bool, topic: Int64?)
     POLL_TIMEOUT    =  30
@@ -618,6 +619,7 @@ module Autobot::Channels
       return nil unless chat && from
 
       topic = msg["message_thread_id"]?.try(&.as_i64?) if msg["is_topic_message"]?.try(&.as_bool?)
+      topic ||= GENERAL_TOPIC if chat["is_forum"]?.try(&.as_bool?)
       chat_id = topic ? "#{chat["id"].as_i64}#{TOPIC_SEPARATOR}#{topic}" : chat["id"].as_i64.to_s
       user_id = from["id"].as_i64.to_s
       username = from["username"]?.try(&.as_s)
@@ -1090,7 +1092,7 @@ module Autobot::Channels
     private def chat_params(chat_id : String) : Hash(String, String)
       chat, _, topic = chat_id.partition(TOPIC_SEPARATOR)
       params = {"chat_id" => chat}
-      params["message_thread_id"] = topic unless topic.empty?
+      params["message_thread_id"] = topic unless topic.empty? || topic == GENERAL_TOPIC.to_s
       params
     end
 
