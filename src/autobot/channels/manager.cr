@@ -115,6 +115,7 @@ module Autobot::Channels
         bus: @bus,
         token: config.token,
         allow_from: config.allow_from,
+        topics: config.topics,
         proxy: config.proxy?,
         custom_commands: custom_cmds,
         session_manager: @session_manager,

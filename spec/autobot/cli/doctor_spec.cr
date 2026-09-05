@@ -365,6 +365,18 @@ describe Autobot::CLI::Doctor do
     end
   end
 
+  describe ".check_telegram" do
+    it "lists the topics a bot owns" do
+      config = make_config("channels:\n  telegram:\n    enabled: true\n    token: \"123:abc\"\n    allow_from: [me]\n    topics: [57, 58]\n")
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_telegram(config.channels.try(&.telegram), 0).should eq(0)
+
+        io.to_s.should contain("✓ Telegram configured (topics: 57, 58)")
+      end
+    end
+  end
+
   describe ".check_voice_transcription" do
     it "skips when no providers configured" do
       config = make_config("{}")

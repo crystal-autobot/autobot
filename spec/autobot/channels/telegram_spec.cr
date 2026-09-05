@@ -36,6 +36,19 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     @stubbed_file_bytes || super
   end
 
+  def test_extract_sender(msg : JSON::Any) : Sender?
+    extract_sender(msg)
+  end
+
+  def test_addressed?(msg : JSON::Any) : Bool
+    sender = extract_sender(msg)
+    sender ? addressed?(msg, sender) : false
+  end
+
+  def test_chat_params(chat_id : String) : Hash(String, String)
+    chat_params(chat_id)
+  end
+
   def test_access_denied_message(sender_id : String) : String
     access_denied_message(sender_id)
   end
@@ -142,7 +155,35 @@ private def build_channel(
   )
 end
 
+private TOPIC_MESSAGE = %({"message_id": 9, "message_thread_id": 57, "is_topic_message": true, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
+private GENERAL_REPLY = %({"message_id": 9, "message_thread_id": 3, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
+
 describe Autobot::Channels::TelegramChannel do
+  describe "forum topics" do
+    it "folds the topic into the chat id" do
+      channel = TelegramChannelTest.new(bus: Autobot::Bus::MessageBus.new, token: "t")
+      sender = channel.test_extract_sender(JSON.parse(TOPIC_MESSAGE))
+      sender.try(&.[:chat_id]).should eq("-1001:57")
+      sender.try(&.[:topic]).should eq(57)
+      channel.test_extract_sender(JSON.parse(GENERAL_REPLY)).try(&.[:chat_id]).should eq("-1001")
+    end
+
+    it "answers in its own topics without a mention and stays silent elsewhere" do
+      channel = TelegramChannelTest.new(bus: Autobot::Bus::MessageBus.new, token: "t", topics: [57_i64])
+      channel.test_addressed?(JSON.parse(TOPIC_MESSAGE)).should be_true
+      channel.test_addressed?(JSON.parse(TOPIC_MESSAGE.sub("57", "58"))).should be_false
+      channel.test_addressed?(JSON.parse(GENERAL_REPLY)).should be_false
+    end
+
+    it "sends the thread id with every request that has a topic" do
+      channel = TelegramChannelTest.new(bus: Autobot::Bus::MessageBus.new, token: "t")
+      channel.test_chat_params("-1001:57").should eq({"chat_id" => "-1001", "message_thread_id" => "57"})
+      channel.test_chat_params("-1001").should eq({"chat_id" => "-1001"})
+      body = channel.test_build_media_multipart("-1001:57", "x".to_slice, "c", "photo", "p.jpg", "image/jpeg")
+      body.should contain(%(name="message_thread_id"\r\n\r\n57))
+    end
+  end
+
   describe "#access_denied_message" do
     it "shows setup instructions when allow_from is empty" do
       channel = build_channel(allow_from: [] of String)

@@ -106,6 +106,7 @@ channels:
 - **Typing indicators** — shows "typing..." while the LLM responds
 - **Markdown rendering** — LLM responses are converted to Telegram HTML
 - **Group chats** — the bot only replies when addressed: mentioned by `@username` or replied to. Other group messages are ignored (no response, no access-denied notice).
+- **Forum topics** — in a group with topics enabled, a bot answers every message in the topics listed under `topics` without a mention, keeps one session per topic and replies into the same topic. See [Forum topics](#forum-topics).
 - **Voice replies** — the `text_to_speech` plugin can generate spoken replies (see [Plugins](plugins.md))
 
 ### Group chat logging
@@ -124,8 +125,27 @@ members' messages to disk; disable the `chat_log` plugin to turn it off.
 | `enabled` | No | `false` | Enable the Telegram channel |
 | `token` | Yes | — | Bot API token from BotFather |
 | `allow_from` | No | `[]` | User IDs/usernames allowed to use the bot |
+| `topics` | No | `[]` | Forum topic IDs the bot owns; it answers there without a mention |
 | `proxy` | No | — | HTTP proxy URL for API requests |
 | `custom_commands` | No | — | Custom slash commands (macros and scripts) |
+
+## Forum topics
+
+A supergroup with topics enabled behaves like several chats in one window. Give each bot its own topic:
+
+```yaml
+channels:
+  telegram:
+    enabled: true
+    token: "${TELEGRAM_BOT_TOKEN}"
+    allow_from: ["username"]
+    topics: [57]
+```
+
+- The topic ID is the number at the end of the topic link, `https://t.me/c/<group>/57`.
+- Messages in a listed topic are treated as addressed to the bot; other topics and the General topic still need a mention.
+- The chat ID becomes `<group>:<topic>`, for example `-1001234567890:57`, so each topic has its own session, its own `/reset` and its own cron delivery target. Use that form as the `to` of a cron job or a message tool call to reach a topic.
+- The bot must see the topic's messages: turn off privacy mode for it in BotFather (`/setprivacy`), or make it a group admin, then remove and re-add it to the group.
 
 ## Troubleshooting
 

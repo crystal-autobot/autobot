@@ -73,6 +73,7 @@ channels:
     # ["*"]           - Allow anyone (use with caution)
     # ["@user", "id"] - Allowlist specific users (recommended)
     allow_from: []
+    topics: []     # forum topic IDs the bot answers in without a mention
 
   slack:
     enabled: false

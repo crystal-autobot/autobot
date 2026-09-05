@@ -188,6 +188,12 @@ describe Autobot::Config::Config do
       Autobot::Config::Config.from_yaml("tools:\n  web:\n    search:\n      api_key: x\n").tools.try(&.web.try(&.allowed_domains)).should eq([] of String)
     end
 
+    it "parses telegram topics" do
+      config = Autobot::Config::Config.from_yaml("channels:\n  telegram:\n    enabled: true\n    topics: [57, 58]\n")
+      config.channels.try(&.telegram.try(&.topics)).should eq([57_i64, 58_i64])
+      Autobot::Config::Config.from_yaml("channels:\n  telegram:\n    enabled: true\n").channels.try(&.telegram.try(&.topics)).should eq([] of Int64)
+    end
+
     it "defaults transcription to enabled with no provider or key" do
       config = Autobot::Config::Config.from_yaml("{}")
       config.transcription.enabled?.should be_true

@@ -369,7 +369,8 @@ module Autobot
           hint("Add user IDs to channels.telegram.allow_from")
           warnings + 1
         else
-          report(Status::Pass, "Telegram configured")
+          topics = telegram.topics.empty? ? "" : " (topics: #{telegram.topics.join(", ")})"
+          report(Status::Pass, "Telegram configured#{topics}")
           warnings
         end
       end
