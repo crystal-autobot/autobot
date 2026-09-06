@@ -413,9 +413,370 @@ describe Autobot::Channels::TelegramChannel do
       content.should eq("[empty message]")
       media.should be_empty
     end
+
+    it "renders media placeholders when message is forwarded without typed text" do
+      channel = build_channel
+      channel.stubbed_file_bytes = "bytes".to_slice
+      msg = JSON.parse(<<-JSON
+        {
+          "forward_origin": {
+            "type": "user",
+            "sender_user": {"id": 1, "is_bot": false, "first_name": "Bob"}
+          },
+          "voice": {"file_id": "v1", "duration": 3}
+        }
+      JSON
+      )
+
+      content, media = channel.test_build_content_and_media(msg)
+      content.should eq("[Forwarded from: Bob]\n[voice message]")
+      media.size.should eq(1)
+      media.first.origin.should eq("forwarded")
+    end
+
+    it "extracts user forward origin" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "forward_origin": {
+            "type": "user",
+            "sender_user": {"first_name": "Alice"}
+          },
+          "text": "Hello world"
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Forwarded from: Alice]\nHello world")
+    end
+
+    it "extracts hidden_user forward origin" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "forward_origin": {
+            "type": "hidden_user",
+            "sender_user_name": "SecretSender"
+          },
+          "text": "Confidential"
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Forwarded from: SecretSender]\nConfidential")
+    end
+
+    it "extracts chat forward origin with author signature" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "forward_origin": {
+            "type": "chat",
+            "sender_chat": {"title": "Dev Group"},
+            "author_signature": "Lead Dev"
+          },
+          "text": "Update released"
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Forwarded from: Dev Group (Lead Dev)]\nUpdate released")
+    end
+
+    it "extracts channel forward origin without author signature" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "forward_origin": {
+            "type": "channel",
+            "chat": {"title": "News Channel"}
+          },
+          "text": "Breaking news"
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Forwarded from: News Channel]\nBreaking news")
+    end
+
+    it "extracts story content when id and chat are present" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "story": {
+            "id": 42,
+            "chat": {"title": "Travel Blog"}
+          },
+          "text": "On the beach"
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Story from Travel Blog (ID: 42)]\nOn the beach")
+    end
+
+    it "extracts story content when only id is present" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "story": {"id": 99},
+          "text": "Look at this"
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Story (ID: 99)]\nLook at this")
+    end
+
+    it "extracts link preview options when URL is not in typed text" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "text": "Check out this documentation",
+          "link_preview_options": {
+            "url": "https://example.com/docs"
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("Check out this documentation\n[Link: https://example.com/docs]")
+    end
+
+    it "ignores link preview options when disabled" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "text": "Read the article",
+          "link_preview_options": {
+            "url": "https://example.com/article",
+            "is_disabled": true
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("Read the article")
+    end
+
+    it "ignores link preview options when URL is already in typed text" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "text": "Visit https://example.com for more information",
+          "link_preview_options": {
+            "url": "https://example.com"
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("Visit https://example.com for more information")
+    end
+
+    it "extracts poll questions and options" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "poll": {
+            "question": "What is your favorite language?",
+            "options": [
+              {"text": "Crystal"},
+              {"text": "Rust"},
+              {"text": "Go"}
+            ]
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Poll: What is your favorite language?]\n- Crystal\n- Rust\n- Go")
+    end
+
+    it "extracts venue information with coordinates" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "venue": {
+            "title": "Cafe Central",
+            "address": "Av. Juarez 123",
+            "location": {"latitude": 20.6597, "longitude": -103.3496}
+          },
+          "location": {"latitude": 20.6597, "longitude": -103.3496}
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Venue: Cafe Central, Av. Juarez 123 (20.659700, -103.349600)]")
+    end
+
+    it "extracts standalone location coordinates" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "location": {"latitude": 20.6597, "longitude": -103.3496}
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Location: 20.659700, -103.349600]")
+    end
+
+    it "extracts contact with name and phone" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "contact": {
+            "first_name": "Bob",
+            "last_name": "Smith",
+            "phone_number": "+15551234"
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Contact: Bob Smith (+15551234)]")
+    end
+
+    it "extracts contact with phone only" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "contact": {
+            "phone_number": "+15551234"
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Contact: unknown (+15551234)]")
+    end
+
+    it "extracts contact with name only" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "contact": {
+            "first_name": "Bob"
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[Contact: Bob]")
+    end
+
+    it "reports an empty message for empty contact payload" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "contact": {}
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should eq("[empty message]")
+    end
+
+    it "extracts Bot API rich_message blocks (blockquote, pre with language, list)" do
+      channel = build_channel
+      msg = JSON.parse(<<-JSON
+        {
+          "rich_message": {
+            "blocks": [
+              {
+                "type": "heading",
+                "text": "Article Header"
+              },
+              {
+                "type": "blockquote",
+                "blocks": [
+                  {"type": "paragraph", "text": "Quoted paragraph inside blockquote"}
+                ]
+              },
+              {
+                "type": "pre",
+                "language": "crystal",
+                "text": "puts 'hello'"
+              },
+              {
+                "type": "list",
+                "items": [
+                  {
+                    "label": "1.",
+                    "blocks": [{"type": "paragraph", "text": "First item"}]
+                  },
+                  {
+                    "label": "2.",
+                    "blocks": [{"type": "paragraph", "text": "Second item"}]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should contain("### Article Header")
+      content.should contain("[Quoting: \"Quoted paragraph inside blockquote\"]")
+      content.should contain("```crystal\nputs 'hello'\n```")
+      content.should contain("1. First item\n2. Second item")
+    end
+
+    it "preserves pre code block leading indentation in rich messages" do
+      channel = build_channel
+      msg = JSON.parse(<<-'JSON'
+        {
+          "rich_message": {
+            "blocks": [
+              {
+                "type": "pre",
+                "language": "python",
+                "text": "    def test():\n        return 42"
+              }
+            ]
+          }
+        }
+      JSON
+      )
+
+      content, _ = channel.test_build_content_and_media(msg)
+      content.should contain("```python\n    def test():\n        return 42\n```")
+    end
   end
 
   describe "#extract_reply_context" do
+    it "prefers quote text over full reply_to_message text" do
+      msg = JSON.parse(<<-JSON
+        {
+          "text": "why?",
+          "quote": {"text": "selected quote"},
+          "reply_to_message": {"text": "Full long message with selected quote inside"}
+        }
+      JSON
+      )
+      channel = build_channel
+      channel.test_extract_reply_context(msg).should eq("selected quote")
+    end
+
     it "returns nil when no reply_to_message" do
       msg = JSON.parse(%({"text": "hello"}))
       channel = build_channel

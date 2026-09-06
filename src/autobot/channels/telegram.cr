@@ -650,7 +650,8 @@ module Autobot::Channels
       reply_msg = msg["reply_to_message"]?
       return nil unless reply_msg
 
-      reply_msg["text"]?.try(&.as_s) || reply_msg["caption"]?.try(&.as_s)
+      quote_text = msg["quote"]?.try(&.[]?("text")).try(&.as_s?)
+      quote_text || reply_msg["text"]?.try(&.as_s?) || reply_msg["caption"]?.try(&.as_s?)
     end
 
     private def service_message?(msg : JSON::Any) : Bool
@@ -663,12 +664,239 @@ module Autobot::Channels
     end
 
     private def build_content_and_media(msg : JSON::Any) : {String, Array(Bus::MediaAttachment)}
+      attribution_parts = [
+        extract_forward_origin_content(msg),
+        extract_story_content(msg),
+      ].compact
+
       typed = typed_text(msg)
       media_parts, media_attachments = @media_extractor.extract(msg, !typed.nil?)
+      body_parts = [typed].compact.concat(media_parts)
 
-      content_parts = [typed].compact.concat(media_parts)
+      trailer_parts = [
+        extract_rich_message_content(msg),
+        extract_link_preview_options_content(msg, typed),
+        extract_poll_content(msg),
+        extract_venue_or_location_content(msg),
+        extract_contact_content(msg),
+      ].compact
+
+      content_parts = attribution_parts + body_parts + trailer_parts
       content = content_parts.empty? ? EMPTY_MESSAGE_LABEL : content_parts.join("\n")
       {content, media_attachments}
+    end
+
+    private def extract_forward_origin_content(msg : JSON::Any) : String?
+      forward_origin = msg["forward_origin"]?.try(&.as_h?)
+      return nil unless forward_origin
+
+      case forward_origin["type"]?.try(&.as_s?)
+      when "user"
+        user = forward_origin["sender_user"]?.try(&.as_h?)
+        user_name = user ? (user["first_name"]?.try(&.as_s?) || user["username"]?.try(&.as_s?)) : nil
+        user_name ? "[Forwarded from: #{user_name}]" : nil
+      when "hidden_user"
+        sender_name = forward_origin["sender_user_name"]?.try(&.as_s?)
+        sender_name ? "[Forwarded from: #{sender_name}]" : nil
+      when "chat"
+        format_forwarded_chat(forward_origin["sender_chat"]?, forward_origin["author_signature"]?.try(&.as_s?))
+      when "channel"
+        format_forwarded_chat(forward_origin["chat"]?, forward_origin["author_signature"]?.try(&.as_s?))
+      else
+        nil
+      end
+    end
+
+    private def format_forwarded_chat(chat_node : JSON::Any?, author_signature : String?) : String?
+      chat = chat_node.try(&.as_h?)
+      return nil unless chat
+
+      title = chat["title"]?.try(&.as_s?) || chat["username"]?.try(&.as_s?)
+      return nil unless title
+
+      if author_signature
+        "[Forwarded from: #{title} (#{author_signature})]"
+      else
+        "[Forwarded from: #{title}]"
+      end
+    end
+
+    private def extract_story_content(msg : JSON::Any) : String?
+      story = msg["story"]?.try(&.as_h?)
+      return nil unless story
+
+      story_id = story["id"]?.try(&.as_i64?)
+      return nil unless story_id
+
+      chat = story["chat"]?.try(&.as_h?)
+      chat_title = chat ? (chat["title"]?.try(&.as_s?) || chat["username"]?.try(&.as_s?) || chat["first_name"]?.try(&.as_s?)) : nil
+      chat_title ? "[Story from #{chat_title} (ID: #{story_id})]" : "[Story (ID: #{story_id})]"
+    end
+
+    private def extract_link_preview_options_content(msg : JSON::Any, typed : String? = nil) : String?
+      link_preview = msg["link_preview_options"]?.try(&.as_h?)
+      return nil unless link_preview
+      return nil if link_preview["is_disabled"]?.try(&.as_bool?)
+
+      url = link_preview["url"]?.try(&.as_s?)
+      return nil unless url
+      return nil if typed && typed.includes?(url)
+
+      "[Link: #{url}]"
+    end
+
+    private def extract_rich_message_content(msg : JSON::Any) : String?
+      rich_message = msg["rich_message"]?.try(&.as_h?)
+      return nil unless rich_message
+
+      blocks = rich_message["blocks"]?.try(&.as_a?)
+      return nil unless blocks
+
+      rendered_blocks = blocks.compact_map { |block| render_rich_block(block) }
+      rendered_blocks.empty? ? nil : rendered_blocks.join("\n")
+    end
+
+    private def render_rich_block(block : JSON::Any) : String?
+      block_hash = block.as_h?
+      return nil unless block_hash
+
+      case block_hash["type"]?.try(&.as_s?)
+      when "blockquote"
+        render_rich_blockquote(block_hash)
+      when "list"
+        render_rich_list(block_hash)
+      else
+        render_rich_text_block(block_hash)
+      end
+    end
+
+    private def render_rich_blockquote(block_hash : Hash(String, JSON::Any)) : String?
+      nested_blocks = block_hash["blocks"]?.try(&.as_a?)
+      return nil unless nested_blocks
+
+      rendered = nested_blocks.compact_map { |nested| render_rich_block(nested) }.join("\n").strip
+      return nil if rendered.empty?
+
+      "[Quoting: \"#{rendered}\"]"
+    end
+
+    private def render_rich_list(block_hash : Hash(String, JSON::Any)) : String?
+      items = block_hash["items"]?.try(&.as_a?)
+      return nil unless items
+
+      rendered_items = items.compact_map do |item|
+        item_hash = item.as_h?
+        next nil unless item_hash
+
+        label = item_hash["label"]?.try(&.as_s?)
+        item_blocks = item_hash["blocks"]?.try(&.as_a?)
+        next nil unless item_blocks
+
+        item_text = item_blocks.compact_map { |nested| render_rich_block(nested) }.join("\n").strip
+        next nil if item_text.empty?
+
+        label ? "#{label} #{item_text}" : "- #{item_text}"
+      end
+
+      rendered_items.empty? ? nil : rendered_items.join("\n")
+    end
+
+    private def render_rich_text_block(block_hash : Hash(String, JSON::Any)) : String?
+      text_node = block_hash["text"]?
+      return nil unless text_node
+
+      rendered = render_rich_text(text_node)
+      return nil if rendered.blank?
+
+      case block_hash["type"]?.try(&.as_s?)
+      when "heading"
+        "### #{rendered.strip}"
+      when "pre"
+        if language = block_hash["language"]?.try(&.as_s?)
+          "```#{language}\n#{rendered.chomp}\n```"
+        else
+          "```\n#{rendered.chomp}\n```"
+        end
+      when "expandable_blockquote", "pullquote"
+        "[Quoting: \"#{rendered.strip}\"]"
+      else
+        rendered.strip
+      end
+    end
+
+    private def render_rich_text(node : JSON::Any) : String
+      if str = node.as_s?
+        str
+      elsif arr = node.as_a?
+        arr.map { |item| render_rich_text(item) }.join
+      elsif node_hash = node.as_h?
+        if text_node = node_hash["text"]?
+          render_rich_text(text_node)
+        else
+          ""
+        end
+      else
+        ""
+      end
+    end
+
+    private def extract_poll_content(msg : JSON::Any) : String?
+      poll = msg["poll"]?.try(&.as_h?)
+      return nil unless poll
+
+      question = poll["question"]?.try(&.as_s?)
+      return nil unless question
+
+      poll_lines = ["[Poll: #{question}]"]
+      if options = poll["options"]?.try(&.as_a?)
+        options.each do |opt|
+          if opt_text = opt.as_h?.try(&.[]?("text")).try(&.as_s?)
+            poll_lines << "- #{opt_text}"
+          end
+        end
+      end
+
+      poll_lines.join("\n")
+    end
+
+    private def extract_venue_or_location_content(msg : JSON::Any) : String?
+      if venue = msg["venue"]?.try(&.as_h?)
+        title = venue["title"]?.try(&.as_s?)
+        address = venue["address"]?.try(&.as_s?)
+        loc = venue["location"]?.try(&.as_h?)
+        lat = loc ? loc["latitude"]?.try(&.as_f?) : nil
+        lon = loc ? loc["longitude"]?.try(&.as_f?) : nil
+
+        venue_info = [title, address].compact.join(", ").presence
+        if lat && lon
+          coords = sprintf("%.6f, %.6f", lat, lon)
+          venue_info ? "[Venue: #{venue_info} (#{coords})]" : "[Location: #{coords}]"
+        elsif venue_info
+          "[Venue: #{venue_info}]"
+        else
+          nil
+        end
+      elsif loc = msg["location"]?.try(&.as_h?)
+        lat = loc["latitude"]?.try(&.as_f?)
+        lon = loc["longitude"]?.try(&.as_f?)
+        return nil unless lat && lon
+
+        coords = sprintf("%.6f, %.6f", lat, lon)
+        "[Location: #{coords}]"
+      else
+        nil
+      end
+    end
+
+    private def extract_contact_content(msg : JSON::Any) : String?
+      contact = msg["contact"]?.try(&.as_h?)
+      return nil unless contact
+
+      name = [contact["first_name"]?.try(&.as_s?), contact["last_name"]?.try(&.as_s?)].compact.join(" ").presence
+      phone = contact["phone_number"]?.try(&.as_s?).presence
+      return nil unless name || phone
+
+      phone ? "[Contact: #{name || "unknown"} (#{phone})]" : "[Contact: #{name}]"
     end
 
     private def download_telegram_file_bytes(file_id : String) : Bytes?
@@ -1099,7 +1327,7 @@ module Autobot::Channels
     end
 
     private def handle_command_message(msg : JSON::Any, sender : Sender) : Bool
-      text = msg["text"]?.try(&.as_s)
+      text = msg["text"]?.try(&.as_s?)
       return false unless text && text.starts_with?('/')
       handle_command(text, sender[:chat_id], sender[:sender_id], sender[:first_name]) if command_for_me?(text, msg, sender)
       true
@@ -1129,14 +1357,14 @@ module Autobot::Channels
     private def mentioned?(msg : JSON::Any) : Bool
       return false unless regex = bot_mention_regex
 
-      if text = msg["text"]?.try(&.as_s)
+      if text = msg["text"]?.try(&.as_s?)
         return true if regex.matches?(text)
       end
-      if caption = msg["caption"]?.try(&.as_s)
+      if caption = msg["caption"]?.try(&.as_s?)
         return true if regex.matches?(caption)
       end
 
-      if reply_username = msg.dig?("reply_to_message", "from", "username").try(&.as_s)
+      if reply_username = msg.dig?("reply_to_message", "from", "username").try(&.as_s?)
         return true if reply_username.compare(@bot_username, case_insensitive: true) == 0
       end
 

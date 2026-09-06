@@ -98,11 +98,15 @@ channels:
 ## Features
 
 - **Long polling** — no webhook or public IP needed
-- **Reply context** — when replying to a message, the original text is included as context so the bot understands what you're referring to
+- **Reply context and quotes** — when replying to a message or selecting a quote excerpt, the replied-to text is prepended as context so the bot understands the reference
 - **Voice notes** — a note recorded in the chat is transcribed via Whisper into the message text (Groq or OpenAI key, or the bot's own `transcription.api_key`); with transcription off the bot replies that it could not hear the note
 - **Audio files and forwarded voice notes** — saved to the inbox as attachments; the transcript stays on the attachment, never in the message text
 - **Photos** — sent as image attachments to the LLM and saved to the inbox
 - **Documents** — saved to the inbox and attached to the message context
+- **Forwards and stories** — forwarded messages and shared stories preserve sender attribution and origin metadata
+- **Polls, locations, and venues** — questions, choices, GPS coordinates, and venue details are formatted into prompt context
+- **Contacts** — shared contact cards format name and phone details
+- **Rich message articles** — Bot API rich message blocks (headings, blockquotes, fenced code with language, and lists) are converted into Markdown
 - **Typing indicators** — shows "typing..." while the LLM responds
 - **Markdown rendering** — LLM responses are converted to Telegram HTML
 - **Group chats** — the bot only replies when addressed: mentioned by `@username` or replied to. Other group messages are ignored (no response, no access-denied notice).

@@ -88,7 +88,7 @@ Channel adapters handle protocol-specific communication (HTTP webhooks, WebSocke
 | Channel | Transport | Features |
 |---------|-----------|----------|
 | CLI | stdin/stdout | Interactive and single-command modes |
-| Telegram | HTTP polling | Photos, voice, custom commands, allowlists |
+| Telegram | HTTP polling | Photos, voice, quotes, forwards, rich messages, custom commands, allowlists |
 | Slack | WebSocket | Thread support, file uploads |
 | WhatsApp | HTTP webhooks | Media messages |
 | Zulip | HTTP Polling | Private direct messages |
