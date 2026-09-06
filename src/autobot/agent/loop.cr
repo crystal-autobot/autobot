@@ -310,8 +310,8 @@ module Autobot::Agent
       enabled_tools : Array(String),
       filesystem_roots : Array(String),
       web_allowed_domains : Array(String),
-      max_tokens : Int32 = Config::AgentDefaults.new.max_tokens,
-      temperature : Float64 = Config::AgentDefaults.new.temperature,
+      max_tokens : Int32,
+      temperature : Float64,
     ) : Nil
       subagents = SubagentManager.new(
         provider: @provider,
