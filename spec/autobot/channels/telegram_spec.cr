@@ -833,4 +833,18 @@ describe Autobot::Channels::TelegramChannel do
       server.close if server
     end
   end
+
+  describe "#send_message" do
+    it "ignores empty or whitespace-only messages without sending requests" do
+      channel = build_channel
+      outbound = Autobot::Bus::OutboundMessage.new(
+        channel: "telegram",
+        chat_id: "123",
+        content: "   \n  "
+      )
+
+      channel.send_message(outbound)
+      channel.created_clients.should be_empty
+    end
+  end
 end

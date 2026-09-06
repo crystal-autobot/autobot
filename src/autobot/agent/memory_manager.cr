@@ -27,6 +27,7 @@ module Autobot::Agent
       @model : String,
       @memory_window : Int32,
       @sessions : Session::Manager,
+      @max_tokens : Int32 = Config::AgentDefaults.new.max_tokens,
     )
       @memory = MemoryStore.new(@workspace)
     end
@@ -128,7 +129,8 @@ module Autobot::Agent
           {"role" => JSON::Any.new(Constants::ROLE_SYSTEM), "content" => JSON::Any.new("You are a memory consolidation agent. Respond only with valid JSON.")},
           {"role" => JSON::Any.new(Constants::ROLE_USER), "content" => JSON::Any.new(prompt)},
         ],
-        model: @model
+        model: @model,
+        max_tokens: @max_tokens
       )
 
       result = parse_result((response.content || "").strip)

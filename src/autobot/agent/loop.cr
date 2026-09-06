@@ -70,6 +70,8 @@ module Autobot::Agent
       enabled_tools : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
       web_allowed_domains : Array(String) = [] of String,
+      max_tokens : Int32 = Config::AgentDefaults.new.max_tokens,
+      temperature : Float64 = Config::AgentDefaults.new.temperature,
     )
       @model = model || @provider.default_model
       sandboxed = sandbox_config.downcase != "none"
@@ -79,7 +81,9 @@ module Autobot::Agent
         provider: @provider,
         context: @context,
         model: @model,
-        max_iterations: @max_iterations
+        max_iterations: @max_iterations,
+        max_tokens: max_tokens,
+        temperature: temperature
       )
 
       @memory_manager = MemoryManager.new(
@@ -87,10 +91,15 @@ module Autobot::Agent
         provider: @provider,
         model: @model,
         memory_window: @memory_window,
-        sessions: @sessions
+        sessions: @sessions,
+        max_tokens: max_tokens
       )
 
-      register_optional_tools(brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns, sandbox_config, rate_limiter, enabled_tools, filesystem_roots, web_allowed_domains)
+      register_optional_tools(
+        brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns,
+        sandbox_config, rate_limiter, enabled_tools, filesystem_roots, web_allowed_domains,
+        max_tokens: max_tokens, temperature: temperature
+      )
       cache_tool_references
     end
 
@@ -175,7 +184,7 @@ module Autobot::Agent
 
       @message_tool.try(&.clear_last_sent)
       result = @executor.execute(messages, @tools, session_key: session.key)
-      final_content = result.content || FALLBACK_RESPONSE
+      final_content = result.content.presence || @message_tool.try(&.last_sent_content) || FALLBACK_RESPONSE
 
       save_to_session(session, @context.render_user_text(msg.content, msg.media?), final_content, result.tools_used)
 
@@ -229,7 +238,7 @@ module Autobot::Agent
 
     # Persist the cron exchange to session so followup messages have context.
     private def save_cron_to_session(session : Session::Session, task_content : String, result : ToolExecutor::Result) : Nil
-      response_content = @message_tool.try(&.last_sent_content) || result.content
+      response_content = @message_tool.try(&.last_sent_content) || result.content.presence
       return unless response_content
 
       save_to_session(session, "[Scheduled task] #{task_content}", response_content, result.tools_used)
@@ -251,7 +260,7 @@ module Autobot::Agent
       )
 
       result = @executor.execute(messages, @tools, session_key: session.key)
-      final_content = result.content || "Background task completed."
+      final_content = result.content.presence || "Background task completed."
 
       session.add_message(Constants::ROLE_USER, msg.content)
       session.add_message(Constants::ROLE_ASSISTANT, final_content)
@@ -301,6 +310,8 @@ module Autobot::Agent
       enabled_tools : Array(String),
       filesystem_roots : Array(String),
       web_allowed_domains : Array(String),
+      max_tokens : Int32,
+      temperature : Float64,
     ) : Nil
       subagents = SubagentManager.new(
         provider: @provider,
@@ -316,6 +327,8 @@ module Autobot::Agent
         enabled_tools: enabled_tools,
         filesystem_roots: filesystem_roots,
         web_allowed_domains: web_allowed_domains,
+        max_tokens: max_tokens,
+        temperature: temperature,
       )
       @tools.register(Tools::SpawnTool.new(subagents))
 
