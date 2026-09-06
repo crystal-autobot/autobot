@@ -91,7 +91,8 @@ module Autobot::Agent
         provider: @provider,
         model: @model,
         memory_window: @memory_window,
-        sessions: @sessions
+        sessions: @sessions,
+        max_tokens: max_tokens
       )
 
       register_optional_tools(
