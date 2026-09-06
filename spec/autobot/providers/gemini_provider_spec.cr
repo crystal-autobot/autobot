@@ -39,4 +39,30 @@ describe Autobot::Providers::GeminiProvider do
     parts[1]["inlineData"]["mimeType"].as_s.should eq("image/png")
     parts[1]["inlineData"]["data"].as_s.should eq("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
   end
+
+  it "drops image blocks whose url is not a base64 data URI" do
+    provider = TestableGeminiProvider.new(api_key: "test_key", model: "gemini-3.7-flash")
+
+    messages = [
+      {
+        "role"    => JSON::Any.new("user"),
+        "content" => JSON::Any.new([
+          JSON::Any.new({
+            "type" => JSON::Any.new("text"),
+            "text" => JSON::Any.new("Describe this"),
+          } of String => JSON::Any),
+          JSON::Any.new({
+            "type"      => JSON::Any.new("image_url"),
+            "image_url" => JSON::Any.new({
+              "url" => JSON::Any.new("https://example.com/photo.png"),
+            } of String => JSON::Any),
+          } of String => JSON::Any),
+        ]),
+      },
+    ]
+
+    parts = provider.test_map_messages_to_native(messages).first["parts"].as_a
+    parts.size.should eq(1)
+    parts[0]["text"].as_s.should eq("Describe this")
+  end
 end

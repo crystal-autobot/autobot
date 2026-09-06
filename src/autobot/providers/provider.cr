@@ -4,6 +4,9 @@ module Autobot
     DEFAULT_MAX_TOKENS  = 4096
     DEFAULT_TEMPERATURE =  0.7
 
+    DATA_URI_PREFIX      = "data:"
+    BASE64_URI_SEPARATOR = ";base64,"
+
     # Abstract base for LLM providers.
     #
     # Implementations handle the specifics of each provider's API
@@ -32,6 +35,13 @@ module Autobot
       # tool schemas remain stable and don't bust the cache.
       def supports_progressive_disclosure? : Bool
         true
+      end
+
+      private def parse_data_uri(url : String) : {String, String}?
+        return unless url.starts_with?(DATA_URI_PREFIX) && url.includes?(BASE64_URI_SEPARATOR)
+
+        header, data = url.split(BASE64_URI_SEPARATOR, 2)
+        {header.lchop(DATA_URI_PREFIX), data}
       end
     end
   end

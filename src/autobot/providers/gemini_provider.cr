@@ -468,8 +468,8 @@ module Autobot
         blocks.each do |block|
           case block["type"]?.try(&.as_s?)
           when "text"
-            if b_text = block["text"]?.try(&.as_s?)
-              parts << {"text" => JSON::Any.new(b_text)}
+            if text = block["text"]?.try(&.as_s?)
+              parts << {"text" => JSON::Any.new(text)}
             end
           when "image_url"
             append_image_url_block(parts, block)
@@ -478,21 +478,14 @@ module Autobot
       end
 
       private def append_image_url_block(parts : Array(Hash(String, JSON::Any)), block : JSON::Any) : Nil
-        img_url = block["image_url"]?.try { |image_obj| image_obj["url"]?.try(&.as_s?) }
-        return unless img_url
-        return unless img_url.starts_with?("data:")
+        url = block["image_url"]?.try { |image| image["url"]?.try(&.as_s?) } || ""
+        return unless parsed = parse_data_uri(url)
 
-        comma_idx = img_url.index(',')
-        return unless comma_idx
-
-        header = img_url[5...comma_idx]
-        mime_type = header.split(';').first
-        b64_data = img_url[(comma_idx + 1)..]
-
+        mime_type, data = parsed
         parts << {
           "inlineData" => JSON::Any.new({
             "mimeType" => JSON::Any.new(mime_type),
-            "data"     => JSON::Any.new(b64_data),
+            "data"     => JSON::Any.new(data),
           } of String => JSON::Any),
         }
       end
