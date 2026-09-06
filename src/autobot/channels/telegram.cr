@@ -393,6 +393,8 @@ module Autobot::Channels
         return
       end
 
+      return if message.content.strip.empty?
+
       html = MarkdownToTelegramHTML.convert(message.content)
       html = MarkdownToTelegramHTML.strip_html(html) unless MarkdownToTelegramHTML.valid_html?(html)
 

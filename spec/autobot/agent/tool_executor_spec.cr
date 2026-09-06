@@ -136,6 +136,30 @@ end
 
 describe Autobot::Agent::ToolExecutor do
   describe "#execute" do
+    it "passes configured max_tokens and temperature to provider" do
+      provider = SequenceMockProvider.new([text_response("Hello, world!")])
+      workspace = TestHelper.tmp_dir("tool_executor_params_test")
+      context = Autobot::Agent::Context::Builder.new(workspace)
+      executor = Autobot::Agent::ToolExecutor.new(
+        provider: provider,
+        context: context,
+        model: "mock-model",
+        max_tokens: 32768,
+        temperature: 0.7
+      )
+      tools = Autobot::Tools::Registry.new
+
+      result = executor.execute(build_messages, tools)
+
+      result.content.should eq("Hello, world!")
+      provider.sent_bodies.size.should eq(1)
+      sent_json = JSON.parse(provider.sent_bodies.first)
+      sent_json["max_tokens"].as_i.should eq(32768)
+      sent_json["temperature"].as_f.should eq(0.7)
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
     it "returns text content when LLM responds without tool calls" do
       provider = SequenceMockProvider.new([text_response("Hello, world!")])
       executor = build_executor(provider)

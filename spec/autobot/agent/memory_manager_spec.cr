@@ -3,6 +3,7 @@ require "../../spec_helper"
 # Mock provider for memory manager tests.
 class MemoryMockProvider < Autobot::Providers::HttpProvider
   getter call_count : Int32 = 0
+  getter sent_bodies : Array(String) = [] of String
 
   def initialize
     super(api_key: "test-key", model: "mock-model")
@@ -10,6 +11,7 @@ class MemoryMockProvider < Autobot::Providers::HttpProvider
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     @call_count += 1
+    @sent_bodies << body
     json_response = %({"history_entry":"[2025-01-01] Summary of conversation","memory_update":"User prefers dark mode"})
     HTTP::Client::Response.new(200, body: %({"choices":[{"message":{"content":#{json_response.to_json}},"finish_reason":"stop"}],"usage":{"prompt_tokens":50,"completion_tokens":20,"total_tokens":70}}))
   end
@@ -198,6 +200,32 @@ describe Autobot::Agent::MemoryManager do
       # Should have the trimmed messages plus the new one
       reloaded.messages.size.should eq(4) # 3 kept + 1 new
       reloaded.messages.last.content.should eq("New message after consolidation")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "passes configured max_tokens to the summarization request" do
+      tmp = TestHelper.tmp_dir
+      provider = MemoryMockProvider.new
+      sessions = Autobot::Session::Manager.new(tmp)
+
+      manager = Autobot::Agent::MemoryManager.new(
+        workspace: tmp,
+        provider: provider,
+        model: "mock-model",
+        memory_window: 6,
+        sessions: sessions,
+        max_tokens: 32768
+      )
+
+      session = sessions.get_or_create("test:max_tokens")
+      10.times { |i| session.add_message("user", "Message #{i}") }
+
+      manager.consolidate_if_needed(session)
+      sleep(200.milliseconds)
+
+      provider.sent_bodies.size.should eq(1)
+      JSON.parse(provider.sent_bodies.first)["max_tokens"].as_i.should eq(32768)
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
