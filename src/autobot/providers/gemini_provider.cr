@@ -448,6 +448,8 @@ module Autobot
         if !has_thought_parts
           if text = msg["content"]?.try(&.as_s?)
             parts << {"text" => JSON::Any.new(text)}
+          elsif blocks = msg["content"]?.try(&.as_a?)
+            append_multimodal_blocks(parts, blocks)
           end
         end
 
@@ -460,6 +462,32 @@ module Autobot
         end
 
         parts
+      end
+
+      private def append_multimodal_blocks(parts : Array(Hash(String, JSON::Any)), blocks : Array(JSON::Any)) : Nil
+        blocks.each do |block|
+          case block["type"]?.try(&.as_s?)
+          when "text"
+            if text = block["text"]?.try(&.as_s?)
+              parts << {"text" => JSON::Any.new(text)}
+            end
+          when "image_url"
+            append_image_url_block(parts, block)
+          end
+        end
+      end
+
+      private def append_image_url_block(parts : Array(Hash(String, JSON::Any)), block : JSON::Any) : Nil
+        url = block["image_url"]?.try { |image| image["url"]?.try(&.as_s?) } || ""
+        return unless parsed = parse_data_uri(url)
+
+        mime_type, data = parsed
+        parts << {
+          "inlineData" => JSON::Any.new({
+            "mimeType" => JSON::Any.new(mime_type),
+            "data"     => JSON::Any.new(data),
+          } of String => JSON::Any),
+        }
       end
 
       private def extract_thought_parts(tcalls) : Array(Hash(String, JSON::Any))?

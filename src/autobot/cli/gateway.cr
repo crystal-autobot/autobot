@@ -144,6 +144,9 @@ module Autobot
         sandbox_config = config.tools.try(&.sandbox) || "auto"
         deny_patterns, allow_patterns = SetupHelper.load_exec_patterns(config)
 
+        agent_defaults = Config::AgentDefaults.new
+        defaults = config.agents.try(&.defaults)
+
         Autobot::Agent::Loop.new(
           bus: bus,
           provider: provider,
@@ -151,8 +154,8 @@ module Autobot
           tools: tool_registry,
           sessions: session_manager,
           model: config.default_model,
-          max_iterations: config.agents.try(&.defaults.try(&.max_tool_iterations)) || 20,
-          memory_window: config.agents.try(&.defaults.try(&.memory_window)) || 50,
+          max_iterations: defaults.try(&.max_tool_iterations) || 20,
+          memory_window: defaults.try(&.memory_window) || 50,
           cron_service: cron_service,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
@@ -163,6 +166,8 @@ module Autobot
           enabled_tools: config.tools.try(&.enabled) || [] of String,
           filesystem_roots: config.tools.try(&.filesystem.try(&.roots)) || [] of String,
           web_allowed_domains: config.tools.try(&.web.try(&.allowed_domains)) || [] of String,
+          max_tokens: defaults.try(&.max_tokens) || agent_defaults.max_tokens,
+          temperature: defaults.try(&.temperature) || agent_defaults.temperature,
         )
       end
 

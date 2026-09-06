@@ -37,6 +37,8 @@ module Autobot::Agent
       @context : Context::Builder,
       @model : String,
       @max_iterations : Int32 = 20,
+      @max_tokens : Int32 = Config::AgentDefaults.new.max_tokens,
+      @temperature : Float64 = Config::AgentDefaults.new.temperature,
     )
     end
 
@@ -109,7 +111,9 @@ module Autobot::Agent
       response = @provider.chat(
         messages: messages,
         tools: tools.definitions(exclude: exclude_tools, compact: compact_tools),
-        model: @model
+        model: @model,
+        max_tokens: @max_tokens,
+        temperature: @temperature,
       )
 
       usage = response.usage

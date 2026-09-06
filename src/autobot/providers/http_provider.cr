@@ -300,7 +300,7 @@ module Autobot
       private def convert_image_url_to_anthropic(block : JSON::Any) : JSON::Any
         url = block["image_url"]?.try { |image_url| image_url["url"]?.try(&.as_s?) } || ""
 
-        media_type, data = parse_data_uri(url)
+        media_type, data = parse_data_uri(url) || {"image/jpeg", url}
 
         JSON::Any.new({
           "type"   => JSON::Any.new("image"),
@@ -310,17 +310,6 @@ module Autobot
             "data"       => JSON::Any.new(data),
           } of String => JSON::Any),
         } of String => JSON::Any)
-      end
-
-      private def parse_data_uri(url : String) : {String, String}
-        if url.starts_with?("data:") && url.includes?(";base64,")
-          parts = url.split(";base64,", 2)
-          media_type = parts[0].lchop("data:")
-          data = parts[1]
-          {media_type, data}
-        else
-          {"image/jpeg", url}
-        end
       end
 
       # Convert tool definitions to Anthropic format.
