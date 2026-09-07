@@ -37,7 +37,10 @@ module Autobot
         end
 
         result = @client.call_tool(@remote_name, params)
-        Tools::ToolResult.success(result)
+        return Tools::ToolResult.success(result.content) if result.success?
+
+        Log.warn { "MCP tool #{@name} returned an error: #{result.content}" }
+        Tools::ToolResult.error(result.content)
       rescue ex
         Log.error { "MCP tool #{@name} failed: #{ex.message}" }
         Tools::ToolResult.error("MCP tool error: #{ex.message}")
@@ -141,12 +144,25 @@ module Autobot
       end
 
       private def self.resolve_type(prop : JSON::Any) : String
+        return Tools::PropertySchema::ANY if opaque?(prop)
+
         types = declared_types(prop).select { |type| Tools::Tool::VALID_SCHEMA_TYPES.includes?(type) }.uniq!
         case types.size
         when 0 then "string"
         when 1 then types.first
         else        Tools::PropertySchema::ANY
         end
+      end
+
+      # A `$ref` names a definition this converter does not resolve. Narrowing to
+      # the branches it can read would reject values the server accepts.
+      private def self.opaque?(prop : JSON::Any) : Bool
+        return true if prop["$ref"]?
+
+        branches = (prop["anyOf"]? || prop["oneOf"]?).try(&.as_a?)
+        return false unless branches
+
+        branches.any? { |branch| opaque?(branch) }
       end
 
       private def self.declared_types(prop : JSON::Any) : Array(String)

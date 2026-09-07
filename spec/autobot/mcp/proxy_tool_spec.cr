@@ -1,5 +1,29 @@
 require "../../spec_helper"
 
+private class FakeClient < Autobot::Mcp::Client
+  def initialize(@result : Autobot::Mcp::Client::CallResult, @running : Bool = true)
+    super(server_name: "test", command: "echo")
+  end
+
+  def alive? : Bool
+    @running
+  end
+
+  def call_tool(name : String, arguments : Hash(String, JSON::Any)) : Autobot::Mcp::Client::CallResult
+    @result
+  end
+end
+
+private def proxy_for(result : Autobot::Mcp::Client::CallResult) : Autobot::Mcp::ProxyTool
+  Autobot::Mcp::ProxyTool.new(
+    client: FakeClient.new(result),
+    remote_name: "search",
+    name: "mcp_test_search",
+    description: "[test] Search",
+    parameters: Autobot::Tools::ToolSchema.new,
+  )
+end
+
 describe Autobot::Config::McpServerConfig do
   it "deserializes from YAML" do
     config = Autobot::Config::McpServerConfig.from_yaml(<<-YAML
@@ -164,6 +188,44 @@ describe Autobot::Mcp::ProxyTool do
       raw = JSON.parse(%({"type":"object","properties":{"sort":{"type":"string","enum":["asc","desc"]}}}))
       schema = Autobot::Mcp::ProxyTool.convert_schema(raw)
       schema.properties["sort"].enum_values.should eq(["asc", "desc"])
+    end
+  end
+
+  describe "schema conversion" do
+    it "leaves a property untyped when a branch is a $ref" do
+      tool_json = JSON.parse(%({"name":"post","description":"Post","inputSchema":{"type":"object","properties":{"parent":{"anyOf":[{"$ref":"#/$defs/parentRequest"},{"type":"string"}]}},"required":["parent"]}}))
+      proxy = Autobot::Mcp::ProxyTool.from_mcp_tool(Autobot::Mcp::Client.new(server_name: "test", command: "echo"), tool_json)
+
+      object = JSON.parse(%({"type":"data_source_id","data_source_id":"abc"}))
+      proxy.validate_params({"parent" => object}).should be_empty
+      proxy.validate_params({"parent" => JSON::Any.new("abc")}).should be_empty
+    end
+
+    it "still narrows a property that declares one type" do
+      tool_json = JSON.parse(%({"name":"post","description":"Post","inputSchema":{"type":"object","properties":{"q":{"type":"string"}},"required":["q"]}}))
+      proxy = Autobot::Mcp::ProxyTool.from_mcp_tool(Autobot::Mcp::Client.new(server_name: "test", command: "echo"), tool_json)
+
+      proxy.validate_params({"q" => JSON::Any.new("ok")}).should be_empty
+      proxy.validate_params({"q" => JSON.parse(%({"a":1}))}).should_not be_empty
+    end
+  end
+
+  describe "#execute" do
+    it "passes a successful call through" do
+      result = proxy_for(Autobot::Mcp::Client::CallResult.new("ok", failed: false))
+        .execute({} of String => JSON::Any)
+
+      result.success?.should be_true
+      result.content.should eq("ok")
+    end
+
+    it "reports a tool that answered with isError" do
+      result = proxy_for(Autobot::Mcp::Client::CallResult.new("body.parent should be an object", failed: true))
+        .execute({} of String => JSON::Any)
+
+      result.success?.should be_false
+      result.error?.should be_true
+      result.content.should eq("body.parent should be an object")
     end
   end
 

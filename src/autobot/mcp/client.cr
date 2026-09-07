@@ -21,6 +21,14 @@ module Autobot
       MAX_RESPONSE_SIZE = 50_000
       ALLOWED_HOST_VARS = {"PATH", "HOME", "LANG"}
 
+      # A tools/call outcome. MCP reports a failing tool as a normal response
+      # carrying `isError`, so the flag has to travel with the content.
+      record CallResult, content : String, failed : Bool do
+        def success? : Bool
+          !failed
+        end
+      end
+
       getter server_name : String
 
       @process : Process?
@@ -107,7 +115,7 @@ module Autobot
 
       # Calls a tool on the MCP server and returns the text content.
       # Result is truncated at `MAX_RESPONSE_SIZE` bytes.
-      def call_tool(name : String, arguments : Hash(String, JSON::Any)) : String
+      def call_tool(name : String, arguments : Hash(String, JSON::Any)) : CallResult
         params = {
           "name"      => JSON::Any.new(name),
           "arguments" => JSON::Any.new(arguments),
@@ -116,10 +124,14 @@ module Autobot
 
         if error = response["error"]?
           message = error["message"]?.try(&.as_s?) || "Unknown MCP error"
-          return "Error: #{message}"
+          return CallResult.new("Error: #{message}", failed: true)
         end
 
-        extract_content(response)
+        CallResult.new(extract_content(response), failed: tool_failed?(response))
+      end
+
+      private def tool_failed?(response : JSON::Any) : Bool
+        response["result"]?.try(&.["isError"]?).try(&.as_bool?) || false
       end
 
       private def wait_for_termination(process : Process) : Nil
