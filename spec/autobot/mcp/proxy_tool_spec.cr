@@ -1,5 +1,29 @@
 require "../../spec_helper"
 
+private class FakeClient < Autobot::Mcp::Client
+  def initialize(@result : Autobot::Mcp::Client::CallResult, @running : Bool = true)
+    super(server_name: "test", command: "echo")
+  end
+
+  def alive? : Bool
+    @running
+  end
+
+  def call_tool(name : String, arguments : Hash(String, JSON::Any)) : Autobot::Mcp::Client::CallResult
+    @result
+  end
+end
+
+private def proxy_for(result : Autobot::Mcp::Client::CallResult) : Autobot::Mcp::ProxyTool
+  Autobot::Mcp::ProxyTool.new(
+    client: FakeClient.new(result),
+    remote_name: "search",
+    name: "mcp_test_search",
+    description: "[test] Search",
+    parameters: Autobot::Tools::ToolSchema.new,
+  )
+end
+
 describe Autobot::Config::McpServerConfig do
   it "deserializes from YAML" do
     config = Autobot::Config::McpServerConfig.from_yaml(<<-YAML
@@ -183,6 +207,25 @@ describe Autobot::Mcp::ProxyTool do
 
       proxy.validate_params({"q" => JSON::Any.new("ok")}).should be_empty
       proxy.validate_params({"q" => JSON.parse(%({"a":1}))}).should_not be_empty
+    end
+  end
+
+  describe "#execute" do
+    it "passes a successful call through" do
+      result = proxy_for(Autobot::Mcp::Client::CallResult.new("ok", failed: false))
+        .execute({} of String => JSON::Any)
+
+      result.success?.should be_true
+      result.content.should eq("ok")
+    end
+
+    it "reports a tool that answered with isError" do
+      result = proxy_for(Autobot::Mcp::Client::CallResult.new("body.parent should be an object", failed: true))
+        .execute({} of String => JSON::Any)
+
+      result.success?.should be_false
+      result.error?.should be_true
+      result.content.should eq("body.parent should be an object")
     end
   end
 

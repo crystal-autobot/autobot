@@ -70,6 +70,17 @@ MCP servers run as regular child processes (not sandboxed) because they typicall
 - **Response truncation**: Tool results are capped at 50KB to prevent memory issues
 - **No auto-restart**: If a server crashes, its tools return errors until autobot is restarted
 
+## Tool errors
+
+A server reports a failing tool by answering normally with `isError` set. Autobot honours that
+flag: the call becomes a tool error, the agent is told it failed, and the message is logged at
+warning level.
+
+Not every server sets it. Some return the upstream API's error as ordinary content with no flag,
+and autobot cannot tell that apart from a successful answer — the agent reads the error text and
+decides what to do. When a tool looks like it succeeded but nothing changed, check what the agent
+was actually told rather than trusting the absence of a warning in the log.
+
 ## Troubleshooting
 
 ### Server fails to start

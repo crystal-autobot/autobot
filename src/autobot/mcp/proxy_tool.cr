@@ -37,7 +37,10 @@ module Autobot
         end
 
         result = @client.call_tool(@remote_name, params)
-        Tools::ToolResult.success(result)
+        return Tools::ToolResult.success(result.content) if result.success?
+
+        Log.warn { "MCP tool #{@name} returned an error: #{result.content}" }
+        Tools::ToolResult.error(result.content)
       rescue ex
         Log.error { "MCP tool #{@name} failed: #{ex.message}" }
         Tools::ToolResult.error("MCP tool error: #{ex.message}")
