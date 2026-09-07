@@ -321,11 +321,12 @@ module Autobot::Config
     PROVIDERS        = %w[groq openai]
     DEFAULT_PROVIDER = "openai"
 
-    record Source, provider : String, api_key : String, own_key : Bool
+    record Source, provider : String, api_key : String, own_key : Bool, model : String? = nil
 
     property? enabled : Bool = true
     property provider : String? = nil
     property api_key : String? = nil
+    property model : String? = nil
 
     def initialize
     end
@@ -441,17 +442,25 @@ module Autobot::Config
       Path[media.inbox].expand(base: workspace_path, home: true)
     end
 
+    # The engine hands the agent inbox paths for stored media and transcripts,
+    # so an allowlist that omits the inbox hands out unreadable pointers.
+    def filesystem_roots : Array(String)
+      roots = tools.try(&.filesystem.try(&.roots)) || [] of String
+      return roots if roots.empty? || roots.includes?(media.inbox)
+      roots + [media.inbox]
+    end
+
     def transcription_source : TranscriptionConfig::Source?
       return nil unless transcription.enabled?
 
       pinned = transcription.provider
       if own_key = transcription.own_key
-        return TranscriptionConfig::Source.new(pinned || TranscriptionConfig::DEFAULT_PROVIDER, own_key, own_key: true)
+        return TranscriptionConfig::Source.new(pinned || TranscriptionConfig::DEFAULT_PROVIDER, own_key, own_key: true, model: transcription.model)
       end
 
       (pinned ? [pinned] : TranscriptionConfig::PROVIDERS).each do |name|
         key = provider_by_name(name).try(&.api_key.presence)
-        return TranscriptionConfig::Source.new(name, key, own_key: false) if key
+        return TranscriptionConfig::Source.new(name, key, own_key: false, model: transcription.model) if key
       end
       nil
     end

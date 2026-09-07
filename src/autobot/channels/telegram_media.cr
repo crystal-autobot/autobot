@@ -70,12 +70,13 @@ module Autobot::Channels
       document = msg["document"]?
       return nil unless document
 
-      format = format_of(document, Bus::MediaAttachment::TYPE_DOCUMENT, Media::Types::DEFAULT[1])
+      extension, mime = format = format_of(document, Bus::MediaAttachment::TYPE_DOCUMENT, Media::Types::DEFAULT[1])
       bytes = fetch(document)
-      data = format[1].starts_with?("image/") && bytes ? Base64.strict_encode(bytes) : nil
+      data = Media::Types.image?(mime) && bytes ? Base64.strict_encode(bytes) : nil
 
       build(Bus::MediaAttachment::TYPE_DOCUMENT, document, origin, format, bytes,
         data: data,
+        transcript: Media::Types.audio?(mime) ? transcribe(bytes, extension) : nil,
         name: string_of(document, "file_name"))
     end
 

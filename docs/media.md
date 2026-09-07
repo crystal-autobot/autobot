@@ -74,7 +74,7 @@ in front of it.
 
 The rendered text, blocks included, is what the session history stores, so a
 later turn can still answer questions about an earlier attachment. A transcript
-longer than 4,000 characters is cut in the block with a pointer to the full
+longer than 24,000 characters is cut in the block with a pointer to the full
 transcript file in the inbox, which the agent can read on demand.
 
 ## Vision
@@ -275,12 +275,14 @@ Voice notes and audio files received via Telegram are transcribed using the Whis
 ```
 Voice note from the sender -> Download -> Transcriber -> "[voice transcription]: ..." in message content -> LLM
 Audio file or forwarded note -> Download -> Transcriber -> transcript on the attachment            -> LLM
+Document with an audio type -> Download -> Transcriber -> transcript on the attachment            -> LLM
 ```
 
 1. **Channel** receives a voice note or audio file and downloads the file bytes
 2. **Transcriber** sends the audio to the Whisper API (OpenAI or Groq) and receives text
 3. For a voice note the sender recorded, with no typed text, the transcript becomes the message content as `[voice transcription]: {text}`
 4. For an audio file, a forwarded voice note, or a voice note with typed text, the transcript is stored on the attachment and the message content only carries a label such as `[audio: title]`
+5. A document is transcribed too when its type is audio, which is how a recording shared as a file rather than as a track arrives
 
 ### Configuration
 

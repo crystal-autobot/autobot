@@ -232,7 +232,7 @@ module Autobot
       end
 
       def self.check_filesystem_roots(config : Config::Config, warnings : Int32) : Int32
-        roots = config.tools.try(&.filesystem.try(&.roots)) || [] of String
+        roots = config.filesystem_roots
         return warnings if roots.empty?
 
         workspace = config.workspace_path
