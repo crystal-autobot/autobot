@@ -167,6 +167,25 @@ describe Autobot::Mcp::ProxyTool do
     end
   end
 
+  describe "schema conversion" do
+    it "leaves a property untyped when a branch is a $ref" do
+      tool_json = JSON.parse(%({"name":"post","description":"Post","inputSchema":{"type":"object","properties":{"parent":{"anyOf":[{"$ref":"#/$defs/parentRequest"},{"type":"string"}]}},"required":["parent"]}}))
+      proxy = Autobot::Mcp::ProxyTool.from_mcp_tool(Autobot::Mcp::Client.new(server_name: "test", command: "echo"), tool_json)
+
+      object = JSON.parse(%({"type":"data_source_id","data_source_id":"abc"}))
+      proxy.validate_params({"parent" => object}).should be_empty
+      proxy.validate_params({"parent" => JSON::Any.new("abc")}).should be_empty
+    end
+
+    it "still narrows a property that declares one type" do
+      tool_json = JSON.parse(%({"name":"post","description":"Post","inputSchema":{"type":"object","properties":{"q":{"type":"string"}},"required":["q"]}}))
+      proxy = Autobot::Mcp::ProxyTool.from_mcp_tool(Autobot::Mcp::Client.new(server_name: "test", command: "echo"), tool_json)
+
+      proxy.validate_params({"q" => JSON::Any.new("ok")}).should be_empty
+      proxy.validate_params({"q" => JSON.parse(%({"a":1}))}).should_not be_empty
+    end
+  end
+
   describe "#to_schema" do
     it "uses raw input schema when available" do
       tool_json = JSON.parse(%({"name":"search","description":"Search things","inputSchema":{"type":"object","properties":{"q":{"type":"string","description":"query"}},"required":["q"]}}))
