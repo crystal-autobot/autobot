@@ -26,11 +26,11 @@ module Autobot
 
     getter provider : String
 
-    def initialize(@api_key : String, @provider : String = "openai")
+    def initialize(@api_key : String, @provider : String = "openai", @model : String? = nil)
     end
 
     def self.from_config(config : Config::Config) : Transcriber?
-      config.transcription_source.try { |source| new(api_key: source.api_key, provider: source.provider) }
+      config.transcription_source.try { |source| new(api_key: source.api_key, provider: source.provider, model: source.model) }
     end
 
     # Transcribe audio data to text.
@@ -42,7 +42,7 @@ module Autobot
         return nil
       end
 
-      body = build_multipart_body(audio_data, filename, config[:model])
+      body = build_multipart_body(audio_data, filename, @model || config[:model])
       headers = HTTP::Headers{
         "Authorization" => "Bearer #{@api_key}",
         "Content-Type"  => "multipart/form-data; boundary=#{BOUNDARY}",

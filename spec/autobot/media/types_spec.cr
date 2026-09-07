@@ -12,6 +12,27 @@ describe Autobot::Media::Types do
     end
   end
 
+  describe ".audio?" do
+    it "recognises audio mime types, parameters and case included" do
+      Autobot::Media::Types.audio?("audio/mp4").should be_true
+      Autobot::Media::Types.audio?("Audio/OGG; codecs=opus").should be_true
+      Autobot::Media::Types.audio?("audio/x-m4a").should be_true
+    end
+
+    it "rejects everything else" do
+      Autobot::Media::Types.audio?("application/pdf").should be_false
+      Autobot::Media::Types.audio?(nil).should be_false
+    end
+  end
+
+  describe ".image?" do
+    it "recognises image mime types and rejects the rest" do
+      Autobot::Media::Types.image?("image/png").should be_true
+      Autobot::Media::Types.image?("audio/mp4").should be_false
+      Autobot::Media::Types.image?(nil).should be_false
+    end
+  end
+
   describe ".extension_for" do
     it "ignores mime parameters and case" do
       Autobot::Media::Types.extension_for("Audio/OGG; codecs=opus", ".bin").should eq(".ogg")

@@ -170,6 +170,31 @@ describe Autobot::Channels::TelegramMedia do
       attachments.first.mime_type.should eq("application/pdf")
     end
 
+    it "transcribes a document that carries audio" do
+      transcriber = FakeTranscriber.new
+      media = build_media(transcriber)
+      msg = message(%({"document": {"file_id": "d3", "file_name": "meeting.m4a", "mime_type": "audio/x-m4a"}}))
+
+      parts, attachments = media.extract(msg, typed_text: false)
+
+      parts.should eq(["[document: meeting.m4a]"])
+      attachment = attachments.first
+      attachment.transcript.should eq("spoken words")
+      attachment.transcribed?.should be_true
+      transcriber.calls.should eq(["audio.m4a"])
+    end
+
+    it "leaves a document alone when it is not audio" do
+      transcriber = FakeTranscriber.new
+      media = build_media(transcriber)
+      msg = message(%({"document": {"file_id": "d4", "file_name": "report.pdf", "mime_type": "application/pdf"}}))
+
+      _, attachments = media.extract(msg, typed_text: false)
+
+      attachments.first.transcript.should be_nil
+      transcriber.calls.should be_empty
+    end
+
     it "keeps document bytes for vision when mime type is an image" do
       media = build_media(bytes: "png-bytes".to_slice)
       msg = message(%({"document": {"file_id": "d2", "file_name": "photo.png", "mime_type": "image/png"}}))

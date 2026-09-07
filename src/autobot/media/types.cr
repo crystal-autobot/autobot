@@ -24,13 +24,28 @@ module Autobot
         .each_with_object({} of String => String) { |(ext, (_, mime)), map| map[mime] ||= ext }
         .merge({"audio/x-m4a" => ".m4a"})
 
+      AUDIO_PREFIX = "audio/"
+      IMAGE_PREFIX = "image/"
+
+      def self.audio?(mime_type : String?) : Bool
+        normalized(mime_type).starts_with?(AUDIO_PREFIX)
+      end
+
+      def self.image?(mime_type : String?) : Bool
+        normalized(mime_type).starts_with?(IMAGE_PREFIX)
+      end
+
+      private def self.normalized(mime_type : String?) : String
+        mime_type.try(&.split(';').first.strip.downcase) || ""
+      end
+
       def self.for_extension(extension : String) : {String, String}
         BY_EXTENSION[extension.downcase]? || DEFAULT
       end
 
       def self.extension_for(mime_type : String?, fallback : String) : String
         return fallback unless mime_type
-        EXTENSION_BY_MIME[mime_type.split(';').first.strip.downcase]? || fallback
+        EXTENSION_BY_MIME[normalized(mime_type)]? || fallback
       end
     end
   end

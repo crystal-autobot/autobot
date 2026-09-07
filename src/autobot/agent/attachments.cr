@@ -4,7 +4,7 @@ require "../bus/events"
 module Autobot
   module Agent
     module Attachments
-      MAX_INLINE_TRANSCRIPT = 4000
+      MAX_INLINE_TRANSCRIPT = 24_000
 
       def self.render(attachment : Bus::MediaAttachment, workspace_root : Path) : String
         "<attachment#{attributes(attachment, workspace_root)}>\n#{body(attachment, workspace_root)}\n</attachment>"

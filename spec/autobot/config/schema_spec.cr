@@ -215,10 +215,42 @@ describe Autobot::Config::Config do
       Autobot::Config::Config.from_yaml("transcription:\n  provider: whisperx\n").transcription.provider_known?.should be_false
     end
 
+    it "carries a transcription model through to the source" do
+      config = Autobot::Config::Config.from_yaml("transcription:\n  provider: groq\n  model: whisper-large-v3\n  api_key: gsk\n")
+      source = config.transcription_source.should_not be_nil
+      source.provider.should eq("groq")
+      source.model.should eq("whisper-large-v3")
+    end
+
+    it "leaves the transcription model unset by default" do
+      Autobot::Config::Config.from_yaml("transcription:\n  api_key: gsk\n").transcription_source.try(&.model).should be_nil
+    end
+
     it "defaults to all tools and the whole workspace" do
       config = Autobot::Config::Config.from_yaml("tools:\n  sandbox: none\n")
       config.tools.try(&.enabled).should eq([] of String)
       config.tools.try(&.filesystem).should be_nil
+    end
+  end
+
+  describe "#filesystem_roots" do
+    it "adds the inbox so engine-supplied paths stay readable" do
+      config = Autobot::Config::Config.from_yaml("tools:\n  filesystem:\n    roots: [skills, vendor]\n")
+      config.filesystem_roots.should eq(["skills", "vendor", "inbox"])
+    end
+
+    it "does not repeat an inbox that is already listed" do
+      config = Autobot::Config::Config.from_yaml("tools:\n  filesystem:\n    roots: [inbox]\n")
+      config.filesystem_roots.should eq(["inbox"])
+    end
+
+    it "honours a renamed inbox" do
+      config = Autobot::Config::Config.from_yaml("media:\n  inbox: incoming\ntools:\n  filesystem:\n    roots: [notes]\n")
+      config.filesystem_roots.should eq(["notes", "incoming"])
+    end
+
+    it "stays empty when no roots are configured, leaving the whole workspace open" do
+      Autobot::Config::Config.from_yaml("{}").filesystem_roots.should be_empty
     end
   end
 

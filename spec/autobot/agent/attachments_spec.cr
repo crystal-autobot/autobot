@@ -36,7 +36,7 @@ describe Autobot::Agent::Attachments do
   end
 
   it "truncates a long transcript and points at the transcript file" do
-    long = "word " * 1000
+    long = "word " * (Autobot::Agent::Attachments::MAX_INLINE_TRANSCRIPT // 5 + 1)
     rendered = render(type: "audio", transcript: long, transcript_path: "/srv/bot/workspace/inbox/memo.txt")
 
     rendered.should contain(long[0, Autobot::Agent::Attachments::MAX_INLINE_TRANSCRIPT])
