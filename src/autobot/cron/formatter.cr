@@ -129,9 +129,9 @@ module Autobot
         end
       end
 
-      # Markdown-formatted exec job output notification.
+      # Exec job output notification; the command's stdout keeps the formatting it was written with.
       def self.format_exec_output(job : CronJob, output : String) : String
-        "⚡ **#{job.name}**\n\n```\n#{output}\n```"
+        "⚡ **#{job.name}**\n\n#{output}"
       end
 
       # HTML-formatted job line for Telegram cron list.
