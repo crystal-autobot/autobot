@@ -121,6 +121,14 @@ describe Autobot::Cron::Formatter do
     end
   end
 
+  describe ".format_exec_output" do
+    it "keeps the output as the command wrote it" do
+      job = Autobot::Cron::CronJob.new(id: "j1", name: "Tekst dnia")
+      result = Autobot::Cron::Formatter.format_exec_output(job, "**bold** line")
+      result.should eq("⚡ **Tekst dnia**\n\n**bold** line")
+    end
+  end
+
   describe ".format_duration" do
     it "formats seconds" do
       Autobot::Cron::Formatter.format_duration(30_000_i64).should eq("30s")
