@@ -278,8 +278,9 @@ module Autobot
           File.chmod(dir, 0o700)
         end
 
+        created = !File.exists?(@store_path)
         File.write(@store_path, s.to_json)
-        File.chmod(@store_path, 0o600)
+        File.chmod(@store_path, 0o600) if created
         @store_mtime = File.info(@store_path).modification_time
       end
 

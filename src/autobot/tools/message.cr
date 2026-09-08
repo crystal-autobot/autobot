@@ -88,6 +88,10 @@ module Autobot
         media = build_media_attachment(params["file_path"]?.try(&.as_s))
         return media if media.is_a?(ToolResult)
 
+        if content.blank? && media.nil?
+          return ToolResult.error("Message content is empty: put the text to send in 'content'")
+        end
+
         msg = Bus::OutboundMessage.new(
           channel: channel,
           chat_id: chat_id,

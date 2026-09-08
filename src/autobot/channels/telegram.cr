@@ -92,7 +92,9 @@ module Autobot::Channels
     end
 
     def self.split_message(text : String) : Array(String)
-      return [text] if text.size <= TELEGRAM_MAX_LENGTH
+      if text.size <= TELEGRAM_MAX_LENGTH
+        return text.blank? ? [] of String : [text]
+      end
 
       chunks = [] of String
       code_block_segments(text).each do |segment|
@@ -103,7 +105,7 @@ module Autobot::Channels
           split_by_paragraphs(segment).each { |chunk| chunks << chunk }
         end
       end
-      chunks
+      chunks.reject(&.blank?)
     end
 
     # Splits text into alternating plain and complete <pre><code>...</code></pre>
@@ -398,9 +400,13 @@ module Autobot::Channels
       html = MarkdownToTelegramHTML.convert(message.content)
       html = MarkdownToTelegramHTML.strip_html(html) unless MarkdownToTelegramHTML.valid_html?(html)
 
-      MarkdownToTelegramHTML.split_message(html).each do |chunk|
-        send_html_chunk(message.chat_id, chunk)
+      chunks = MarkdownToTelegramHTML.split_message(html)
+      if chunks.empty?
+        Log.warn { "Nothing to send: formatting left the message empty" }
+        return
       end
+
+      chunks.each { |chunk| send_html_chunk(message.chat_id, chunk) }
     end
 
     private def send_html_chunk(chat_id : String, html : String) : Nil
@@ -410,13 +416,16 @@ module Autobot::Channels
         "parse_mode" => "HTML",
       })
 
-      unless result
-        Log.warn { "HTML parse failed, falling back to plain text" }
-        api_request("sendMessage", {
-          "chat_id" => chat_id,
-          "text"    => MarkdownToTelegramHTML.strip_html(html),
-        })
-      end
+      return if result
+
+      Log.warn { "HTML parse failed, falling back to plain text" }
+      plain = MarkdownToTelegramHTML.strip_html(html)
+      return if plain.blank?
+
+      api_request("sendMessage", {
+        "chat_id" => chat_id,
+        "text"    => plain,
+      })
     end
 
     private def find_sendable_attachment(media : Array(Bus::MediaAttachment)?) : Bus::MediaAttachment?

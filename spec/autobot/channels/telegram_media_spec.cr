@@ -54,6 +54,15 @@ describe Autobot::Channels::TelegramMedia do
       transcriber.calls.should eq(["audio.ogg"])
     end
 
+    it "names the upload after a real container when the mime type is unknown" do
+      transcriber = FakeTranscriber.new
+      msg = message(%({"voice": {"file_id": "v2", "mime_type": "audio/opus", "duration": 3}}))
+
+      build_media(transcriber).extract(msg, typed_text: false)
+
+      transcriber.calls.should eq(["audio.ogg"])
+    end
+
     it "falls back to a placeholder without a transcriber" do
       media = build_media
 
@@ -124,6 +133,15 @@ describe Autobot::Channels::TelegramMedia do
       attachments.first.mime_type.should eq("audio/mp4")
       attachments.first.name.should eq("New Recording 6.m4a")
       transcriber.calls.should eq(["audio.m4a"])
+    end
+
+    it "names the upload after a real container when the mime type is unknown" do
+      transcriber = FakeTranscriber.new
+      msg = message(%({"audio": {"file_id": "a4", "mime_type": "audio/basic"}}))
+
+      build_media(transcriber).extract(msg, typed_text: false)
+
+      transcriber.calls.should eq(["audio.mp3"])
     end
 
     it "prefers the file name extension over a conflicting mime type" do
