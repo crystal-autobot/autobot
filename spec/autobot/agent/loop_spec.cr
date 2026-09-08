@@ -75,6 +75,15 @@ private def create_test_loop(
   )
 end
 
+private def next_outbound_event(events : Channel(Autobot::Bus::OutboundEvent)) : Autobot::Bus::OutboundEvent
+  select
+  when event = events.receive
+    event
+  when timeout(2.seconds)
+    raise "Timed out waiting for an outbound event"
+  end
+end
+
 describe Autobot::Agent::Loop do
   describe "#build_cron_prompt" do
     it "includes the task message" do
@@ -401,7 +410,7 @@ describe Autobot::Agent::Loop do
       )
 
       response = loop_inst.test_process_message(msg)
-      response.try(&.silent?).should be_true
+      response.should be_nil
 
       session = sessions.get_or_create("telegram:chat1")
       history = session.get_history
@@ -441,7 +450,7 @@ describe Autobot::Agent::Loop do
         content: "hello"
       )
 
-      loop_inst.test_process_message(msg).try(&.silent?).should be_true
+      loop_inst.test_process_message(msg).should be_nil
     end
 
     it "ends the turn once a listed tool has answered, without asking the model again" do
@@ -475,7 +484,7 @@ describe Autobot::Agent::Loop do
 
       response = loop_inst.test_process_message(msg)
 
-      response.try(&.silent?).should be_true
+      response.should be_nil
       provider.call_count.should eq(1)
       history = sessions.get_or_create("telegram:chat1").get_history
       history.map(&.["role"]).should eq(["user"])
@@ -504,6 +513,78 @@ describe Autobot::Agent::Loop do
       response.try(&.metadata["thread_ts"]).should eq("1234567890.123456")
       response.try(&.metadata["channel_type"]).should eq("channel")
     ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "#run" do
+    it "ends the turn after the reply" do
+      tmp = TestHelper.tmp_dir
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: MockProvider.new("Hi there"),
+        workspace: tmp,
+        tools: Autobot::Tools::Registry.new,
+        sessions: Autobot::Session::Manager.new(tmp),
+        memory_window: 0,
+        sandbox_config: "none"
+      )
+
+      events = Channel(Autobot::Bus::OutboundEvent).new(4)
+      bus.consume_outbound { |event| events.send(event) }
+      spawn { loop_inst.run }
+
+      bus.publish_inbound(Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "hello"
+      ))
+
+      next_outbound_event(events).should be_a(Autobot::Bus::OutboundMessage)
+      next_outbound_event(events).should be_a(Autobot::Bus::TurnEnded)
+    ensure
+      loop_inst.try(&.stop)
+      bus.try(&.stop)
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "ends a turn that a listed tool answered" do
+      tmp = TestHelper.tmp_dir
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"deliver","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
+      tools = Autobot::Tools::Registry.new
+      tools.register(SelfDeliveringTool.new)
+
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: MockProvider.new(responses: [tool_call_resp]),
+        workspace: tmp,
+        tools: tools,
+        sessions: Autobot::Session::Manager.new(tmp),
+        memory_window: 0,
+        sandbox_config: "none",
+        stop_after: ["deliver"]
+      )
+
+      events = Channel(Autobot::Bus::OutboundEvent).new(4)
+      bus.consume_outbound { |event| events.send(event) }
+      spawn { loop_inst.run }
+
+      bus.publish_inbound(Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "hello"
+      ))
+
+      event = next_outbound_event(events)
+      event.should be_a(Autobot::Bus::TurnEnded)
+      event.chat_id.should eq("chat1")
+    ensure
+      loop_inst.try(&.stop)
+      bus.try(&.stop)
       FileUtils.rm_rf(tmp) if tmp
     end
   end

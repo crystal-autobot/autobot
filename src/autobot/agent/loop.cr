@@ -124,6 +124,8 @@ module Autobot::Agent
             chat_id: msg.chat_id,
             content: GENERIC_ERROR_MESSAGE
           ))
+        ensure
+          @bus.publish_turn_ended(*turn_target(msg))
         end
       end
 
@@ -188,13 +190,13 @@ module Autobot::Agent
       finish_turn(session, msg, result)
     end
 
-    private def finish_turn(session : Session::Session, msg : Bus::InboundMessage, result : ToolExecutor::Result) : Bus::OutboundMessage
+    private def finish_turn(session : Session::Session, msg : Bus::InboundMessage, result : ToolExecutor::Result) : Bus::OutboundMessage?
       user_text = @context.render_user_text(msg.content, msg.media?)
       sent_by_message_tool = @message_tool.try(&.last_sent_content)
 
       if result.stopped_by || sent_by_message_tool || answered_by_tools?(result)
         save_to_session(session, user_text, sent_by_message_tool, result.tools_used)
-        return Bus::OutboundMessage.silent(msg.channel, msg.chat_id, msg.metadata)
+        return nil
       end
 
       reply = result.content.presence || FALLBACK_RESPONSE
@@ -283,6 +285,12 @@ module Autobot::Agent
         chat_id: origin_chat_id,
         content: final_content
       )
+    end
+
+    private def turn_target(msg : Bus::InboundMessage) : {String, String}
+      return parse_origin(msg.chat_id) if msg.channel == Constants::CHANNEL_SYSTEM
+
+      {msg.channel, msg.chat_id}
     end
 
     # Parse origin channel/chat_id from system message chat_id (format: "channel:chat_id")

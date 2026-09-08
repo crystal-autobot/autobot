@@ -166,21 +166,25 @@ module Autobot::Channels
       Log.info { "Zulip channel enabled" }
     end
 
-    # Dispatch outbound messages from the bus to the appropriate channel.
+    # Dispatch outbound events from the bus to the appropriate channel.
     private def dispatch_outbound : Nil
       Log.info { "Outbound dispatcher started" }
-      @bus.consume_outbound do |message|
-        channel = @channels[message.channel]?
-        if channel
-          begin
-            channel.send_message(message)
-          rescue ex
-            Log.error { "Error sending to #{message.channel}: #{ex.message}" }
-          end
-        else
-          Log.warn { "No channel found for: #{message.channel}" }
-        end
+      @bus.consume_outbound { |event| dispatch(event) }
+    end
+
+    private def dispatch(event : Bus::OutboundEvent) : Nil
+      channel = @channels[event.channel]?
+      unless channel
+        Log.warn { "No channel found for: #{event.channel}" }
+        return
       end
+
+      case event
+      in Bus::OutboundMessage then channel.send_message(event)
+      in Bus::TurnEnded       then channel.turn_ended(event.chat_id)
+      end
+    rescue ex
+      Log.error { "Error dispatching to #{event.channel}: #{ex.message}" }
     end
   end
 end

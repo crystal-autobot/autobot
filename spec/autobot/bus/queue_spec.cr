@@ -35,10 +35,10 @@ describe Autobot::Bus::MessageBus do
 
   it "publishes and consumes outbound messages" do
     bus = Autobot::Bus::MessageBus.new(capacity: 10)
-    received = Channel(Autobot::Bus::OutboundMessage).new(1)
+    received = Channel(Autobot::Bus::OutboundEvent).new(1)
 
-    bus.consume_outbound do |msg|
-      received.send(msg)
+    bus.consume_outbound do |event|
+      received.send(event)
     end
 
     msg = Autobot::Bus::OutboundMessage.new(
@@ -50,9 +50,31 @@ describe Autobot::Bus::MessageBus do
 
     select
     when result = received.receive
-      result.content.should eq("reply")
+      result.as(Autobot::Bus::OutboundMessage).content.should eq("reply")
     when timeout(2.seconds)
       raise "Timed out waiting for outbound message"
+    end
+
+    bus.stop
+  end
+
+  it "publishes and consumes the end of a turn" do
+    bus = Autobot::Bus::MessageBus.new(capacity: 10)
+    received = Channel(Autobot::Bus::OutboundEvent).new(1)
+
+    bus.consume_outbound do |event|
+      received.send(event)
+    end
+
+    bus.publish_turn_ended("telegram", "chat1")
+
+    select
+    when result = received.receive
+      result.should be_a(Autobot::Bus::TurnEnded)
+      result.channel.should eq("telegram")
+      result.chat_id.should eq("chat1")
+    when timeout(2.seconds)
+      raise "Timed out waiting for the end of a turn"
     end
 
     bus.stop

@@ -102,13 +102,9 @@ module Autobot::Bus
       @metadata : Hash(String, String) = {} of String => String,
     )
     end
-
-    def self.silent(channel : String, chat_id : String, metadata : Hash(String, String) = {} of String => String) : OutboundMessage
-      new(channel: channel, chat_id: chat_id, content: "", metadata: metadata)
-    end
-
-    def silent? : Bool
-      content.blank? && media?.nil?
-    end
   end
+
+  record TurnEnded, channel : String, chat_id : String
+
+  alias OutboundEvent = OutboundMessage | TurnEnded
 end

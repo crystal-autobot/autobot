@@ -896,8 +896,8 @@ describe Autobot::Channels::TelegramChannel do
   end
 end
 
-describe "a silent outbound message on Telegram" do
-  it "stops typing and sends nothing" do
+describe "the end of a turn on Telegram" do
+  it "stops typing and calls no API" do
     channel = QuietTelegramTest.new(
       bus: Autobot::Bus::MessageBus.new,
       token: "test-token",
@@ -907,7 +907,7 @@ describe "a silent outbound message on Telegram" do
       cron_service: nil,
     )
 
-    channel.send_message(Autobot::Bus::OutboundMessage.silent("telegram", "-1001:2"))
+    channel.turn_ended("-1001:2")
 
     channel.typing_stopped.should eq(["-1001:2"])
     channel.api_calls.should be_empty

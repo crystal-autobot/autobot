@@ -103,7 +103,7 @@ channels:
 - **Audio files and forwarded voice notes** — saved to the inbox as attachments; the transcript stays on the attachment, never in the message text
 - **Photos** — sent as image attachments to the LLM and saved to the inbox
 - **Documents** — saved to the inbox and attached to the message context
-- **Typing indicators** — shows "typing..." while the LLM responds
+- **Typing indicators** — shows "typing..." from the incoming message until the turn ends, whether or not the turn produced a reply
 - **Markdown rendering** — LLM responses are converted to Telegram HTML
 - **Group chats** — the bot only replies when addressed: mentioned by `@username` or replied to. Other group messages are ignored (no response, no access-denied notice).
 - **Forum topics** — in a group with topics enabled, a bot answers every message in the topics listed under `topics` without a mention, keeps one session per topic and replies into the same topic. See [Forum topics](#forum-topics).
