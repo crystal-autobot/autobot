@@ -10,6 +10,26 @@ describe Autobot::Cron::Service do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  it "creates the store private and then leaves its permissions alone" do
+    tmp = TestHelper.tmp_dir
+    store_path = tmp / "cron.json"
+    service = Autobot::Cron::Service.new(store_path: store_path)
+
+    schedule = Autobot::Cron::CronSchedule.new(
+      kind: Autobot::Cron::ScheduleKind::Every,
+      every_ms: 60000_i64
+    )
+    service.add_job(name: "first", schedule: schedule, message: "one")
+    File.info(store_path).permissions.should eq(File::Permissions.new(0o600))
+
+    File.chmod(store_path, 0o660)
+    service.add_job(name: "second", schedule: schedule, message: "two")
+
+    File.info(store_path).permissions.should eq(File::Permissions.new(0o660))
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "adds a recurring job" do
     tmp = TestHelper.tmp_dir
     service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
