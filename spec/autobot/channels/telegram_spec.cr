@@ -626,6 +626,41 @@ describe Autobot::Channels::TelegramChannel do
   end
 
   describe "#execute_script" do
+    it "sends the output as plain text, exactly as printed" do
+      tmp = TestHelper.tmp_dir
+      script_file = tmp / "progress.sh"
+      File.write(script_file, <<-SCRIPT)
+        #!/bin/sh
+        printf '📊 Words: 16 new · **5 due**\n📅 Days: 3/7 <b>\n'
+        SCRIPT
+      File.chmod(script_file, 0o755)
+
+      channel = build_channel
+      channel.test_execute_script(script_file.to_s, "", "123")
+
+      channel.sent_replies.should eq(["📊 Words: 16 new · **5 due**\n📅 Days: 3/7 &lt;b&gt;"])
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "sends a failed script's stderr as plain text" do
+      tmp = TestHelper.tmp_dir
+      script_file = tmp / "broken.sh"
+      File.write(script_file, <<-SCRIPT)
+        #!/bin/sh
+        echo 'no such <thing>' >&2
+        exit 2
+        SCRIPT
+      File.chmod(script_file, 0o755)
+
+      channel = build_channel
+      channel.test_execute_script(script_file.to_s, "", "123")
+
+      channel.sent_replies.should eq(["Script failed (exit 2):\nno such &lt;thing&gt;"])
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "drains large stderr output concurrent with stdout without deadlocking" do
       tmp = TestHelper.tmp_dir
       script_file = tmp / "test_script.sh"

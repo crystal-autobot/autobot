@@ -885,10 +885,16 @@ module Autobot::Channels
                end
 
       stop_typing(chat_id)
-      send_reply(chat_id, "<pre>#{MarkdownToTelegramHTML.escape_html(result)}</pre>")
+      send_verbatim(chat_id, result)
     rescue ex
       stop_typing(chat_id)
       send_reply(chat_id, "Error running script")
+    end
+
+    private def send_verbatim(chat_id : String, text : String) : Nil
+      MarkdownToTelegramHTML.split_message(MarkdownToTelegramHTML.escape_html(text.strip)).each do |chunk|
+        send_reply(chat_id, chunk)
+      end
     end
 
     private def validate_script_path(script_path : String) : String?

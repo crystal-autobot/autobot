@@ -85,7 +85,7 @@ channels:
           description: "Deploy to production"
 ```
 
-**Macros** send the prompt to the LLM. **Scripts** execute a shell command and return the output.
+**Macros** send the prompt to the LLM. **Scripts** execute a shell command and send its output as plain text, exactly as printed: nothing in it is interpreted as formatting, and `<` and `&` are escaped. A script that fails gets `Script failed (exit N):` followed by its stderr.
 
 ## Built-in commands
 
