@@ -2,12 +2,15 @@ require "../../spec_helper"
 
 # Mock provider that returns a simple text response (no tool calls).
 class MockProvider < Autobot::Providers::HttpProvider
+  getter call_count = 0
+
   def initialize(@response_content : String = "Mock response", @responses : Array(String)? = nil)
     super(api_key: "test-key", model: "mock-model")
     @response_index = 0
   end
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
+    @call_count += 1
     if responses = @responses
       resp = responses[@response_index]? || responses.last
       @response_index += 1
@@ -398,7 +401,7 @@ describe Autobot::Agent::Loop do
       )
 
       response = loop_inst.test_process_message(msg)
-      response.should be_nil
+      response.try(&.silent?).should be_true
 
       session = sessions.get_or_create("telegram:chat1")
       history = session.get_history
@@ -435,10 +438,50 @@ describe Autobot::Agent::Loop do
         channel: "telegram",
         sender_id: "user1",
         chat_id: "chat1",
-        content: "zrucznyj u korystuvanni"
+        content: "hello"
       )
 
-      loop_inst.test_process_message(msg).should be_nil
+      loop_inst.test_process_message(msg).try(&.silent?).should be_true
+    end
+
+    it "ends the turn once a listed tool has answered, without asking the model again" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"deliver","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
+      prose_resp = %({"choices":[{"message":{"content":"prose"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
+      provider = MockProvider.new(responses: [tool_call_resp, prose_resp])
+      tools = Autobot::Tools::Registry.new
+      tools.register(Autobot::Tools::MessageTool.new)
+      tools.register(SelfDeliveringTool.new)
+
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: provider,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        memory_window: 0,
+        sandbox_config: "none",
+        stop_after: ["deliver"]
+      )
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "okresowo?"
+      )
+
+      response = loop_inst.test_process_message(msg)
+
+      response.try(&.silent?).should be_true
+      provider.call_count.should eq(1)
+      history = sessions.get_or_create("telegram:chat1").get_history
+      history.map(&.["role"]).should eq(["user"])
+      history.first["content"].should eq("okresowo?")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
     end
 
     it "preserves inbound metadata in outbound response" do

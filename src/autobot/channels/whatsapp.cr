@@ -61,6 +61,8 @@ module Autobot::Channels
     end
 
     def send_message(message : Bus::OutboundMessage) : Nil
+      return if message.silent?
+
       unless @connected
         Log.warn { "WhatsApp bridge not connected" }
         return

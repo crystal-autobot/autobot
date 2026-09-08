@@ -158,7 +158,7 @@ module Autobot
           if response.has_tool_calls?
             tool_results = response.tool_calls.map do |tool_call|
               result = tool_registry.execute(tool_call.name, tool_call.arguments)
-              {tool_call.id, tool_call.name, result}
+              {tool_call.id, tool_call.name, result.content}
             end
 
             parts = [] of String

@@ -147,7 +147,19 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
   private def start_typing(chat_id : String) : Nil
   end
 
+  getter typing_stopped = [] of String
+
   private def stop_typing(chat_id : String) : Nil
+    typing_stopped << chat_id
+  end
+end
+
+private class QuietTelegramTest < TelegramChannelTest
+  getter api_calls = [] of String
+
+  private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
+    api_calls << method
+    nil
   end
 end
 
@@ -846,5 +858,23 @@ describe Autobot::Channels::TelegramChannel do
       channel.send_message(outbound)
       channel.created_clients.should be_empty
     end
+  end
+end
+
+describe "a silent outbound message on Telegram" do
+  it "stops typing and sends nothing" do
+    channel = QuietTelegramTest.new(
+      bus: Autobot::Bus::MessageBus.new,
+      token: "test-token",
+      allow_from: [] of String,
+      proxy: nil,
+      custom_commands: Autobot::Config::CustomCommandsConfig.new,
+      cron_service: nil,
+    )
+
+    channel.send_message(Autobot::Bus::OutboundMessage.silent("telegram", "-1001:2"))
+
+    channel.typing_stopped.should eq(["-1001:2"])
+    channel.api_calls.should be_empty
   end
 end

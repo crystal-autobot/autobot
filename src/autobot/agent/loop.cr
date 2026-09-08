@@ -68,6 +68,7 @@ module Autobot::Agent
       sandbox_config : String = "auto",
       rate_limiter : Tools::RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
+      @stop_after : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
       web_allowed_domains : Array(String) = [] of String,
       max_tokens : Int32 = Config::AgentDefaults.new.max_tokens,
@@ -183,15 +184,22 @@ module Autobot::Agent
       )
 
       @message_tool.try(&.clear_last_sent)
-      result = @executor.execute(messages, @tools, session_key: session.key)
+      result = @executor.execute(messages, @tools, session_key: session.key, stop_after: @stop_after)
+      finish_turn(session, msg, result)
+    end
+
+    private def finish_turn(session : Session::Session, msg : Bus::InboundMessage, result : ToolExecutor::Result) : Bus::OutboundMessage
+      user_text = @context.render_user_text(msg.content, msg.media?)
       sent_by_message_tool = @message_tool.try(&.last_sent_content)
-      final_content = result.content.presence || sent_by_message_tool || FALLBACK_RESPONSE
 
-      save_to_session(session, @context.render_user_text(msg.content, msg.media?), final_content, result.tools_used)
+      if result.stopped_by || sent_by_message_tool || answered_by_tools?(result)
+        save_to_session(session, user_text, sent_by_message_tool, result.tools_used)
+        return Bus::OutboundMessage.silent(msg.channel, msg.chat_id, msg.metadata)
+      end
 
-      return nil if sent_by_message_tool || answered_by_tools?(result)
-
-      build_response(msg.channel, msg.chat_id, final_content, msg.metadata)
+      reply = result.content.presence || FALLBACK_RESPONSE
+      save_to_session(session, user_text, reply, result.tools_used)
+      build_response(msg.channel, msg.chat_id, reply, msg.metadata)
     end
 
     private def answered_by_tools?(result : ToolExecutor::Result) : Bool
@@ -232,7 +240,7 @@ module Autobot::Agent
         messages, @tools,
         session_key: session.key,
         exclude_tools: BACKGROUND_EXCLUDED_TOOLS,
-        stop_after_tool: "message"
+        stop_after: @stop_after | ["message"]
       )
 
       save_cron_to_session(session, msg.content, result)
@@ -361,9 +369,9 @@ module Autobot::Agent
       @image_tool.try(&.set_context(channel, chat_id))
     end
 
-    private def save_to_session(session : Session::Session, user_content : String, assistant_content : String, tools_used : Array(String)) : Nil
+    private def save_to_session(session : Session::Session, user_content : String, assistant_content : String?, tools_used : Array(String)) : Nil
       session.add_message(Constants::ROLE_USER, user_content, nil)
-      session.add_message(Constants::ROLE_ASSISTANT, assistant_content, tools_used.empty? ? nil : tools_used)
+      session.add_message(Constants::ROLE_ASSISTANT, assistant_content, tools_used.empty? ? nil : tools_used) if assistant_content
       @sessions.save(session)
     end
 

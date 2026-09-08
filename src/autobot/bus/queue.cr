@@ -54,7 +54,7 @@ module Autobot::Bus
     def publish_outbound(message : OutboundMessage) : Nil
       return if @stopped
 
-      Log.debug { "Outbound: #{message.channel}:#{message.chat_id} - #{message.content[0..50]}" }
+      Log.debug { "Outbound: #{message.channel}:#{message.chat_id} - #{message.silent? ? "(silent)" : message.content[0..50]}" }
       @outbound.send(message)
     end
 
