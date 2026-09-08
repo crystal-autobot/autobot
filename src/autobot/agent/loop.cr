@@ -184,14 +184,18 @@ module Autobot::Agent
 
       @message_tool.try(&.clear_last_sent)
       result = @executor.execute(messages, @tools, session_key: session.key)
-      final_content = result.content.presence || @message_tool.try(&.last_sent_content) || FALLBACK_RESPONSE
+      sent_by_message_tool = @message_tool.try(&.last_sent_content)
+      final_content = result.content.presence || sent_by_message_tool || FALLBACK_RESPONSE
 
       save_to_session(session, @context.render_user_text(msg.content, msg.media?), final_content, result.tools_used)
 
-      # Skip automatic text response if the message tool already sent during this turn
-      return nil if @message_tool.try(&.last_sent_content)
+      return nil if sent_by_message_tool || answered_by_tools?(result)
 
       build_response(msg.channel, msg.chat_id, final_content, msg.metadata)
+    end
+
+    private def answered_by_tools?(result : ToolExecutor::Result) : Bool
+      result.content.presence.nil? && !result.tools_used.empty?
     end
 
     # Route system messages to the appropriate handler.
