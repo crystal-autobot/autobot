@@ -131,7 +131,7 @@ module Autobot
 
       private def exec_via_sandbox_exec(command : String, timeout : Int32, workspace : Path) : ToolResult
         status, stdout, stderr = Sandbox.exec(command, workspace, timeout)
-        report_outcome(status, stdout, stderr)
+        ToolResult.success(format_exec_output(status, stdout, stderr))
       end
 
       private def exec_program_via_sandbox_exec(program : String, args : Array(String), timeout : Int32, workspace : Path) : ToolResult
@@ -205,16 +205,12 @@ module Autobot
 
       private def exec_direct(command : String, timeout : Int32) : ToolResult
         status, stdout, stderr = Sandbox.capture_command("sh", ["-c", command], timeout)
-        report_outcome(status, stdout, stderr)
+        ToolResult.success(format_exec_output(status, stdout, stderr))
       end
 
       private def exec_program_direct(program : String, args : Array(String), timeout : Int32) : ToolResult
         status, stdout, stderr = Sandbox.capture_command(program, args, timeout)
         require_success(status, stdout, stderr)
-      end
-
-      private def report_outcome(status : Process::Status, stdout : String, stderr : String) : ToolResult
-        ToolResult.success(format_exec_output(status, stdout, stderr))
       end
 
       private def require_success(status : Process::Status, stdout : String, stderr : String) : ToolResult
@@ -227,17 +223,11 @@ module Autobot
         parts << stdout unless stdout.empty?
         parts << "STDERR:\n#{stderr}" unless stderr.empty?
 
-        if reportable_exit_code?(status)
+        if !status.success? && status.normal_exit? && status.exit_code != Sandbox::TIMEOUT_EXIT_CODE
           parts << "\nExit code: #{status.exit_code}"
         end
 
         parts.empty? ? "[no output]" : parts.join("\n")
-      end
-
-      private def reportable_exit_code?(status : Process::Status) : Bool
-        return false if status.success? || !status.normal_exit?
-
-        status.exit_code != Sandbox::TIMEOUT_EXIT_CODE
       end
     end
   end

@@ -93,5 +93,6 @@ describe Autobot::Tools::SandboxExecutor do
 
     result.error?.should be_true
     result.content.should contain("working")
+    result.content.should_not contain("Exit code")
   end
 end
