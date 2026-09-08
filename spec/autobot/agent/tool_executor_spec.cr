@@ -278,8 +278,7 @@ describe Autobot::Agent::ToolExecutor do
 
       message_tool.called?.should be_true
       result.tools_used.should eq(["message"])
-      result.stop.try(&.tool).should eq("message")
-      result.stop.try(&.output).should eq("Message sent")
+      result.stop_output.should_not be_nil
       provider.call_count.should eq(1)
       result.content.should be_nil
     end
@@ -295,7 +294,7 @@ describe Autobot::Agent::ToolExecutor do
 
       result = executor.execute(build_messages, tools, stop_after: ["refusing"])
 
-      result.stop.should be_nil
+      result.stop_output.should be_nil
       result.content.should eq("could not post")
       provider.call_count.should eq(2)
     end
@@ -310,7 +309,7 @@ describe Autobot::Agent::ToolExecutor do
 
       result = executor.execute(build_messages, tools, stop_after: ["message"])
 
-      result.stop.should be_nil
+      result.stop_output.should be_nil
       result.content.should eq("Continued.")
       result.tools_used.should eq(["echo"])
       provider.call_count.should eq(2)

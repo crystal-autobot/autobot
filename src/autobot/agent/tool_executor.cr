@@ -27,13 +27,11 @@ module Autobot::Agent
     # are cheap and often useful as ongoing context.
     TRUNCATION_THRESHOLD = 500
 
-    record Stop, tool : String, output : String
-
     record Result,
       content : String?,
       tools_used : Array(String),
       total_tokens : Int32,
-      stop : Stop? = nil
+      stop_output : String? = nil
 
     def initialize(
       @provider : Providers::Provider,
@@ -60,7 +58,7 @@ module Autobot::Agent
       stop_after : Array(String) = [] of String,
     ) : Result
       final_content : String? = nil
-      stop : Stop? = nil
+      stop_output : String? = nil
       tools_used = [] of String
       total_tokens = 0
 
@@ -91,16 +89,16 @@ module Autobot::Agent
 
         if response.has_tool_calls?
           iteration_boundaries << messages.size
-          messages, stop = process_tool_calls(messages, response, tools, tools_used, session_key, stop_after)
+          messages, stop_output = process_tool_calls(messages, response, tools, tools_used, session_key, stop_after)
           response.tool_calls.each { |tool_call| called_tools << tool_call.name }
-          break if stop
+          break if stop_output
         else
           final_content = response.content
           break
         end
       end
 
-      Result.new(content: final_content, tools_used: tools_used.uniq, total_tokens: total_tokens, stop: stop)
+      Result.new(content: final_content, tools_used: tools_used.uniq, total_tokens: total_tokens, stop_output: stop_output)
     end
 
     private def call_llm(
@@ -133,7 +131,7 @@ module Autobot::Agent
       tools_used : Array(String),
       session_key : String?,
       stop_after : Array(String),
-    ) : {Array(Hash(String, JSON::Any)), Stop?}
+    ) : {Array(Hash(String, JSON::Any)), String?}
       messages = @context.add_assistant_message(
         messages,
         response.content,
@@ -148,9 +146,7 @@ module Autobot::Agent
         log_tool_call(tool_call)
         result = tools.execute(tool_call.name, tool_call.arguments, session_key)
         messages = @context.add_tool_result(messages, tool_call.id, tool_call.name, result.content)
-        if result.success? && stop_after.includes?(tool_call.name)
-          return {messages, Stop.new(tool: tool_call.name, output: result.content)}
-        end
+        return {messages, result.content} if result.success? && stop_after.includes?(tool_call.name)
       end
 
       {messages, nil}
