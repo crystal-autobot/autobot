@@ -194,6 +194,14 @@ describe Autobot::Channels::MarkdownToTelegramHTML do
       Autobot::Channels::MarkdownToTelegramHTML.split_message("short").should eq(["short"])
     end
 
+    it "yields no chunk when there is nothing to send" do
+      Autobot::Channels::MarkdownToTelegramHTML.split_message("").should be_empty
+      Autobot::Channels::MarkdownToTelegramHTML.split_message(" \n\t ").should be_empty
+      Autobot::Channels::MarkdownToTelegramHTML.split_message(
+        Autobot::Channels::MarkdownToTelegramHTML.convert("---")
+      ).should be_empty
+    end
+
     it "splits long messages by paragraphs" do
       paragraph = "a" * 2000
       text = "#{paragraph}\n\n#{paragraph}\n\n#{paragraph}"
