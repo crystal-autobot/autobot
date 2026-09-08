@@ -26,6 +26,18 @@ describe Autobot::Tools::MessageTool do
     sent_messages[0].media?.should be_nil
   end
 
+  it "returns error when content is blank and nothing is attached" do
+    sent_messages = [] of Autobot::Bus::OutboundMessage
+    tool = Autobot::Tools::MessageTool.new
+    tool.set_context("telegram", "123")
+    tool.send_callback = ->(msg : Autobot::Bus::OutboundMessage) { sent_messages << msg; nil }
+
+    result = tool.execute({"content" => JSON::Any.new("  \n ")})
+    result.success?.should be_false
+    result.content.should contain("Message content is empty")
+    sent_messages.should be_empty
+  end
+
   it "returns error when no channel context" do
     tool = Autobot::Tools::MessageTool.new
     tool.send_callback = ->(_msg : Autobot::Bus::OutboundMessage) { nil }
