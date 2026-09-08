@@ -48,7 +48,7 @@ module Autobot::Channels
       return {nil, nil} unless voice
 
       bytes = fetch(voice)
-      format = format_of(voice, Bus::MediaAttachment::TYPE_VOICE, "audio/ogg")
+      format = format_of(voice, ".ogg")
       transcript = transcribe(bytes, format[0])
       attachment = build(Bus::MediaAttachment::TYPE_VOICE, voice, origin, format, bytes,
         transcript: spoken ? nil : transcript, transcribed: !transcript.nil?)
@@ -60,7 +60,7 @@ module Autobot::Channels
       return nil unless audio
 
       bytes = fetch(audio)
-      format = format_of(audio, Bus::MediaAttachment::TYPE_AUDIO, "audio/mpeg")
+      format = format_of(audio, ".mp3")
       build(Bus::MediaAttachment::TYPE_AUDIO, audio, origin, format, bytes,
         transcript: transcribe(bytes, format[0]),
         name: string_of(audio, "title") || string_of(audio, "file_name"))
@@ -70,7 +70,7 @@ module Autobot::Channels
       document = msg["document"]?
       return nil unless document
 
-      extension, mime = format = format_of(document, Bus::MediaAttachment::TYPE_DOCUMENT, Media::Types::DEFAULT[1])
+      extension, mime = format = format_of(document, ".bin")
       bytes = fetch(document)
       data = Media::Types.image?(mime) && bytes ? Base64.strict_encode(bytes) : nil
 
@@ -82,13 +82,13 @@ module Autobot::Channels
 
     # The platform file name is the most reliable source of the format; Telegram
     # often omits mime_type, and Whisper rejects a mislabelled extension.
-    private def format_of(node : JSON::Any, type : String, default_mime : String) : {String, String}
+    private def format_of(node : JSON::Any, default_extension : String) : {String, String}
       name_extension = File.extname(string_of(node, "file_name") || "").downcase
       mime = string_of(node, "mime_type")
       return {name_extension, mime || Media::Types.for_extension(name_extension)[1]} unless name_extension.empty?
 
-      mime ||= default_mime
-      {Media::Types.extension_for(mime, ".#{type}"), mime}
+      extension = Media::Types.extension_for(mime, default_extension)
+      {extension, mime || Media::Types.for_extension(extension)[1]}
     end
 
     private def build(type : String, node : JSON::Any, origin : String, format : {String, String}, bytes : Bytes?,

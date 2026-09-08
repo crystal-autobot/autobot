@@ -12,6 +12,20 @@ describe Autobot::Media::Types do
     end
   end
 
+  describe ".extension_for" do
+    it "maps mime aliases onto a real container extension" do
+      Autobot::Media::Types.extension_for("audio/opus", ".bin").should eq(".ogg")
+      Autobot::Media::Types.extension_for("audio/x-wav", ".bin").should eq(".wav")
+      Autobot::Media::Types.extension_for("audio/x-m4a", ".bin").should eq(".m4a")
+      Autobot::Media::Types.extension_for("audio/ogg", ".bin").should eq(".ogg")
+    end
+
+    it "falls back when the mime is unknown or missing" do
+      Autobot::Media::Types.extension_for("audio/basic", ".mp3").should eq(".mp3")
+      Autobot::Media::Types.extension_for(nil, ".ogg").should eq(".ogg")
+    end
+  end
+
   describe ".audio?" do
     it "recognises audio mime types, parameters and case included" do
       Autobot::Media::Types.audio?("audio/mp4").should be_true

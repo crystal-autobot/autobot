@@ -251,8 +251,8 @@ LLM generates file (exec tool) -> message(content, file_path) -> Read & base64 e
 | `.gif` | animation | `sendAnimation` |
 | `.mp4` | video | `sendDocument` |
 | `.pdf` | document | `sendDocument` |
-| `.ogg` | voice | `sendVoice` |
-| `.mp3`, `.m4a`, `.wav`, `.webm` | audio | `sendAudio` |
+| `.ogg`, `.oga` | voice | `sendVoice` |
+| `.mp3`, `.m4a`, `.wav`, `.flac`, `.webm` | audio | `sendAudio` |
 | `.txt` | document | `sendDocument` |
 | Other | document | `sendDocument` |
 
