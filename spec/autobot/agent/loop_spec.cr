@@ -18,6 +18,24 @@ class MockProvider < Autobot::Providers::HttpProvider
   end
 end
 
+class SelfDeliveringTool < Autobot::Tools::Tool
+  def name : String
+    "deliver"
+  end
+
+  def description : String
+    "Delivers its own output"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new(properties: {} of String => Autobot::Tools::PropertySchema)
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.success("# sent")
+  end
+end
+
 # Testable subclass exposing private methods for unit testing.
 class TestableLoop < Autobot::Agent::Loop
   def test_build_cron_prompt(msg : Autobot::Bus::InboundMessage) : String
@@ -390,6 +408,37 @@ describe Autobot::Agent::Loop do
       history[1]["content"].should eq("Sent via message tool")
     ensure
       FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "stays quiet when a tool answered the turn and the model added nothing" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"deliver","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
+      empty_resp = %({"choices":[{"message":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
+      provider = MockProvider.new(responses: [tool_call_resp, empty_resp])
+      tools = Autobot::Tools::Registry.new
+      tools.register(Autobot::Tools::MessageTool.new)
+      tools.register(SelfDeliveringTool.new)
+
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: provider,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        memory_window: 0,
+        sandbox_config: "none"
+      )
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "zrucznyj u korystuvanni"
+      )
+
+      loop_inst.test_process_message(msg).should be_nil
     end
 
     it "preserves inbound metadata in outbound response" do
