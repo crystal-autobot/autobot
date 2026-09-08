@@ -158,9 +158,9 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 
 ### Tools that end the turn
 
-`tools.stop_after` names the tools that answer for the bot. When a listed tool call succeeds, the turn is over: the model is not called again and no reply of the bot's own is sent, because the tool has already delivered whatever there was to say. A listed tool that fails hands the turn back to the model, which sees the error and can answer itself. This fits a skill script that posts to the chat on its own: list its `bash_` tool here, have it exit 0 once it has posted and non-zero when it could not, and print the text to relay in that case. A skill script that exits non-zero reaches the model as a tool error carrying the script's full output, so nothing it printed is lost.
+`tools.stop_after` names the tools that answer for the bot. A successful call ends the turn: the model is not asked again and no reply of the bot's own is sent. A failed call hands the turn back to the model, which sees the tool error — for a skill script, its full output — and can answer itself. So a script that posts to the chat itself lists its `bash_` tool here, exits 0 once posted, and exits non-zero printing the text to relay.
 
-What the listed tool printed is kept in the session history as the bot's own line, together with the tools the turn used, so the next turn sees an answered message instead of an open question. When the turn also sent something with the `message` tool, that text is recorded instead — it is what reached the chat. A tool that prints nothing leaves the user's line alone in the history.
+What the tool printed is kept in the session history as the bot's line, next to the tools the turn used. If the turn also used the `message` tool, that text is recorded instead, since it is what reached the chat; a tool that prints nothing records nothing.
 
 ### Web Fetch Egress
 

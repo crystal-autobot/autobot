@@ -77,7 +77,7 @@ graph LR
 3. **LLM request** — The assembled context is sent to the configured LLM provider (Anthropic, OpenAI, DeepSeek, Groq, Gemini, OpenRouter, or vLLM).
 4. **Tool execution** — If the LLM response contains tool calls, each tool is executed through the tool registry. Shell commands run inside a kernel-enforced sandbox (Docker or bubblewrap). MCP tools are proxied to external servers.
 5. **Iteration** — Tool results are fed back into the agent loop. The LLM can issue further tool calls, creating a multi-turn execution cycle until it produces a final text response.
-6. **Message egress** — The final response is published to the event bus and delivered back through the originating channel. Every turn also publishes an end-of-turn signal, so a channel learns the turn is over even when a tool already answered and no response follows.
+6. **Message egress** — The final response is published to the event bus and delivered back through the originating channel. Every turn also publishes an end-of-turn event, so a channel knows the turn is over even when no response follows.
 
 ## Core Components
 
