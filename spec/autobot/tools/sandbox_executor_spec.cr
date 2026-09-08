@@ -63,4 +63,21 @@ describe Autobot::Tools::SandboxExecutor do
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
+
+  it "reports a program that exits non-zero as an error with its full output" do
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
+
+    result = executor.exec_program("sh", ["-c", "echo out; echo err >&2; exit 3"])
+
+    result.error?.should be_true
+    result.content.should contain("out")
+    result.content.should contain("STDERR:\nerr")
+    result.content.should contain("Exit code: 3")
+  end
+
+  it "keeps a shell command that exits non-zero a success" do
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
+
+    executor.exec("false").success?.should be_true
+  end
 end

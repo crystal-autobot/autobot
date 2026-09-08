@@ -136,7 +136,7 @@ module Autobot
 
       private def exec_program_via_sandbox_exec(program : String, args : Array(String), timeout : Int32, workspace : Path) : ToolResult
         status, stdout, stderr = Sandbox.exec_program(program, args, workspace, timeout)
-        build_exec_result(status, stdout, stderr)
+        build_exec_result(status, stdout, stderr, strict: true)
       end
 
       # Direct execution (tests and non-sandbox mode)
@@ -208,7 +208,7 @@ module Autobot
         build_exec_result(status, stdout, stderr)
       end
 
-      private def build_exec_result(status : Process::Status, stdout : String, stderr : String) : ToolResult
+      private def build_exec_result(status : Process::Status, stdout : String, stderr : String, strict : Bool = false) : ToolResult
         parts = [] of String
         parts << stdout unless stdout.empty?
         parts << "STDERR:\n#{stderr}" unless stderr.empty?
@@ -218,12 +218,14 @@ module Autobot
         end
 
         data = parts.empty? ? "[no output]" : parts.join("\n")
+        return ToolResult.error(data) if strict && !status.success?
+
         ToolResult.success(data)
       end
 
       private def exec_program_direct(program : String, args : Array(String), timeout : Int32) : ToolResult
         status, stdout, stderr = Sandbox.capture_command(program, args, timeout)
-        build_exec_result(status, stdout, stderr)
+        build_exec_result(status, stdout, stderr, strict: true)
       end
     end
   end
