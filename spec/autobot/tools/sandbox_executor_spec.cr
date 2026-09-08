@@ -75,9 +75,23 @@ describe Autobot::Tools::SandboxExecutor do
     result.content.should contain("Exit code: 3")
   end
 
-  it "keeps a shell command that exits non-zero a success" do
+  it "reports a shell command that exits non-zero as a success carrying its exit code" do
     executor = Autobot::Tools::SandboxExecutor.new(nil)
 
-    executor.exec("false").success?.should be_true
+    result = executor.exec("echo out; echo err >&2; exit 3")
+
+    result.success?.should be_true
+    result.content.should contain("out")
+    result.content.should contain("STDERR:\nerr")
+    result.content.should contain("Exit code: 3")
+  end
+
+  it "reports a program that times out as an error with the output it produced" do
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
+
+    result = executor.exec_program("sh", ["-c", "echo working; sleep 5"], timeout: 1)
+
+    result.error?.should be_true
+    result.content.should contain("working")
   end
 end
