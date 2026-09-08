@@ -1,4 +1,5 @@
 require "json"
+require "../constants"
 
 module Autobot::Bus
   # Inbound message from a chat channel
@@ -27,6 +28,14 @@ module Autobot::Bus
     # Session key for persistence
     def session_key : String
       "#{channel}:#{chat_id}"
+    end
+
+    def origin : {String, String}
+      return {channel, chat_id} unless channel == Constants::CHANNEL_SYSTEM
+      return {Constants::CHANNEL_CLI, chat_id} unless chat_id.includes?(":")
+
+      parts = chat_id.split(":", 2)
+      {parts[0], parts[1]}
     end
 
     def unheard_voice_note? : Bool
@@ -103,4 +112,8 @@ module Autobot::Bus
     )
     end
   end
+
+  record TurnEnded, channel : String, chat_id : String
+
+  alias OutboundEvent = OutboundMessage | TurnEnded
 end

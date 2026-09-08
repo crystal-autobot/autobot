@@ -30,7 +30,8 @@ module Autobot::Agent
     record Result,
       content : String?,
       tools_used : Array(String),
-      total_tokens : Int32
+      total_tokens : Int32,
+      stop_output : String? = nil
 
     def initialize(
       @provider : Providers::Provider,
@@ -48,15 +49,16 @@ module Autobot::Agent
     # - `tools`: registry of available tools
     # - `session_key`: for per-session rate limiting (nil for subagents)
     # - `exclude_tools`: tool names to omit from LLM tool definitions
-    # - `stop_after_tool`: break early after this tool is called (e.g. "message" for cron)
+    # - `stop_after`: tool names whose successful call ends the turn (e.g. "message" for cron)
     def execute(
       messages : Array(Hash(String, JSON::Any)),
       tools : Tools::Registry,
       session_key : String? = nil,
       exclude_tools : Array(String)? = nil,
-      stop_after_tool : String? = nil,
+      stop_after : Array(String) = [] of String,
     ) : Result
       final_content : String? = nil
+      stop_output : String? = nil
       tools_used = [] of String
       total_tokens = 0
 
@@ -87,19 +89,16 @@ module Autobot::Agent
 
         if response.has_tool_calls?
           iteration_boundaries << messages.size
-          messages = process_tool_calls(messages, response, tools, tools_used, session_key)
+          messages, stop_output = process_tool_calls(messages, response, tools, tools_used, session_key, stop_after)
           response.tool_calls.each { |tool_call| called_tools << tool_call.name }
-
-          if stop_tool = stop_after_tool
-            break if response.tool_calls.any? { |tool_call| tool_call.name == stop_tool }
-          end
+          break if stop_output
         else
           final_content = response.content
           break
         end
       end
 
-      Result.new(content: final_content, tools_used: tools_used.uniq, total_tokens: total_tokens)
+      Result.new(content: final_content, tools_used: tools_used.uniq, total_tokens: total_tokens, stop_output: stop_output)
     end
 
     private def call_llm(
@@ -131,7 +130,8 @@ module Autobot::Agent
       tools : Tools::Registry,
       tools_used : Array(String),
       session_key : String?,
-    ) : Array(Hash(String, JSON::Any))
+      stop_after : Array(String),
+    ) : {Array(Hash(String, JSON::Any)), String?}
       messages = @context.add_assistant_message(
         messages,
         response.content,
@@ -145,10 +145,11 @@ module Autobot::Agent
         tools_used << tool_call.name
         log_tool_call(tool_call)
         result = tools.execute(tool_call.name, tool_call.arguments, session_key)
-        messages = @context.add_tool_result(messages, tool_call.id, tool_call.name, result)
+        messages = @context.add_tool_result(messages, tool_call.id, tool_call.name, result.content)
+        return {messages, result.content} if result.success? && stop_after.includes?(tool_call.name)
       end
 
-      messages
+      {messages, nil}
     end
 
     # Truncate tool results from iterations older than the most recent one.

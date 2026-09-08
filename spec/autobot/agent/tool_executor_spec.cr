@@ -22,14 +22,6 @@ class SequenceMockProvider < Autobot::Providers::HttpProvider
   end
 end
 
-private def text_response(content : String) : String
-  %({"choices":[{"message":{"content":#{content.to_json}},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
-end
-
-private def tool_call_response(tool_name : String, tool_id : String, arguments : String = "{}") : String
-  %({"choices":[{"message":{"content":"","tool_calls":[{"id":"#{tool_id}","type":"function","function":{"name":"#{tool_name}","arguments":"#{arguments.gsub('"', "\\\"")}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
-end
-
 private def guardrail_response(content : String = "Content blocked by guardrail.") : String
   %({"choices":[{"message":{"content":#{content.to_json}},"finish_reason":"guardrail_intervened"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
 end
@@ -61,6 +53,24 @@ class EchoTool < Autobot::Tools::Tool
 
   def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
     Autobot::Tools::ToolResult.success("Echo: #{params["text"]?.try(&.as_s) || "nil"}")
+  end
+end
+
+class RefusingTool < Autobot::Tools::Tool
+  def name : String
+    "refusing"
+  end
+
+  def description : String
+    "Refuses every call"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.error("could not post")
   end
 end
 
@@ -245,7 +255,7 @@ describe Autobot::Agent::ToolExecutor do
       result.content.should eq("OK")
     end
 
-    it "stops after specified tool with stop_after_tool" do
+    it "ends the turn after a listed tool succeeds" do
       provider = SequenceMockProvider.new([
         tool_call_response("message", "tc_1", %({"content":"hello"})),
         text_response("This should not be reached"),
@@ -256,17 +266,32 @@ describe Autobot::Agent::ToolExecutor do
       tools = Autobot::Tools::Registry.new
       tools.register(message_tool)
 
-      result = executor.execute(build_messages, tools, stop_after_tool: "message")
+      result = executor.execute(build_messages, tools, stop_after: ["message"])
 
       message_tool.called?.should be_true
       result.tools_used.should eq(["message"])
-      # Only one LLM call - stops after the tool executes
+      result.stop_output.should_not be_nil
       provider.call_count.should eq(1)
-      # Content is nil because we broke before getting a text response
       result.content.should be_nil
     end
 
-    it "does not stop for non-matching tools when stop_after_tool is set" do
+    it "lets the model continue after a listed tool fails" do
+      provider = SequenceMockProvider.new([
+        tool_call_response("refusing", "tc_1"),
+        text_response("I could not post that"),
+      ])
+      executor = build_executor(provider)
+      tools = Autobot::Tools::Registry.new
+      tools.register(RefusingTool.new)
+
+      result = executor.execute(build_messages, tools, stop_after: ["refusing"])
+
+      result.stop_output.should be_nil
+      result.content.should eq("I could not post that")
+      provider.call_count.should eq(2)
+    end
+
+    it "does not stop for tools that are not listed" do
       provider = SequenceMockProvider.new([
         tool_call_response("echo", "tc_1", %({"text":"not message"})),
         text_response("Continued."),
@@ -274,8 +299,9 @@ describe Autobot::Agent::ToolExecutor do
       executor = build_executor(provider)
       tools = create_echo_tool
 
-      result = executor.execute(build_messages, tools, stop_after_tool: "message")
+      result = executor.execute(build_messages, tools, stop_after: ["message"])
 
+      result.stop_output.should be_nil
       result.content.should eq("Continued.")
       result.tools_used.should eq(["echo"])
       provider.call_count.should eq(2)

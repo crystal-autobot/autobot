@@ -121,28 +121,32 @@ describe Autobot::Tools::Registry do
     registry = Autobot::Tools::Registry.new
     registry.register(DummyTool.new)
     result = registry.execute("dummy", {"input" => JSON::Any.new("hello")})
-    result.should eq("echo: hello")
+    result.success?.should be_true
+    result.content.should eq("echo: hello")
   end
 
   it "returns error for unknown tool execution" do
     registry = Autobot::Tools::Registry.new
     result = registry.execute("unknown", {} of String => JSON::Any)
-    result.should contain("Error: Tool 'unknown' not found")
+    result.error?.should be_true
+    result.content.should contain("Error: Tool 'unknown' not found")
   end
 
   it "returns error for invalid parameters" do
     registry = Autobot::Tools::Registry.new
     registry.register(DummyTool.new)
     result = registry.execute("dummy", {} of String => JSON::Any)
-    result.should contain("Error: Invalid parameters")
-    result.should contain("missing required parameter 'input'")
+    result.error?.should be_true
+    result.content.should contain("Error: Invalid parameters")
+    result.content.should contain("missing required parameter 'input'")
   end
 
   it "handles tool execution failures gracefully" do
     registry = Autobot::Tools::Registry.new
     registry.register(FailingTool.new)
     result = registry.execute("failing", {} of String => JSON::Any)
-    result.should contain("Error") # Generic for security
+    result.error?.should be_true
+    result.content.should contain("Error") # Generic for security
   end
 
   it "lists tool names" do
@@ -219,7 +223,7 @@ describe Autobot::Tools::Registry do
       registry.register(LeakyTool.new)
       leaked = "OPENAI_API_KEY=sk-abcdefghijklmnop123456\nTELEGRAM_BOT_TOKEN=123456:AbC-dEf\nBRAVE_API_KEY=BSAxyz"
 
-      output = registry.execute("leaky", {"text" => JSON::Any.new(leaked)})
+      output = registry.execute("leaky", {"text" => JSON::Any.new(leaked)}).content
 
       output.should eq("OPENAI_API_KEY=[REDACTED]\nTELEGRAM_BOT_token=[REDACTED]\nBRAVE_API_KEY=[REDACTED]")
     end
@@ -229,7 +233,7 @@ describe Autobot::Tools::Registry do
       registry.register(LeakyTool.new)
       content = "commit 3f2a9c1d8e7b6a5f4c3d2e1f0a9b8c7d6e5f4a3b\naW1hZ2VieXRlc2FyZWxvbmdlcnRoYW50d2VudHk="
 
-      registry.execute("leaky", {"text" => JSON::Any.new(content)}).should eq(content)
+      registry.execute("leaky", {"text" => JSON::Any.new(content)}).content.should eq(content)
     end
   end
 end

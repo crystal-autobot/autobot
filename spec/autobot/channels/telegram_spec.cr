@@ -147,7 +147,10 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
   private def start_typing(chat_id : String) : Nil
   end
 
+  getter typing_stopped = [] of String
+
   private def stop_typing(chat_id : String) : Nil
+    typing_stopped << chat_id
   end
 end
 
@@ -879,6 +882,15 @@ describe Autobot::Channels::TelegramChannel do
       )
 
       channel.send_message(outbound)
+      channel.created_clients.should be_empty
+    end
+  end
+
+  describe "#turn_ended" do
+    it "stops typing without sending anything" do
+      channel = build_channel
+      channel.turn_ended("-1001:2")
+      channel.typing_stopped.should eq(["-1001:2"])
       channel.created_clients.should be_empty
     end
   end

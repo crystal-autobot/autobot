@@ -113,6 +113,8 @@ tools:
     - list_dir
     - message
     - "mcp_homeassistant_*"  # a trailing * matches by prefix; MCP tools are named mcp_<server>_<tool>
+  stop_after:    # Optional; a successful call of a listed tool ends the turn
+    - bash_notify
   filesystem:
     roots: [notes, inbox]  # Optional; file tools may only touch these workspace subdirectories
   sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
@@ -153,6 +155,12 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 ### Tool Allowlist
 
 `tools.enabled` names the tools a bot may have. Anything not listed is never registered, whichever source it comes from: built-in tools, skill scripts, plugins and MCP servers all pass through the same check. A name ending in `*` matches by prefix, as in the MCP `tools:` list. Leave it out to keep today's behaviour of registering everything. `autobot doctor` prints the effective list and warns about an entry that matches no known tool, so a typo does not silently remove a tool; at startup the bot logs a warning for entries that matched nothing.
+
+### Tools that end the turn
+
+`tools.stop_after` names the tools that answer for the bot. A successful call ends the turn: the model is not asked again and no reply of the bot's own is sent. A failed call hands the turn back to the model, which sees the tool error — for a skill script, its full output — and can answer itself. So a script that posts to the chat itself lists its `bash_` tool here, exits 0 once posted, and exits non-zero printing the text to relay.
+
+What the tool printed is kept in the session history as the bot's line, next to the tools the turn used. If the turn also used the `message` tool, that text is recorded instead, since it is what reached the chat; a tool that prints nothing records nothing.
 
 ### Web Fetch Egress
 
@@ -323,6 +331,7 @@ tools:
     # model: gpt-image-1     # optional, auto-detected from provider
     # size: 1024x1024
   enabled: [read_file, write_file, edit_file, list_dir, message]  # optional allowlist
+  stop_after: [bash_notify]       # optional, tools whose successful call ends the turn
   filesystem:
     roots: [notes, inbox]      # optional, workspace subdirectories the file tools may touch
 

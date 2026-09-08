@@ -87,11 +87,11 @@ module Autobot::Tools
       Log.warn { "tools.enabled entries matched no tool: #{unmatched.join(", ")}" }
     end
 
-    def execute(name : String, params : Hash(String, JSON::Any), session_key : String? = nil) : String
+    def execute(name : String, params : Hash(String, JSON::Any), session_key : String? = nil) : ToolResult
       tool = @tools[name]?
 
       unless tool
-        return "Error: Tool '#{name}' not found"
+        return ToolResult.error("Error: Tool '#{name}' not found")
       end
 
       # Use provided session key or fall back to instance default
@@ -99,13 +99,13 @@ module Autobot::Tools
 
       if error = @rate_limiter.check_limit(name, effective_session_key)
         Log.warn { "Rate limit exceeded for tool #{name}: #{error}" }
-        return "Error: #{error}"
+        return ToolResult.error("Error: #{error}")
       end
 
       begin
         errors = tool.validate_params(params)
         unless errors.empty?
-          return "Error: Invalid parameters for tool '#{name}': #{errors.join("; ")}"
+          return ToolResult.error("Error: Invalid parameters for tool '#{name}': #{errors.join("; ")}")
         end
 
         if path = params["path"]?.try(&.as_s?)
@@ -127,12 +127,12 @@ module Autobot::Tools
 
         @rate_limiter.record_call(name, effective_session_key)
 
-        LogSanitizer.redact_credentials(result.to_s)
+        ToolResult.new(result.status, LogSanitizer.redact_credentials(result.content))
       rescue ex : Exception
         error_msg = "Error executing #{name}"
         Log.error { error_msg }
         Log.error { ex.backtrace.join("\n") }
-        error_msg
+        ToolResult.error(error_msg)
       end
     end
 

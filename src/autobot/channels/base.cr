@@ -24,6 +24,9 @@ module Autobot::Channels
     # Send an outbound message through this channel.
     abstract def send_message(message : Bus::OutboundMessage) : Nil
 
+    def turn_ended(chat_id : String) : Nil
+    end
+
     # Check if a sender is allowed to use this bot.
     # Returns false if no allow list (deny by default).
     # Use ["*"] in allow_from to allow all senders.

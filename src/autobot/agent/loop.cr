@@ -68,6 +68,7 @@ module Autobot::Agent
       sandbox_config : String = "auto",
       rate_limiter : Tools::RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
+      @stop_after : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
       web_allowed_domains : Array(String) = [] of String,
       max_tokens : Int32 = Config::AgentDefaults.new.max_tokens,
@@ -123,6 +124,8 @@ module Autobot::Agent
             chat_id: msg.chat_id,
             content: GENERIC_ERROR_MESSAGE
           ))
+        ensure
+          @bus.publish_turn_ended(*msg.origin)
         end
       end
 
@@ -183,15 +186,26 @@ module Autobot::Agent
       )
 
       @message_tool.try(&.clear_last_sent)
-      result = @executor.execute(messages, @tools, session_key: session.key)
-      sent_by_message_tool = @message_tool.try(&.last_sent_content)
-      final_content = result.content.presence || sent_by_message_tool || FALLBACK_RESPONSE
+      result = @executor.execute(messages, @tools, session_key: session.key, stop_after: @stop_after)
+      finish_turn(session, msg, result)
+    end
 
-      save_to_session(session, @context.render_user_text(msg.content, msg.media?), final_content, result.tools_used)
+    private def finish_turn(session : Session::Session, msg : Bus::InboundMessage, result : ToolExecutor::Result) : Bus::OutboundMessage?
+      user_text = @context.render_user_text(msg.content, msg.media?)
+      delivered = delivered_text(result)
 
-      return nil if sent_by_message_tool || answered_by_tools?(result)
+      if delivered || answered_by_tools?(result)
+        save_to_session(session, user_text, delivered, result.tools_used)
+        return nil
+      end
 
-      build_response(msg.channel, msg.chat_id, final_content, msg.metadata)
+      reply = result.content.presence || FALLBACK_RESPONSE
+      save_to_session(session, user_text, reply, result.tools_used)
+      build_response(msg.channel, msg.chat_id, reply, msg.metadata)
+    end
+
+    private def delivered_text(result : ToolExecutor::Result) : String?
+      @message_tool.try(&.last_sent_content) || result.stop_output
     end
 
     private def answered_by_tools?(result : ToolExecutor::Result) : Bool
@@ -215,7 +229,7 @@ module Autobot::Agent
     # Saves the exchange to the session so followup messages have context.
     # Returns nil because cron turns deliver via the message tool explicitly.
     private def process_cron_message(msg : Bus::InboundMessage) : Nil
-      origin_channel, origin_chat_id = parse_origin(msg.chat_id)
+      origin_channel, origin_chat_id = msg.origin
       session = @sessions.get_or_create("#{origin_channel}:#{origin_chat_id}")
       update_tool_contexts(origin_channel, origin_chat_id)
       @message_tool.try(&.clear_last_sent)
@@ -232,7 +246,7 @@ module Autobot::Agent
         messages, @tools,
         session_key: session.key,
         exclude_tools: BACKGROUND_EXCLUDED_TOOLS,
-        stop_after_tool: "message"
+        stop_after: @stop_after | ["message"]
       )
 
       save_cron_to_session(session, msg.content, result)
@@ -242,16 +256,16 @@ module Autobot::Agent
 
     # Persist the cron exchange to session so followup messages have context.
     private def save_cron_to_session(session : Session::Session, task_content : String, result : ToolExecutor::Result) : Nil
-      response_content = @message_tool.try(&.last_sent_content) || result.content.presence
-      return unless response_content
+      delivered = delivered_text(result) || result.content.presence
+      return unless delivered
 
-      save_to_session(session, "[Scheduled task] #{task_content}", response_content, result.tools_used)
+      save_to_session(session, "[Scheduled task] #{task_content}", delivered, result.tools_used)
     end
 
     # Handle a subagent result announcement.
     # Runs with full session history, saves the exchange, and returns a response.
     private def process_subagent_message(msg : Bus::InboundMessage) : Bus::OutboundMessage
-      origin_channel, origin_chat_id = parse_origin(msg.chat_id)
+      origin_channel, origin_chat_id = msg.origin
       session = @sessions.get_or_create("#{origin_channel}:#{origin_chat_id}")
       update_tool_contexts(origin_channel, origin_chat_id)
 
@@ -275,16 +289,6 @@ module Autobot::Agent
         chat_id: origin_chat_id,
         content: final_content
       )
-    end
-
-    # Parse origin channel/chat_id from system message chat_id (format: "channel:chat_id")
-    private def parse_origin(chat_id : String) : {String, String}
-      if chat_id.includes?(":")
-        parts = chat_id.split(":", 2)
-        {parts[0], parts[1]}
-      else
-        {Constants::CHANNEL_CLI, chat_id}
-      end
     end
 
     # Build prompt for cron-triggered agent turns.
@@ -361,9 +365,11 @@ module Autobot::Agent
       @image_tool.try(&.set_context(channel, chat_id))
     end
 
-    private def save_to_session(session : Session::Session, user_content : String, assistant_content : String, tools_used : Array(String)) : Nil
+    private def save_to_session(session : Session::Session, user_content : String, assistant_content : String?, tools_used : Array(String)) : Nil
       session.add_message(Constants::ROLE_USER, user_content, nil)
-      session.add_message(Constants::ROLE_ASSISTANT, assistant_content, tools_used.empty? ? nil : tools_used)
+      if content = assistant_content.presence
+        session.add_message(Constants::ROLE_ASSISTANT, content, tools_used.empty? ? nil : tools_used)
+      end
       @sessions.save(session)
     end
 

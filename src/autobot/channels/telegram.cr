@@ -388,8 +388,6 @@ module Autobot::Channels
     DOCUMENT_CAPTION_LIMIT = 1024
 
     def send_message(message : Bus::OutboundMessage) : Nil
-      stop_typing(message.chat_id)
-
       if attachment = find_sendable_attachment(message.media?)
         send_media(message.chat_id, attachment, message.content)
         return
@@ -407,6 +405,10 @@ module Autobot::Channels
       end
 
       chunks.each { |chunk| send_html_chunk(message.chat_id, chunk) }
+    end
+
+    def turn_ended(chat_id : String) : Nil
+      stop_typing(chat_id)
     end
 
     private def send_html_chunk(chat_id : String, html : String) : Nil

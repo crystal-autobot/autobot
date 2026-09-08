@@ -15,3 +15,11 @@ module TestHelper
     dir
   end
 end
+
+def text_response(content : String) : String
+  %({"choices":[{"message":{"content":#{content.to_json}},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
+end
+
+def tool_call_response(tool_name : String, tool_id : String, arguments : String = "{}") : String
+  %({"choices":[{"message":{"content":"","tool_calls":[{"id":"#{tool_id}","type":"function","function":{"name":"#{tool_name}","arguments":"#{arguments.gsub('"', "\\\"")}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
+end

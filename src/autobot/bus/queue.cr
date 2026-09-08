@@ -6,12 +6,12 @@ module Autobot::Bus
     Log = ::Log.for("bus")
 
     @inbound : Channel(InboundMessage)
-    @outbound : Channel(OutboundMessage)
+    @outbound : Channel(OutboundEvent)
     @stopped : Bool = false
 
     def initialize(capacity : Int32 = 100)
       @inbound = Channel(InboundMessage).new(capacity)
-      @outbound = Channel(OutboundMessage).new(capacity)
+      @outbound = Channel(OutboundEvent).new(capacity)
     end
 
     # Publish an inbound message (from channels to agent)
@@ -58,19 +58,26 @@ module Autobot::Bus
       @outbound.send(message)
     end
 
-    # Consume outbound messages (channels read these)
-    def consume_outbound(&block : OutboundMessage -> Nil) : Nil
+    def publish_turn_ended(channel : String, chat_id : String) : Nil
+      return if @stopped
+
+      Log.debug { "Turn ended: #{channel}:#{chat_id}" }
+      @outbound.send(TurnEnded.new(channel, chat_id))
+    end
+
+    # Consume outbound events (channels read these)
+    def consume_outbound(&block : OutboundEvent -> Nil) : Nil
       spawn do
         loop do
           break if @stopped
 
           begin
             select
-            when msg = @outbound.receive
+            when event = @outbound.receive
               begin
-                block.call(msg)
+                block.call(event)
               rescue ex
-                Log.error { "Error processing outbound message: #{ex.message}" }
+                Log.error { "Error processing outbound event: #{ex.message}" }
                 Log.error { ex.backtrace.join("\n") }
               end
             when timeout(5.seconds)
