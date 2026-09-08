@@ -22,14 +22,6 @@ class SequenceMockProvider < Autobot::Providers::HttpProvider
   end
 end
 
-private def text_response(content : String) : String
-  %({"choices":[{"message":{"content":#{content.to_json}},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
-end
-
-private def tool_call_response(tool_name : String, tool_id : String, arguments : String = "{}") : String
-  %({"choices":[{"message":{"content":"","tool_calls":[{"id":"#{tool_id}","type":"function","function":{"name":"#{tool_name}","arguments":"#{arguments.gsub('"', "\\\"")}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
-end
-
 private def guardrail_response(content : String = "Content blocked by guardrail.") : String
   %({"choices":[{"message":{"content":#{content.to_json}},"finish_reason":"guardrail_intervened"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
 end
@@ -41,24 +33,6 @@ private def create_echo_tool : Autobot::Tools::Registry
 end
 
 # Minimal tool that echoes input for testing.
-class RefusingTool < Autobot::Tools::Tool
-  def name : String
-    "refusing"
-  end
-
-  def description : String
-    "Refuses every call"
-  end
-
-  def parameters : Autobot::Tools::ToolSchema
-    Autobot::Tools::ToolSchema.new(properties: {} of String => Autobot::Tools::PropertySchema)
-  end
-
-  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
-    Autobot::Tools::ToolResult.error("could not post")
-  end
-end
-
 class EchoTool < Autobot::Tools::Tool
   def name : String
     "echo"
@@ -79,6 +53,24 @@ class EchoTool < Autobot::Tools::Tool
 
   def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
     Autobot::Tools::ToolResult.success("Echo: #{params["text"]?.try(&.as_s) || "nil"}")
+  end
+end
+
+class RefusingTool < Autobot::Tools::Tool
+  def name : String
+    "refusing"
+  end
+
+  def description : String
+    "Refuses every call"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.error("could not post")
   end
 end
 
@@ -285,8 +277,8 @@ describe Autobot::Agent::ToolExecutor do
 
     it "lets the model continue after a listed tool fails" do
       provider = SequenceMockProvider.new([
-        tool_call_response("refusing", "tc_1", "{}"),
-        text_response("could not post"),
+        tool_call_response("refusing", "tc_1"),
+        text_response("I could not post that"),
       ])
       executor = build_executor(provider)
       tools = Autobot::Tools::Registry.new
@@ -295,7 +287,7 @@ describe Autobot::Agent::ToolExecutor do
       result = executor.execute(build_messages, tools, stop_after: ["refusing"])
 
       result.stop_output.should be_nil
-      result.content.should eq("could not post")
+      result.content.should eq("I could not post that")
       provider.call_count.should eq(2)
     end
 

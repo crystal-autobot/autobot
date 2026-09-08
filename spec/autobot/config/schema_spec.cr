@@ -180,7 +180,6 @@ describe Autobot::Config::Config do
       config = Autobot::Config::Config.from_yaml(yaml)
       config.tools.try(&.enabled).should eq(["read_file", "ha_*"])
       config.tools.try(&.filesystem.try(&.roots)).should eq(["notes", "inbox"])
-      config.tools.try(&.stop_after).should eq([] of String)
     end
 
     it "parses the web fetch domain allowlist" do
@@ -190,8 +189,9 @@ describe Autobot::Config::Config do
     end
 
     it "parses the tools that end the turn" do
-      config = Autobot::Config::Config.from_yaml("tools:\n  enabled: [bash_notify]\n  stop_after: [bash_notify]\n")
+      config = Autobot::Config::Config.from_yaml("tools:\n  stop_after: [bash_notify]\n")
       config.tools.try(&.stop_after).should eq(["bash_notify"])
+      Autobot::Config::Config.from_yaml("tools:\n  enabled: [read_file]\n").tools.try(&.stop_after).should eq([] of String)
     end
 
     it "parses telegram topics" do

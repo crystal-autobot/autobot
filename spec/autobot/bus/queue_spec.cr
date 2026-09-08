@@ -70,9 +70,9 @@ describe Autobot::Bus::MessageBus do
 
     select
     when result = received.receive
-      result.should be_a(Autobot::Bus::TurnEnded)
-      result.channel.should eq("telegram")
-      result.chat_id.should eq("chat1")
+      event = result.as(Autobot::Bus::TurnEnded)
+      event.channel.should eq("telegram")
+      event.chat_id.should eq("chat1")
     when timeout(2.seconds)
       raise "Timed out waiting for the end of a turn"
     end

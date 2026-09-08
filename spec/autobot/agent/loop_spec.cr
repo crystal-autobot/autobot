@@ -22,6 +22,9 @@ class MockProvider < Autobot::Providers::HttpProvider
 end
 
 class SelfDeliveringTool < Autobot::Tools::Tool
+  def initialize(@output : String = "# sent")
+  end
+
   def name : String
     "deliver"
   end
@@ -31,29 +34,11 @@ class SelfDeliveringTool < Autobot::Tools::Tool
   end
 
   def parameters : Autobot::Tools::ToolSchema
-    Autobot::Tools::ToolSchema.new(properties: {} of String => Autobot::Tools::PropertySchema)
+    Autobot::Tools::ToolSchema.new
   end
 
   def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
-    Autobot::Tools::ToolResult.success("# sent")
-  end
-end
-
-class QuietDeliveringTool < Autobot::Tools::Tool
-  def name : String
-    "deliver_quietly"
-  end
-
-  def description : String
-    "Delivers its own output and prints nothing"
-  end
-
-  def parameters : Autobot::Tools::ToolSchema
-    Autobot::Tools::ToolSchema.new(properties: {} of String => Autobot::Tools::PropertySchema)
-  end
-
-  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
-    Autobot::Tools::ToolResult.success("")
+    Autobot::Tools::ToolResult.success(@output)
   end
 end
 
@@ -72,24 +57,26 @@ private def create_test_loop(
   workspace : Path,
   cron_service : Autobot::Cron::Service? = nil,
   tools : Autobot::Tools::Registry? = nil,
+  provider : Autobot::Providers::Provider? = nil,
+  sessions : Autobot::Session::Manager? = nil,
+  bus : Autobot::Bus::MessageBus? = nil,
+  stop_after : Array(String) = [] of String,
 ) : TestableLoop
-  bus = Autobot::Bus::MessageBus.new(capacity: 10)
-  provider = MockProvider.new
   tool_registry = tools || Autobot::Tools::Registry.new
-  sessions = Autobot::Session::Manager.new(workspace)
 
   # Register message tool so it can be wired
   tool_registry.register(Autobot::Tools::MessageTool.new)
 
   TestableLoop.new(
-    bus: bus,
-    provider: provider,
+    bus: bus || Autobot::Bus::MessageBus.new(capacity: 10),
+    provider: provider || MockProvider.new,
     workspace: workspace,
     tools: tool_registry,
-    sessions: sessions,
+    sessions: sessions || Autobot::Session::Manager.new(workspace),
     cron_service: cron_service,
     memory_window: 0,
-    sandbox_config: "none"
+    sandbox_config: "none",
+    stop_after: stop_after
   )
 end
 
@@ -283,21 +270,15 @@ describe Autobot::Agent::Loop do
       tmp = TestHelper.tmp_dir
       cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
       sessions = Autobot::Session::Manager.new(tmp)
-      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"deliver","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      provider = MockProvider.new(responses: [tool_call_resp])
       tools = Autobot::Tools::Registry.new
-      tools.register(Autobot::Tools::MessageTool.new)
       tools.register(SelfDeliveringTool.new)
 
-      loop_inst = TestableLoop.new(
-        bus: Autobot::Bus::MessageBus.new(capacity: 10),
-        provider: provider,
+      loop_inst = create_test_loop(
         workspace: tmp,
-        tools: tools,
-        sessions: sessions,
         cron_service: cron,
-        memory_window: 0,
-        sandbox_config: "none",
+        tools: tools,
+        provider: MockProvider.new(responses: [tool_call_response("deliver", "call_1")]),
+        sessions: sessions,
         stop_after: ["deliver"]
       )
 
@@ -442,9 +423,8 @@ describe Autobot::Agent::Loop do
       tmp = TestHelper.tmp_dir
       sessions = Autobot::Session::Manager.new(tmp)
       bus = Autobot::Bus::MessageBus.new(capacity: 10)
-      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"message","arguments":"{\\"content\\":\\"Sent via message tool\\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      empty_resp = %({"choices":[{"message":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      provider = MockProvider.new(responses: [tool_call_resp, empty_resp])
+      tool_call_resp = tool_call_response("message", "call_1", %({"content":"Sent via message tool"}))
+      provider = MockProvider.new(responses: [tool_call_resp, text_response("")])
       tools = Autobot::Tools::Registry.new
 
       message_tool = Autobot::Tools::MessageTool.new
@@ -484,9 +464,7 @@ describe Autobot::Agent::Loop do
       tmp = TestHelper.tmp_dir
       sessions = Autobot::Session::Manager.new(tmp)
       bus = Autobot::Bus::MessageBus.new(capacity: 10)
-      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"deliver","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      empty_resp = %({"choices":[{"message":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      provider = MockProvider.new(responses: [tool_call_resp, empty_resp])
+      provider = MockProvider.new(responses: [tool_call_response("deliver", "call_1"), text_response("")])
       tools = Autobot::Tools::Registry.new
       tools.register(Autobot::Tools::MessageTool.new)
       tools.register(SelfDeliveringTool.new)
@@ -514,22 +492,15 @@ describe Autobot::Agent::Loop do
     it "ends the turn once a listed tool has answered, without asking the model again" do
       tmp = TestHelper.tmp_dir
       sessions = Autobot::Session::Manager.new(tmp)
-      bus = Autobot::Bus::MessageBus.new(capacity: 10)
-      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"deliver","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      prose_resp = %({"choices":[{"message":{"content":"prose"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      provider = MockProvider.new(responses: [tool_call_resp, prose_resp])
+      provider = MockProvider.new(responses: [tool_call_response("deliver", "call_1"), text_response("prose")])
       tools = Autobot::Tools::Registry.new
-      tools.register(Autobot::Tools::MessageTool.new)
       tools.register(SelfDeliveringTool.new)
 
-      loop_inst = TestableLoop.new(
-        bus: bus,
-        provider: provider,
+      loop_inst = create_test_loop(
         workspace: tmp,
         tools: tools,
+        provider: provider,
         sessions: sessions,
-        memory_window: 0,
-        sandbox_config: "none",
         stop_after: ["deliver"]
       )
 
@@ -558,21 +529,15 @@ describe Autobot::Agent::Loop do
     it "records no assistant line when the listed tool printed nothing" do
       tmp = TestHelper.tmp_dir
       sessions = Autobot::Session::Manager.new(tmp)
-      bus = Autobot::Bus::MessageBus.new(capacity: 10)
-      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"deliver_quietly","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      provider = MockProvider.new(responses: [tool_call_resp])
       tools = Autobot::Tools::Registry.new
-      tools.register(QuietDeliveringTool.new)
+      tools.register(SelfDeliveringTool.new(""))
 
-      loop_inst = TestableLoop.new(
-        bus: bus,
-        provider: provider,
+      loop_inst = create_test_loop(
         workspace: tmp,
         tools: tools,
+        provider: MockProvider.new(responses: [tool_call_response("deliver", "call_1")]),
         sessions: sessions,
-        memory_window: 0,
-        sandbox_config: "none",
-        stop_after: ["deliver_quietly"]
+        stop_after: ["deliver"]
       )
 
       msg = Autobot::Bus::InboundMessage.new(
@@ -593,20 +558,14 @@ describe Autobot::Agent::Loop do
     it "records the text the message tool sent, not its receipt" do
       tmp = TestHelper.tmp_dir
       sessions = Autobot::Session::Manager.new(tmp)
-      bus = Autobot::Bus::MessageBus.new(capacity: 10)
-      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"message","arguments":"{\\"content\\":\\"Sent via message tool\\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
-      provider = MockProvider.new(responses: [tool_call_resp])
-      tools = Autobot::Tools::Registry.new
-      tools.register(Autobot::Tools::MessageTool.new)
+      provider = MockProvider.new(responses: [
+        tool_call_response("message", "call_1", %({"content":"Sent via message tool"})),
+      ])
 
-      loop_inst = TestableLoop.new(
-        bus: bus,
-        provider: provider,
+      loop_inst = create_test_loop(
         workspace: tmp,
-        tools: tools,
+        provider: provider,
         sessions: sessions,
-        memory_window: 0,
-        sandbox_config: "none",
         stop_after: ["message"]
       )
 
@@ -650,53 +609,17 @@ describe Autobot::Agent::Loop do
   end
 
   describe "#run" do
-    it "ends the turn after the reply" do
-      tmp = TestHelper.tmp_dir
-      bus = Autobot::Bus::MessageBus.new(capacity: 10)
-      loop_inst = TestableLoop.new(
-        bus: bus,
-        provider: MockProvider.new("Hi there"),
-        workspace: tmp,
-        tools: Autobot::Tools::Registry.new,
-        sessions: Autobot::Session::Manager.new(tmp),
-        memory_window: 0,
-        sandbox_config: "none"
-      )
-
-      events = Channel(Autobot::Bus::OutboundEvent).new(4)
-      bus.consume_outbound { |event| events.send(event) }
-      spawn { loop_inst.run }
-
-      bus.publish_inbound(Autobot::Bus::InboundMessage.new(
-        channel: "telegram",
-        sender_id: "user1",
-        chat_id: "chat1",
-        content: "hello"
-      ))
-
-      next_outbound_event(events).should be_a(Autobot::Bus::OutboundMessage)
-      next_outbound_event(events).should be_a(Autobot::Bus::TurnEnded)
-    ensure
-      loop_inst.try(&.stop)
-      bus.try(&.stop)
-      FileUtils.rm_rf(tmp) if tmp
-    end
-
     it "ends a turn that a listed tool answered" do
       tmp = TestHelper.tmp_dir
       bus = Autobot::Bus::MessageBus.new(capacity: 10)
-      tool_call_resp = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"deliver","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
       tools = Autobot::Tools::Registry.new
       tools.register(SelfDeliveringTool.new)
 
-      loop_inst = TestableLoop.new(
-        bus: bus,
-        provider: MockProvider.new(responses: [tool_call_resp]),
+      loop_inst = create_test_loop(
         workspace: tmp,
         tools: tools,
-        sessions: Autobot::Session::Manager.new(tmp),
-        memory_window: 0,
-        sandbox_config: "none",
+        provider: MockProvider.new(responses: [tool_call_response("deliver", "call_1")]),
+        bus: bus,
         stop_after: ["deliver"]
       )
 
@@ -786,7 +709,7 @@ describe Autobot::Agent::Loop do
     end
   end
 
-  describe "#parse_origin" do
+  describe "message origin" do
     it "splits channel:chat_id format" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)

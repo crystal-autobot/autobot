@@ -154,15 +154,6 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
   end
 end
 
-private class QuietTelegramTest < TelegramChannelTest
-  getter api_calls = [] of String
-
-  private def api_request(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
-    api_calls << method
-    nil
-  end
-end
-
 private def build_channel(
   allow_from : Array(String) = [] of String,
   custom_commands : Autobot::Config::CustomCommandsConfig? = nil,
@@ -894,22 +885,13 @@ describe Autobot::Channels::TelegramChannel do
       channel.created_clients.should be_empty
     end
   end
-end
 
-describe "the end of a turn on Telegram" do
-  it "stops typing and calls no API" do
-    channel = QuietTelegramTest.new(
-      bus: Autobot::Bus::MessageBus.new,
-      token: "test-token",
-      allow_from: [] of String,
-      proxy: nil,
-      custom_commands: Autobot::Config::CustomCommandsConfig.new,
-      cron_service: nil,
-    )
-
-    channel.turn_ended("-1001:2")
-
-    channel.typing_stopped.should eq(["-1001:2"])
-    channel.api_calls.should be_empty
+  describe "#turn_ended" do
+    it "stops typing without sending anything" do
+      channel = build_channel
+      channel.turn_ended("-1001:2")
+      channel.typing_stopped.should eq(["-1001:2"])
+      channel.created_clients.should be_empty
+    end
   end
 end

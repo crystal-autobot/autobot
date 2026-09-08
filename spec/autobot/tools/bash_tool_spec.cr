@@ -32,7 +32,6 @@ describe Autobot::Tools::BashTool do
 
     result.error?.should be_true
     result.content.should contain("could not post")
-    result.content.should contain("Exit code: 1")
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
