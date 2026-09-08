@@ -194,7 +194,12 @@ module Autobot::Agent
       user_text = @context.render_user_text(msg.content, msg.media?)
       sent_by_message_tool = @message_tool.try(&.last_sent_content)
 
-      if result.stopped_by || sent_by_message_tool || answered_by_tools?(result)
+      if stop = result.stop
+        save_to_session(session, user_text, sent_by_message_tool || stop.output, result.tools_used)
+        return nil
+      end
+
+      if sent_by_message_tool || answered_by_tools?(result)
         save_to_session(session, user_text, sent_by_message_tool, result.tools_used)
         return nil
       end
@@ -252,10 +257,10 @@ module Autobot::Agent
 
     # Persist the cron exchange to session so followup messages have context.
     private def save_cron_to_session(session : Session::Session, task_content : String, result : ToolExecutor::Result) : Nil
-      response_content = @message_tool.try(&.last_sent_content) || result.content.presence
-      return unless response_content
+      delivered = @message_tool.try(&.last_sent_content) || result.stop.try(&.output) || result.content.presence
+      return unless delivered
 
-      save_to_session(session, "[Scheduled task] #{task_content}", response_content, result.tools_used)
+      save_to_session(session, "[Scheduled task] #{task_content}", delivered, result.tools_used)
     end
 
     # Handle a subagent result announcement.
@@ -379,7 +384,9 @@ module Autobot::Agent
 
     private def save_to_session(session : Session::Session, user_content : String, assistant_content : String?, tools_used : Array(String)) : Nil
       session.add_message(Constants::ROLE_USER, user_content, nil)
-      session.add_message(Constants::ROLE_ASSISTANT, assistant_content, tools_used.empty? ? nil : tools_used) if assistant_content
+      if content = assistant_content.presence
+        session.add_message(Constants::ROLE_ASSISTANT, content, tools_used.empty? ? nil : tools_used)
+      end
       @sessions.save(session)
     end
 

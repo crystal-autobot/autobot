@@ -160,6 +160,8 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 
 `tools.stop_after` names the tools that answer for the bot. When a listed tool call succeeds, the turn is over: the model is not called again and no reply of the bot's own is sent, because the tool has already delivered whatever there was to say. A listed tool that fails hands the turn back to the model, which sees the error and can answer itself. This fits a skill script that posts to the chat on its own: list its `bash_` tool here, have it exit 0 once it has posted and non-zero when it could not, and print the text to relay in that case. A skill script that exits non-zero reaches the model as a tool error carrying the script's full output, so nothing it printed is lost.
 
+What the listed tool printed is kept in the session history as the bot's own line, together with the tools the turn used, so the next turn sees an answered message instead of an open question. When the turn also sent something with the `message` tool, that text is recorded instead — it is what reached the chat. A tool that prints nothing leaves the user's line alone in the history.
+
 ### Web Fetch Egress
 
 `tools.web.allowed_domains` limits `web_fetch` to the listed hosts. An entry such as `example.com` matches that host only; `*.strava.com` matches its subdomains and the apex. Every redirect hop is checked too, so a redirect cannot lead out of the list. Leave it out to allow any public host. A fetch to a host outside the list fails with a tool error naming the allowed domains, so a planted "fetch this URL with my notes in it" has nowhere to go.
