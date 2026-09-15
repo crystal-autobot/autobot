@@ -7,11 +7,54 @@ private def write_script(dir : Path, body : String) : String
   path
 end
 
-private def bash_tool(script_path : String) : Autobot::Tools::BashTool
-  Autobot::Tools::BashTool.new(Autobot::Tools::SandboxExecutor.new(nil), script_path, "bash_notify", "Notify")
+private def bash_tool(script_path : String, params = [] of Autobot::Agent::SkillParam) : Autobot::Tools::BashTool
+  Autobot::Tools::BashTool.new(Autobot::Tools::SandboxExecutor.new(nil), script_path, "bash_notify", "Notify", params)
+end
+
+private def sql_params : Array(Autobot::Agent::SkillParam)
+  [Autobot::Agent::SkillParam.new("sql", "one read-only statement"), Autobot::Agent::SkillParam.new("limit", "max rows")]
 end
 
 describe Autobot::Tools::BashTool do
+  it "splits the args string like a shell when no parameters are declared" do
+    tmp = TestHelper.tmp_dir
+    tool = bash_tool(write_script(tmp, "printf '%s|' \"$#\" \"$@\""))
+
+    result = tool.execute({"args" => JSON::Any.new("select 'a b' c")})
+
+    result.content.strip.should eq("3|select|a b|c|")
+    tool.parameters.properties.keys.should eq(["args"])
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "passes declared parameters positionally and verbatim" do
+    tmp = TestHelper.tmp_dir
+    tool = bash_tool(write_script(tmp, "printf '%s|' \"$#\" \"$@\""), sql_params)
+
+    result = tool.execute({"sql" => JSON::Any.new("select 'a b' from t"), "limit" => JSON::Any.new("5")})
+
+    result.content.strip.should eq("2|select 'a b' from t|5|")
+    tool.parameters.properties.keys.should eq(["sql", "limit"])
+    tool.parameters.properties["sql"].description.should eq("one read-only statement")
+    tool.parameters.required.should eq(["sql", "limit"])
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "reads declared parameters from the skill next to the script" do
+    tmp = TestHelper.tmp_dir
+    Dir.mkdir_p((tmp / "notify").to_s)
+    File.write((tmp / "notify" / "SKILL.md").to_s, "---\nname: notify\ntool: bash_notify\nparams:\n  sql: one statement\n---\n# Notify\n")
+
+    params = Autobot::Tools::BashToolDiscovery.declared_params(tmp.to_s, "notify.sh")
+
+    params.map(&.name).should eq(["sql"])
+    Autobot::Tools::BashToolDiscovery.declared_params(tmp.to_s, "other.sh").should be_empty
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "returns the script output when it exits zero" do
     tmp = TestHelper.tmp_dir
     tool = bash_tool(write_script(tmp, "echo '# posted'"))

@@ -162,6 +162,28 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 
 What the tool printed is kept in the session history as the bot's line, next to the tools the turn used. If the turn also used the `message` tool, that text is recorded instead, since it is what reached the chat; a tool that prints nothing records nothing.
 
+### Skill scripts as tools
+
+Every executable `skills/*.sh` in the workspace becomes a `bash_<name>` tool. The first comment line under the shebang is the tool's description, so write the usage there. By default the model passes one `args` string, split like a shell command line: quotes group words and are removed.
+
+A script that takes structured input declares its parameters in the frontmatter of the skill next to it, `skills/<name>/SKILL.md`. Each parameter becomes a string property of the tool with its own description, all required, and the script receives the values as positional parameters in the declared order, verbatim, so a statement with its own quoting, such as SQL, arrives untouched:
+
+```yaml
+---
+name: query
+description: The training database behind bash_query
+tool: bash_query
+params:
+  sql: one read-only SQL statement
+---
+```
+
+```sh
+#!/usr/bin/env bash
+# Usage: bash_query — one read-only query, rows tab separated
+exec python3 query.py "$1"
+```
+
 ### Web Fetch Egress
 
 `tools.web.allowed_domains` limits `web_fetch` to the listed hosts. An entry such as `example.com` matches that host only; `*.strava.com` matches its subdomains and the apex. Every redirect hop is checked too, so a redirect cannot lead out of the list. Leave it out to allow any public host. A fetch to a host outside the list fails with a tool error naming the allowed domains, so a planted "fetch this URL with my notes in it" has nowhere to go.
