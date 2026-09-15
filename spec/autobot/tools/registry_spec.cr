@@ -65,6 +65,117 @@ class FailingTool < Autobot::Tools::Tool
   end
 end
 
+class EmptyFailingTool < Autobot::Tools::Tool
+  def name : String
+    "empty_failing"
+  end
+
+  def description : String
+    "A tool that fails with an empty exception message"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    raise Exception.new
+  end
+end
+
+class LeakyFailingTool < Autobot::Tools::Tool
+  def name : String
+    "leaky_failing"
+  end
+
+  def description : String
+    "A tool that fails with credentials in the exception message"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    raise "connection failed to api sk-ant-api03-abcdefghijklmnop123456"
+  end
+end
+
+class WhitespaceFailingTool < Autobot::Tools::Tool
+  def name : String
+    "whitespace_failing"
+  end
+
+  def description : String
+    "A tool that fails with whitespace-only exception message"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    raise "   \n\t  "
+  end
+end
+
+class WhitespacePaddedTool < Autobot::Tools::Tool
+  def name : String
+    "padded_failing"
+  end
+
+  def description : String
+    "A tool that fails with padded whitespace in exception message"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    raise "  connection reset  \n"
+  end
+end
+
+class CustomFailingTool < Autobot::Tools::Tool
+  class CustomError < Exception
+  end
+
+  def name : String
+    "custom_failing"
+  end
+
+  def description : String
+    "A tool that fails with an exception subclass lacking a message"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    raise CustomError.new
+  end
+end
+
+class HugeFailingTool < Autobot::Tools::Tool
+  def name : String
+    "huge_failing"
+  end
+
+  def description : String
+    "A tool that fails with a huge exception message"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    raise "x" * 6_000
+  end
+end
+
 describe Autobot::Tools::Registry do
   it "starts empty" do
     registry = Autobot::Tools::Registry.new
@@ -141,12 +252,61 @@ describe Autobot::Tools::Registry do
     result.content.should contain("missing required parameter 'input'")
   end
 
-  it "handles tool execution failures gracefully" do
+  it "handles tool execution failures gracefully and preserves exception message" do
     registry = Autobot::Tools::Registry.new
     registry.register(FailingTool.new)
     result = registry.execute("failing", {} of String => JSON::Any)
     result.error?.should be_true
-    result.content.should contain("Error") # Generic for security
+    result.content.should eq("Error executing failing: intentional failure")
+  end
+
+  it "falls back to generic error message when exception message is empty" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(EmptyFailingTool.new)
+    result = registry.execute("empty_failing", {} of String => JSON::Any)
+    result.error?.should be_true
+    result.content.should eq("Error executing empty_failing")
+  end
+
+  it "redacts credentials present in tool exception messages" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(LeakyFailingTool.new)
+    result = registry.execute("leaky_failing", {} of String => JSON::Any)
+    result.error?.should be_true
+    result.content.should eq("Error executing leaky_failing: connection failed to api sk-ant-[REDACTED]")
+  end
+
+  it "falls back to generic error message when exception message is whitespace-only" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(WhitespaceFailingTool.new)
+    result = registry.execute("whitespace_failing", {} of String => JSON::Any)
+    result.error?.should be_true
+    result.content.should eq("Error executing whitespace_failing")
+  end
+
+  it "strips leading and trailing whitespace from exception messages" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(WhitespacePaddedTool.new)
+    result = registry.execute("padded_failing", {} of String => JSON::Any)
+    result.error?.should be_true
+    result.content.should eq("Error executing padded_failing: connection reset")
+  end
+
+  it "falls back to exception class name when subclass message is empty" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(CustomFailingTool.new)
+    result = registry.execute("custom_failing", {} of String => JSON::Any)
+    result.error?.should be_true
+    result.content.should eq("Error executing custom_failing: CustomFailingTool::CustomError")
+  end
+
+  it "truncates oversized exception messages to MAX_ERROR_LENGTH" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(HugeFailingTool.new)
+    result = registry.execute("huge_failing", {} of String => JSON::Any)
+    result.error?.should be_true
+    expected = "Error executing huge_failing: #{"x" * Autobot::Tools::Registry::MAX_ERROR_LENGTH}... (truncated)"
+    result.content.should eq(expected)
   end
 
   it "lists tool names" do

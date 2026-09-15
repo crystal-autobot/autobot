@@ -8,6 +8,8 @@ module Autobot::Tools
   class Registry
     Log = ::Log.for("tools.registry")
 
+    MAX_ERROR_LENGTH = 4_000
+
     @tools : Hash(String, Tool)
     @rate_limiter : RateLimiter
     @session_key : String
@@ -129,11 +131,28 @@ module Autobot::Tools
 
         ToolResult.new(result.status, LogSanitizer.redact_credentials(result.content))
       rescue ex : Exception
-        error_msg = "Error executing #{name}"
-        Log.error { error_msg }
-        Log.error { ex.backtrace.join("\n") }
-        ToolResult.error(error_msg)
+        handle_execution_error(name, ex)
       end
+    end
+
+    private def handle_execution_error(name : String, ex : Exception) : ToolResult
+      details = if msg = ex.message.try(&.strip.presence)
+                  msg.size > MAX_ERROR_LENGTH ? "#{msg[0, MAX_ERROR_LENGTH]}... (truncated)" : msg
+                elsif ex.class != Exception
+                  ex.class.name
+                end
+
+      error_msg = if details
+                    "Error executing #{name}: #{details}"
+                  else
+                    "Error executing #{name}"
+                  end
+      sanitized_msg = LogSanitizer.redact_credentials(error_msg)
+      Log.error { sanitized_msg }
+      if bt = ex.backtrace?
+        Log.error { bt.join("\n") }
+      end
+      ToolResult.error(sanitized_msg)
     end
 
     # Get list of registered tool names
