@@ -22,11 +22,17 @@ module Autobot
 
       @[JSON::Field(key: "_type")]
       property type : String = "metadata"
+      property key : String? = nil
       property created_at : String
       property updated_at : String
       property metadata : Hash(String, JSON::Any) = {} of String => JSON::Any
 
-      def initialize(@created_at : String = Time.utc.to_rfc3339, @updated_at : String = Time.utc.to_rfc3339, @metadata = {} of String => JSON::Any)
+      def initialize(
+        @created_at : String = Time.utc.to_rfc3339,
+        @updated_at : String = Time.utc.to_rfc3339,
+        @metadata = {} of String => JSON::Any,
+        @key : String? = nil,
+      )
       end
     end
 

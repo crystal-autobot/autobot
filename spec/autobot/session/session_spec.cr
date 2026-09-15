@@ -96,6 +96,26 @@ describe Autobot::Session::Message do
   end
 end
 
+describe Autobot::Session::Metadata do
+  it "serializes to JSON with key" do
+    meta = Autobot::Session::Metadata.new(
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      key: "telegram:user_123"
+    )
+    json = meta.to_json
+    parsed = JSON.parse(json)
+    parsed["_type"].as_s.should eq("metadata")
+    parsed["key"].as_s.should eq("telegram:user_123")
+  end
+
+  it "deserializes from JSON with null or missing key" do
+    json = %({"_type":"metadata","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","key":null})
+    meta = Autobot::Session::Metadata.from_json(json)
+    meta.key.should be_nil
+  end
+end
+
 describe Autobot::Session::Manager do
   it "creates a new session" do
     tmp = TestHelper.tmp_dir
@@ -131,6 +151,7 @@ describe Autobot::Session::Manager do
     # Create new manager to force load from disk
     manager2 = Autobot::Session::Manager.new(workspace: tmp)
     loaded = manager2.get_or_create(unique_key)
+    loaded.key.should eq(unique_key)
     loaded.messages.size.should eq(2)
     loaded.messages[0].content.should eq("test message")
     loaded.messages[1].content.should eq("response")
@@ -156,5 +177,94 @@ describe Autobot::Session::Manager do
     manager.delete("delete:me").should be_false # Already deleted
   ensure
     FileUtils.rm_rf(tmp) if tmp
+  end
+
+  describe "#list_sessions" do
+    it "preserves canonical session keys with underscores" do
+      tmp = TestHelper.tmp_dir
+      manager = Autobot::Session::Manager.new(workspace: tmp)
+
+      session = manager.get_or_create("telegram:user_12345")
+      session.add_message("user", "hello")
+      manager.save(session)
+
+      sessions = manager.list_sessions
+      sessions.size.should eq(1)
+      sessions.first["key"].should eq("telegram:user_12345")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "falls back to filename substitution for legacy session files without key in metadata" do
+      tmp = TestHelper.tmp_dir
+      manager = Autobot::Session::Manager.new(workspace: tmp)
+
+      # Create a legacy session file without "key" in the metadata header
+      sessions_dir = tmp / "sessions"
+      Dir.mkdir_p(sessions_dir)
+      legacy_path = sessions_dir / "legacy_session_1.jsonl"
+      File.write(legacy_path, <<-JSON
+        {"_type":"metadata","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","metadata":{}}
+        {"role":"user","content":"legacy message","timestamp":"2026-01-01T00:00:00Z"}
+        JSON
+      )
+
+      sessions = manager.list_sessions
+      sessions.size.should eq(1)
+      sessions.first["key"].should eq("legacy:session:1")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "handles null or empty key in metadata without raising TypeCastError" do
+      tmp = TestHelper.tmp_dir
+      manager = Autobot::Session::Manager.new(workspace: tmp)
+
+      sessions_dir = tmp / "sessions"
+      Dir.mkdir_p(sessions_dir)
+      null_key_path = sessions_dir / "session_with_null_key.jsonl"
+      File.write(null_key_path, <<-JSON
+        {"_type":"metadata","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","key":null,"metadata":{}}
+        {"role":"user","content":"test","timestamp":"2026-01-01T00:00:00Z"}
+        JSON
+      )
+
+      empty_key_path = sessions_dir / "session_with_empty_key.jsonl"
+      File.write(empty_key_path, <<-JSON
+        {"_type":"metadata","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","key":"","metadata":{}}
+        {"role":"user","content":"test","timestamp":"2026-01-01T00:00:00Z"}
+        JSON
+      )
+
+      sessions = manager.list_sessions
+      sessions.size.should eq(2)
+      keys = sessions.map { |entry| entry["key"] }
+      keys.should contain("session:with:null:key")
+      keys.should contain("session:with:empty:key")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe "#get_or_create cache synchronization" do
+    it "synchronizes cache when loaded session canonical key differs from query key" do
+      tmp = TestHelper.tmp_dir
+      manager = Autobot::Session::Manager.new(workspace: tmp)
+
+      # Save a session whose canonical key is telegram:user_123
+      session = manager.get_or_create("telegram:user_123")
+      session.add_message("user", "test")
+      manager.save(session)
+
+      # In a fresh manager instance, load via colon key which maps to telegram_user_123.jsonl
+      manager2 = Autobot::Session::Manager.new(workspace: tmp)
+      loaded = manager2.get_or_create("telegram:user:123")
+      loaded.key.should eq("telegram:user_123")
+
+      # Both keys should return the exact same in-memory session reference
+      manager2.get_or_create("telegram:user_123").should be(loaded)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
   end
 end

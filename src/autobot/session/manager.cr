@@ -1,4 +1,5 @@
 require "json"
+require "log"
 require "./session"
 
 module Autobot
@@ -21,6 +22,7 @@ module Autobot
 
         session = load(key) || Session.new(key: key)
         @cache[key] = session
+        @cache[session.key] = session if session.key != key
         session
       end
 
@@ -34,6 +36,7 @@ module Autobot
 
         File.open(path, "w") do |session_file|
           meta = Metadata.new(
+            key: session.key,
             created_at: session.created_at.to_rfc3339,
             updated_at: session.updated_at.to_rfc3339,
             metadata: session.metadata
@@ -74,12 +77,12 @@ module Autobot
             next unless first_line
 
             data = JSON.parse(first_line)
-            next unless data["_type"]?.try(&.as_s) == "metadata"
+            next unless data["_type"]?.try(&.as_s?) == "metadata"
 
             sessions << {
-              "key"        => Path[path].stem.gsub("_", ":"),
-              "created_at" => data["created_at"]?.try(&.as_s) || "",
-              "updated_at" => data["updated_at"]?.try(&.as_s) || "",
+              "key"        => data["key"]?.try(&.as_s?).presence || Path[path].stem.gsub("_", ":"),
+              "created_at" => data["created_at"]?.try(&.as_s?) || "",
+              "updated_at" => data["updated_at"]?.try(&.as_s?) || "",
               "path"       => path,
             }
           rescue
@@ -107,6 +110,7 @@ module Autobot
           messages = [] of Message
           meta_hash = {} of String => JSON::Any
           created_at : Time? = nil
+          canonical_key : String? = nil
 
           File.each_line(path) do |line|
             line = line.strip
@@ -114,8 +118,9 @@ module Autobot
 
             data = JSON.parse(line)
 
-            if data["_type"]?.try(&.as_s) == "metadata"
-              if ca = data["created_at"]?.try(&.as_s)
+            if data["_type"]?.try(&.as_s?) == "metadata"
+              canonical_key = data["key"]?.try(&.as_s?).presence
+              if ca = data["created_at"]?.try(&.as_s?)
                 created_at = Time.parse_rfc3339(ca)
               end
               if md = data["metadata"]?
@@ -127,7 +132,7 @@ module Autobot
           end
 
           Session.new(
-            key: key,
+            key: canonical_key || key,
             messages: messages,
             created_at: created_at || Time.utc,
             metadata: meta_hash
