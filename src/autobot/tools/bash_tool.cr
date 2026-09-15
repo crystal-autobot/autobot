@@ -9,29 +9,35 @@ module Autobot
     # A tool that wraps a bash script found in a skills directory.
     #
     # Bash tools are auto-discovered from skills/ directories. Each executable
-    # `.sh` file becomes a tool the agent can invoke. The script receives
+    # `.sh` or `.bash` file becomes a tool the agent can invoke. The script receives
     # arguments as positional parameters and environment variables: the
     # parameters its SKILL.md declares, in order, or the split `args` string.
     class BashTool < Tool
       Log = ::Log.for(self)
 
-      SCRIPT_TIMEOUT = 30
+      SCRIPT_EXTENSIONS = {".sh", ".bash"}
+      SCRIPT_TIMEOUT    = 30
 
       getter script_path : String
       getter params : Array(Agent::SkillParam)
       @tool_name : String
       @tool_description : String
 
+      def self.script_name(filename : String) : String?
+        ext = File.extname(filename)
+        File.basename(filename, ext) if SCRIPT_EXTENSIONS.includes?(ext)
+      end
+
       def initialize(
         @executor : SandboxExecutor,
         @script_path : String,
-        @tool_name : String? = nil,
-        @tool_description : String? = nil,
+        tool_name : String? = nil,
+        tool_description : String? = nil,
         @params = [] of Agent::SkillParam,
       )
-        base = File.basename(@script_path, ".sh")
-        @tool_name ||= "bash_#{base}"
-        @tool_description ||= "Run the '#{base}' bash script."
+        base = BashTool.script_name(@script_path) || File.basename(@script_path)
+        @tool_name = tool_name || "bash_#{base}"
+        @tool_description = tool_description || "Run the '#{base}' bash script."
       end
 
       def name : String
@@ -151,11 +157,11 @@ module Autobot
 
         entries = Dir.entries(dir).reject { |e| e == "." || e == ".." }.sort!
         entries.each do |entry|
-          next unless entry.ends_with?(".sh")
+          next unless name = BashTool.script_name(entry)
 
           script_path = "#{dir}/#{entry}"
           desc = extract_description(script_path)
-          tool_name = derive_tool_name(entry)
+          tool_name = derive_tool_name(name)
 
           Log.debug { "Found bash tool: #{tool_name} -> #{script_path}" }
           tools << BashTool.new(
@@ -169,7 +175,8 @@ module Autobot
       end
 
       def self.declared_params(dir : String, entry : String) : Array(Agent::SkillParam)
-        skill_file = "#{dir}/#{File.basename(entry, ".sh")}/SKILL.md"
+        name = BashTool.script_name(entry) || entry
+        skill_file = "#{dir}/#{name}/SKILL.md"
         return [] of Agent::SkillParam unless File.exists?(skill_file)
 
         Agent::SkillsLoader.parse_frontmatter(File.read(skill_file)).params
@@ -192,11 +199,11 @@ module Autobot
       end
 
       private def self.default_description(script_path : String) : String
-        "Run the '#{File.basename(script_path, ".sh")}' bash script."
+        name = BashTool.script_name(script_path) || File.basename(script_path)
+        "Run the '#{name}' bash script."
       end
 
-      private def self.derive_tool_name(filename : String) : String
-        name = filename.sub(/\.sh$/, "")
+      private def self.derive_tool_name(name : String) : String
         "bash_#{name}"
       end
     end
