@@ -10,11 +10,15 @@ module Autobot
       end
     end
 
+    # One declared parameter of the tool a skill script provides.
+    record SkillParam, name : String, description : String
+
     # Parsed frontmatter metadata from a SKILL.md file.
     struct SkillMetadata
       property description : String?
       property? always : Bool
       property tool : String?
+      property params : Array(SkillParam)
       property requires_bins : Array(String)
       property requires_env : Array(String)
       property raw : Hash(String, String)
@@ -23,6 +27,7 @@ module Autobot
         @description = nil,
         @always = false,
         @tool = nil,
+        @params = [] of SkillParam,
         @requires_bins = [] of String,
         @requires_env = [] of String,
         @raw = {} of String => String,
@@ -156,7 +161,7 @@ module Autobot
         content = load_skill(name)
         return SkillMetadata.new unless content
 
-        parse_frontmatter(content)
+        SkillsLoader.parse_frontmatter(content)
       end
 
       # Build a tool_name -> skill_name mapping by scanning all available skills once.
@@ -169,25 +174,20 @@ module Autobot
         cache
       end
 
-      private def parse_frontmatter(content : String) : SkillMetadata
+      PARAMS_KEY = "params"
+
+      def self.parse_frontmatter(content : String) : SkillMetadata
         return SkillMetadata.new unless content.starts_with?("---")
 
         if match = content.match(/\A---\n(.*?)\n---/m)
-          raw = {} of String => String
-          match[1].split("\n").each do |line|
-            if colon_idx = line.index(':')
-              key = line[0...colon_idx].strip
-              value = line[(colon_idx + 1)..].strip.strip('"').strip('\'')
-              raw[key] = value
-            end
-          end
-
+          raw, params = parse_lines(match[1].split("\n"))
           bins, env = parse_requires(raw["metadata"]?)
 
           SkillMetadata.new(
             description: raw["description"]?,
             always: raw["always"]? == "true",
             tool: raw["tool"]?,
+            params: params,
             requires_bins: bins,
             requires_env: env,
             raw: raw
@@ -197,7 +197,27 @@ module Autobot
         end
       end
 
-      private def parse_requires(metadata_json : String?) : {Array(String), Array(String)}
+      private def self.parse_lines(lines : Array(String)) : {Hash(String, String), Array(SkillParam)}
+        raw = {} of String => String
+        params = [] of SkillParam
+        in_params = false
+        lines.each do |line|
+          colon_idx = line.index(':')
+          next unless colon_idx
+          key = line[0...colon_idx].strip
+          value = line[(colon_idx + 1)..].strip.strip('"').strip('\'')
+          indented = line.starts_with?(' ') || line.starts_with?('\t')
+          if in_params && indented
+            params << SkillParam.new(key, value)
+          else
+            in_params = key == PARAMS_KEY && value.empty?
+            raw[key] = value
+          end
+        end
+        {raw, params}
+      end
+
+      private def self.parse_requires(metadata_json : String?) : {Array(String), Array(String)}
         empty = {[] of String, [] of String}
         return empty unless metadata_json
 

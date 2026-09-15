@@ -87,6 +87,33 @@ describe Autobot::Agent::SkillsLoader do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  it "parses declared tool parameters in order" do
+    tmp = TestHelper.tmp_dir
+    skills_dir = tmp / "skills" / "query"
+    Dir.mkdir_p(skills_dir)
+    File.write(skills_dir / "SKILL.md", <<-MD
+    ---
+    name: query
+    tool: bash_query
+    params:
+      sql: one read-only statement
+      limit: max rows
+    always: true
+    ---
+
+    # Query
+    MD
+    )
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: tmp / "no_builtin")
+    meta = loader.get_skill_metadata("query")
+    meta.params.map { |param| {param.name, param.description} }.should eq([{"sql", "one read-only statement"}, {"limit", "max rows"}])
+    meta.tool.should eq("bash_query")
+    meta.always?.should be_true
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "returns default metadata for skill without frontmatter" do
     tmp = TestHelper.tmp_dir
     skills_dir = tmp / "skills" / "plain"
