@@ -1,5 +1,6 @@
 require "../config/validator"
 require "../tools/sandbox"
+require "../tools/bash_tool"
 require "../mcp/proxy_tool"
 
 module Autobot
@@ -214,7 +215,12 @@ module Autobot
       private def self.skill_tool_names(config : Config::Config) : Array(String)
         [config.workspace_path / "skills", Config::Loader.skills_dir].flat_map do |dir|
           next [] of String unless Dir.exists?(dir)
-          Dir.children(dir).select(&.ends_with?(".sh")).map { |file| "bash_#{file.rchop(".sh")}" }
+          Dir.children(dir).compact_map do |file|
+            next unless Tools::BashToolDiscovery.valid_script?(file)
+            next unless File.file?(Path[dir, file])
+
+            Tools::BashToolDiscovery.derive_tool_name(file)
+          end
         end
       end
 

@@ -670,6 +670,49 @@ describe Autobot::CLI::Doctor do
       FileUtils.rm_rf(workspace) if workspace
     end
 
+    it "accepts .bash skill scripts as known tools" do
+      workspace = TestHelper.tmp_dir("doctor-bash-skills")
+      Dir.mkdir_p(workspace / "skills")
+      File.write(workspace / "skills" / "deploy.bash", "#!/usr/bin/bash\necho deploy")
+      config = make_config(<<-YAML
+      agents:
+        defaults:
+          workspace: "#{workspace}"
+      tools:
+        enabled: [bash_deploy, read_file]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0).should eq(0)
+        io.to_s.should_not contain("match no known tool")
+      end
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "ignores hidden scripts in skills directory when validating tools" do
+      workspace = TestHelper.tmp_dir("doctor-hidden-skills")
+      Dir.mkdir_p(workspace / "skills")
+      File.write(workspace / "skills" / ".hidden.bash", "#!/usr/bin/bash\necho hidden")
+      config = make_config(<<-YAML
+      agents:
+        defaults:
+          workspace: "#{workspace}"
+      tools:
+        enabled: [bash_hidden, read_file]
+      YAML
+      )
+
+      with_doctor_io do |io|
+        Autobot::CLI::Doctor.check_tools(config, 0).should eq(1)
+        io.to_s.should contain("bash_hidden")
+        io.to_s.should contain("match no known tool")
+      end
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
     it "does not warn when an MCP server has no tool list" do
       config = make_config(<<-YAML
       tools:

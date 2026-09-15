@@ -8,7 +8,7 @@ module Autobot
     # A tool that wraps a bash script found in a skills directory.
     #
     # Bash tools are auto-discovered from skills/ directories. Each executable
-    # `.sh` file becomes a tool the agent can invoke. The script receives
+    # `.sh` or `.bash` file becomes a tool the agent can invoke. The script receives
     # arguments as positional parameters and environment variables.
     class BashTool < Tool
       Log = ::Log.for(self)
@@ -19,10 +19,28 @@ module Autobot
       @tool_name : String
       @tool_description : String
 
-      def initialize(@executor : SandboxExecutor, @script_path : String, @tool_name : String? = nil, @tool_description : String? = nil)
-        base = File.basename(@script_path, ".sh")
-        @tool_name ||= "bash_#{base}"
-        @tool_description ||= "Run the '#{base}' bash script."
+      def self.strip_script_extension(filename : String) : String
+        if filename.ends_with?(".bash")
+          filename.rchop(".bash")
+        elsif filename.ends_with?(".sh")
+          filename.rchop(".sh")
+        else
+          filename
+        end
+      end
+
+      def self.valid_script?(filename : String) : Bool
+        !filename.starts_with?(".") && (filename.ends_with?(".sh") || filename.ends_with?(".bash"))
+      end
+
+      def self.derive_tool_name(filename : String) : String
+        "bash_#{strip_script_extension(filename)}"
+      end
+
+      def initialize(@executor : SandboxExecutor, @script_path : String, tool_name : String? = nil, tool_description : String? = nil)
+        base = BashTool.strip_script_extension(File.basename(@script_path))
+        @tool_name = tool_name || "bash_#{base}"
+        @tool_description = tool_description || "Run the '#{base}' bash script."
       end
 
       def name : String
@@ -128,13 +146,20 @@ module Autobot
       private def self.discover_in_dir(executor : SandboxExecutor, dir : String, tools : Array(BashTool)) : Nil
         return unless Dir.exists?(dir)
 
-        entries = Dir.entries(dir).reject { |e| e == "." || e == ".." }.sort!
+        entries = Dir.entries(dir).reject { |entry| entry == "." || entry == ".." }.sort!
         entries.each do |entry|
-          next unless entry.ends_with?(".sh")
+          next unless valid_script?(entry)
 
           script_path = "#{dir}/#{entry}"
-          desc = extract_description(script_path)
+          next unless File.file?(script_path)
+
           tool_name = derive_tool_name(entry)
+          if tools.any? { |tool| tool.name == tool_name }
+            Log.warn { "Duplicate skill tool '#{tool_name}' from #{script_path}, skipping" }
+            next
+          end
+
+          desc = extract_description(script_path)
 
           Log.debug { "Found bash tool: #{tool_name} -> #{script_path}" }
           tools << BashTool.new(
@@ -144,6 +169,14 @@ module Autobot
             tool_description: desc
           )
         end
+      end
+
+      def self.valid_script?(filename : String) : Bool
+        BashTool.valid_script?(filename)
+      end
+
+      def self.derive_tool_name(filename : String) : String
+        BashTool.derive_tool_name(filename)
       end
 
       private def self.extract_description(script_path : String) : String
@@ -161,12 +194,7 @@ module Autobot
       end
 
       private def self.default_description(script_path : String) : String
-        "Run the '#{File.basename(script_path, ".sh")}' bash script."
-      end
-
-      private def self.derive_tool_name(filename : String) : String
-        name = filename.sub(/\.sh$/, "")
-        "bash_#{name}"
+        "Run the '#{BashTool.strip_script_extension(File.basename(script_path))}' bash script."
       end
     end
   end
