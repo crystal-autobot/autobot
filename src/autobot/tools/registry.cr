@@ -129,7 +129,8 @@ module Autobot::Tools
 
         ToolResult.new(result.status, LogSanitizer.redact_credentials(result.content))
       rescue ex : Exception
-        error_msg = "Error executing #{name}"
+        details = LogSanitizer.redact_credentials(ex.message.presence || ex.class.name)
+        error_msg = "Error executing #{name}: #{details}"
         Log.error { error_msg }
         Log.error { ex.backtrace.join("\n") }
         ToolResult.error(error_msg)
