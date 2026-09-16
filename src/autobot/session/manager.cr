@@ -64,32 +64,6 @@ module Autobot
         end
       end
 
-      # List all sessions with metadata.
-      def list_sessions : Array(Hash(String, String))
-        sessions = [] of Hash(String, String)
-
-        Dir.glob(File.join(@sessions_dir, "*.jsonl")) do |path|
-          begin
-            first_line = File.open(path, &.gets)
-            next unless first_line
-
-            data = JSON.parse(first_line)
-            next unless data["_type"]?.try(&.as_s) == "metadata"
-
-            sessions << {
-              "key"        => Path[path].stem.gsub("_", ":"),
-              "created_at" => data["created_at"]?.try(&.as_s) || "",
-              "updated_at" => data["updated_at"]?.try(&.as_s) || "",
-              "path"       => path,
-            }
-          rescue
-            next
-          end
-        end
-
-        sessions.sort_by { |session_data| session_data["updated_at"] }.reverse!
-      end
-
       private def session_path(key : String) : String
         safe_key = safe_filename(key.gsub(":", "_"))
         File.join(@sessions_dir, "#{safe_key}.jsonl")
