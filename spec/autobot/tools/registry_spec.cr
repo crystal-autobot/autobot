@@ -48,6 +48,9 @@ class LeakyTool < Autobot::Tools::Tool
 end
 
 class FailingTool < Autobot::Tools::Tool
+  def initialize(@error : Exception = Exception.new("intentional failure"))
+  end
+
   def name : String
     "failing"
   end
@@ -61,7 +64,7 @@ class FailingTool < Autobot::Tools::Tool
   end
 
   def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
-    raise "intentional failure"
+    raise @error
   end
 end
 
@@ -141,12 +144,26 @@ describe Autobot::Tools::Registry do
     result.content.should contain("missing required parameter 'input'")
   end
 
-  it "handles tool execution failures gracefully" do
+  it "tells the agent why a tool raised" do
     registry = Autobot::Tools::Registry.new
     registry.register(FailingTool.new)
     result = registry.execute("failing", {} of String => JSON::Any)
     result.error?.should be_true
-    result.content.should contain("Error") # Generic for security
+    result.content.should eq("Error executing failing: intentional failure")
+  end
+
+  it "names the exception class when a raised error has no message" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(FailingTool.new(IO::Error.new))
+    result = registry.execute("failing", {} of String => JSON::Any)
+    result.content.should eq("Error executing failing: IO::Error")
+  end
+
+  it "redacts credentials from a raised error" do
+    registry = Autobot::Tools::Registry.new
+    registry.register(FailingTool.new(Exception.new("request failed: Bearer abc123secret")))
+    result = registry.execute("failing", {} of String => JSON::Any)
+    result.content.should eq("Error executing failing: request failed: Bearer [REDACTED]")
   end
 
   it "lists tool names" do
