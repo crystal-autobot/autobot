@@ -58,11 +58,33 @@ describe Autobot::Session::Session do
       Autobot::Session::Session::DEFAULT_MAX_HISTORY.should eq(25)
 
       session = Autobot::Session::Session.new(key: "test:1")
-      40.times { |i| session.add_message("user", "msg#{i}") }
+      37.times { |i| session.add_message("user", "msg#{i}") }
 
       history = session.get_history
       history.size.should eq(25)
-      history[0]["content"].should eq("msg15")
+      history[0]["content"].should eq("msg12")
+    end
+
+    it "moves the first message forward by half the cap at a time" do
+      session = Autobot::Session::Session.new(key: "test:1")
+      firsts = (0...49).map do |i|
+        session.add_message("user", "msg#{i}")
+        session.get_history.first["content"]
+      end
+
+      firsts[0..24].uniq.should eq(["msg0"])
+      firsts[25..36].uniq.should eq(["msg12"])
+      firsts[37..48].uniq.should eq(["msg24"])
+    end
+
+    it "keeps more than half the cap and never more than the cap" do
+      session = Autobot::Session::Session.new(key: "test:1")
+      100.times do |i|
+        session.add_message("user", "msg#{i}")
+        size = session.get_history(max_messages: 10).size
+        size.should be <= 10
+        size.should be >= Math.min(i + 1, 6)
+      end
     end
   end
 

@@ -63,19 +63,21 @@ module Autobot
 
       # Get message history for LLM context (role + content only).
       def get_history(max_messages : Int32 = DEFAULT_MAX_HISTORY) : Array(Hash(String, String))
-        recent = if @messages.size > max_messages
-                   @messages[-max_messages..]
-                 else
-                   @messages
-                 end
-
-        recent.map { |message| {"role" => message.role, "content" => message.content} }
+        @messages[history_start(max_messages)..].map { |message| {"role" => message.role, "content" => message.content} }
       end
 
       # Clear all messages.
       def clear : Nil
         @messages.clear
         @updated_at = Time.utc
+      end
+
+      private def history_start(max_messages : Int32) : Int32
+        overflow = @messages.size - max_messages
+        return 0 if overflow <= 0
+
+        step = Math.max(1, max_messages // 2)
+        (overflow + step - 1) // step * step
       end
     end
   end

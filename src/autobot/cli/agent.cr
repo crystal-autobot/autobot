@@ -131,9 +131,8 @@ module Autobot
         defaults = config.agents.try(&.defaults)
         max_tokens = defaults.try(&.max_tokens) || agent_defaults.max_tokens
         temperature = defaults.try(&.temperature) || agent_defaults.temperature
-        memory_window = defaults.try(&.memory_window) || agent_defaults.memory_window
 
-        messages = session.get_history(memory_window)
+        messages = session.get_history
         tools = tool_registry.definitions
 
         begin

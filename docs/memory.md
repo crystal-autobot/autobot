@@ -119,6 +119,7 @@ agents:
 
 - Consolidates after N messages
 - Keeps last 10 messages in full context
+- Sends at most the last 25 messages with each request; that window moves forward 12 messages at a time (see [Prompt caching](providers.md#prompt-caching))
 - Archives older messages as summaries
 
 ### Disable Consolidation
