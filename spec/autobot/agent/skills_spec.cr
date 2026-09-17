@@ -306,4 +306,29 @@ describe Autobot::Agent::SkillsLoader do
     FileUtils.rm_rf(tmp) if tmp
     FileUtils.rm_rf(builtin) if builtin
   end
+
+  it "parses frontmatter with CRLF line endings" do
+    content = "---\r\nname: deploy\r\ndescription: Deploy app\r\nalways: true\r\n---\r\n# Deploy Guide\r\nRun deploy."
+    meta = Autobot::Agent::SkillsLoader.parse_frontmatter(content)
+
+    meta.description.should eq("Deploy app")
+    meta.always?.should be_true
+  end
+
+  it "strips frontmatter with CRLF line endings when loading skill for context" do
+    content = "---\r\nname: deploy\r\ndescription: Deploy app\r\n---\r\n# Deploy Guide\r\nRun deploy."
+    tmp = TestHelper.tmp_dir
+    skills_dir = tmp / "skills" / "deploy"
+    Dir.mkdir_p(skills_dir)
+    File.write(skills_dir / "SKILL.md", content)
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: tmp / "no_builtin")
+    loaded = loader.load_skills_for_context(["deploy"])
+
+    loaded.should contain("# Deploy Guide")
+    loaded.should_not contain("name: deploy")
+    loaded.should_not contain("---")
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
 end
