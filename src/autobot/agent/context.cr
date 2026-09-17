@@ -30,15 +30,12 @@ module Autobot::Agent
         @skills = SkillsLoader.new(@workspace)
       end
 
-      def render_user_text(text : String, media : Array(Bus::MediaAttachment)?) : String
-        return text if media.nil? || media.empty?
-
-        blocks = media.map { |attachment| Attachments.render(attachment, @workspace_root) }
-        (text.empty? ? blocks : [text, *blocks]).join("\n\n")
+      def render_user_message(text : String, media : Array(Bus::MediaAttachment)?, now : Time = Time.utc) : String
+        with_current_time(render_user_text(text, media), now)
       end
 
-      def with_current_time(text : String) : String
-        note = "[Current time: #{Time.utc.to_s(TIMESTAMP_FORMAT)} (UTC)]"
+      def with_current_time(text : String, now : Time = Time.utc) : String
+        note = "[Current time: #{now.to_utc.to_s(TIMESTAMP_FORMAT)} (UTC)]"
         text.empty? ? note : "#{text}\n\n#{note}"
       end
 
@@ -53,6 +50,7 @@ module Autobot::Agent
         chat_id : String? = nil,
         background : Bool = false,
         tool_names : Array(String)? = nil,
+        now : Time = Time.utc,
       ) : Array(Hash(String, JSON::Any))
         messages = [] of Hash(String, JSON::Any)
 
@@ -79,7 +77,7 @@ module Autobot::Agent
         # Add current user message
         messages << {
           "role"    => JSON::Any.new(Constants::ROLE_USER),
-          "content" => build_user_content(current_message, media),
+          "content" => build_user_content(current_message, media, now),
         }
 
         messages
@@ -247,8 +245,15 @@ module Autobot::Agent
         IDENTITY
       end
 
-      private def build_user_content(text : String, media : Array(Bus::MediaAttachment)?) : JSON::Any
-        content = with_current_time(render_user_text(text, media))
+      private def render_user_text(text : String, media : Array(Bus::MediaAttachment)?) : String
+        return text if media.nil? || media.empty?
+
+        blocks = media.map { |attachment| Attachments.render(attachment, @workspace_root) }
+        (text.empty? ? blocks : [text, *blocks]).join("\n\n")
+      end
+
+      private def build_user_content(text : String, media : Array(Bus::MediaAttachment)?, now : Time) : JSON::Any
+        content = render_user_message(text, media, now)
         return JSON::Any.new(content) unless media && media.any?(&.data)
 
         build_multimodal_content(content, media)

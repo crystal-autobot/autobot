@@ -52,6 +52,17 @@ describe Autobot::Agent::Context::Builder do
       end
     end
 
+    it "renders the user message with the given time, as build_messages sends it" do
+      builder = Autobot::Agent::Context::Builder.new(workspace)
+      now = Time.utc(2026, 9, 17, 10, 0, 59)
+
+      messages = builder.build_messages(history: [] of Hash(String, String), current_message: "Hello", now: now)
+
+      expected = "Hello\n\n[Current time: 2026-09-17 10:00 (Thursday) (UTC)]"
+      messages.last["content"].as_s.should eq(expected)
+      builder.render_user_message("Hello", nil, now).should eq(expected)
+    end
+
     it "adds the current time to the text block of multimodal content" do
       builder = Autobot::Agent::Context::Builder.new(workspace)
       media = [Autobot::Bus::MediaAttachment.new(type: "photo", mime_type: "image/jpeg", data: "imgdata")]

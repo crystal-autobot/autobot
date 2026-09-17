@@ -19,7 +19,8 @@ module Autobot::Agent
     DISABLED_MEMORY_WINDOW             =  0 # Setting memory_window to 0 disables consolidation
     MIN_KEEP_COUNT                     =  2 # Minimum messages to keep after consolidation
     MAX_KEEP_COUNT                     = 10 # Maximum messages to keep after consolidation
-    MAX_MESSAGES_WITHOUT_CONSOLIDATION = 10 # When consolidation is disabled, keep only this many messages
+    KEEP_COUNT_WITHOUT_CONSOLIDATION   = 10
+    MAX_MESSAGES_WITHOUT_CONSOLIDATION = KEEP_COUNT_WITHOUT_CONSOLIDATION * 2
 
     def initialize(
       @workspace : Path,
@@ -43,7 +44,7 @@ module Autobot::Agent
       return if session.messages.size <= MAX_MESSAGES_WITHOUT_CONSOLIDATION
 
       old_count = session.messages.size
-      session.messages = session.messages[-MAX_MESSAGES_WITHOUT_CONSOLIDATION..]
+      session.messages = session.messages[-KEEP_COUNT_WITHOUT_CONSOLIDATION..]
       @sessions.save(session)
       Log.info { "Memory consolidation disabled - trimmed session from #{old_count} to #{session.messages.size} messages" }
     end

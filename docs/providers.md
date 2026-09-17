@@ -97,7 +97,8 @@ The only exception is voice transcription, which requires Groq or OpenAI (see ab
 
 Most providers can reuse work for a prompt that starts exactly like an earlier one, and they bill those cached tokens at a lower price. Autobot keeps the start of each request the same across turns and inside a tool loop, so the cache can be hit:
 
-- The system prompt holds no clock. The current date and time (UTC) go at the end of the current user message, and the session history keeps only the user's own words.
+- The system prompt holds no clock. The current date and time (UTC) go at the end of the current user message, and the session stores that message exactly as it was sent, time line included. Each request of the next turn starts with the exact text of the previous turn's first request.
+- With `memory_window: 0`, the session is trimmed in chunks: once it holds more than 20 messages, it drops to the last 10. The start of the history stays the same for several turns instead of moving on every turn.
 - Skills are listed in name order, and long-term memory comes after the skills. On providers that cache by prefix (OpenAI, DeepSeek), a memory update does not undo the cached skills. Anthropic and Gemini cache the system prompt as one block, so any change to it, memory included, writes that block again.
 - Every step of a tool loop sends the same full tool list. A tool result longer than 20,000 characters is cut once, when it is added, and earlier tool results are never shortened or rewritten after that.
 
