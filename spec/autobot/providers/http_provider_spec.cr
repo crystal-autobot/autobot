@@ -69,6 +69,33 @@ class TestableHttpProvider < Autobot::Providers::HttpProvider
   end
 end
 
+private def cache_mark_paths(node : JSON::Any, path : String = "") : Array(String)
+  if hash = node.as_h?
+    hash.flat_map do |key, value|
+      key == "cache_control" ? [path] : cache_mark_paths(value, "#{path}.#{key}")
+    end
+  elsif array = node.as_a?
+    array.each_with_index.flat_map { |item, index| cache_mark_paths(item, "#{path}[#{index}]") }.to_a
+  else
+    [] of String
+  end
+end
+
+private def chat_message(role : String, content : String) : Hash(String, JSON::Any)
+  {"role" => JSON::Any.new(role), "content" => JSON::Any.new(content)}
+end
+
+private def cache_test_tools : Array(Hash(String, JSON::Any))
+  [{
+    "type"     => JSON::Any.new("function"),
+    "function" => JSON::Any.new({
+      "name"        => JSON::Any.new("read_file"),
+      "description" => JSON::Any.new("Read a file"),
+      "parameters"  => JSON::Any.new({} of String => JSON::Any),
+    } of String => JSON::Any),
+  } of String => JSON::Any]
+end
+
 # HttpProvider is tested via response parsing since actual HTTP calls require a server.
 # These tests validate the response parsing logic using JSON fixtures.
 describe Autobot::Providers::HttpProvider do
@@ -328,23 +355,187 @@ describe Autobot::Providers::HttpProvider do
       result[0]["cache_control"]?.should be_nil
     end
 
-    it "parses cache tokens from Anthropic usage" do
+    it "counts cached Anthropic input as prompt tokens" do
       body = %({"type":"message","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":80,"cache_read_input_tokens":20}})
       response = provider.test_parse_anthropic_response(body)
 
-      response.usage.prompt_tokens.should eq(100)
+      response.usage.prompt_tokens.should eq(200)
+      response.usage.total_tokens.should eq(250)
       response.usage.cache_creation_tokens.should eq(80)
       response.usage.cache_read_tokens.should eq(20)
-      response.usage.cached?.should be_true
     end
 
     it "handles missing cache tokens gracefully" do
       body = %({"type":"message","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":50,"output_tokens":25}})
       response = provider.test_parse_anthropic_response(body)
 
+      response.usage.prompt_tokens.should eq(50)
       response.usage.cache_creation_tokens.should eq(0)
       response.usage.cache_read_tokens.should eq(0)
-      response.usage.cached?.should be_false
+    end
+
+    it "parses OpenAI cached and cache write tokens" do
+      body = %({"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2785,"completion_tokens":21,"total_tokens":2806,"prompt_tokens_details":{"cached_tokens":2688,"cache_write_tokens":64}}})
+      usage = provider.test_parse_compatible_response(body).usage
+
+      usage.prompt_tokens.should eq(2785)
+      usage.cache_read_tokens.should eq(2688)
+      usage.cache_creation_tokens.should eq(64)
+    end
+
+    it "parses DeepSeek cache hit tokens" do
+      body = %({"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1200,"completion_tokens":10,"total_tokens":1210,"prompt_cache_hit_tokens":1024,"prompt_cache_miss_tokens":176}})
+      usage = provider.test_parse_compatible_response(body).usage
+
+      usage.prompt_tokens.should eq(1200)
+      usage.cache_read_tokens.should eq(1024)
+    end
+
+    it "tolerates null prompt token details" do
+      body = %({"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1,"total_tokens":6,"prompt_tokens_details":null}})
+      usage = provider.test_parse_compatible_response(body).usage
+
+      usage.prompt_tokens.should eq(5)
+      usage.cache_read_tokens.should eq(0)
+      usage.cache_creation_tokens.should eq(0)
+    end
+
+    it "asks Anthropic to cache the conversation with top-level cache_control" do
+      anthropic = TestableHttpProvider.new(api_key: api_key, model: "anthropic/claude-sonnet-4-5")
+      anthropic.chat([{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}])
+
+      body = anthropic.last_api_body.should_not be_nil
+      body["cache_control"]["type"].as_s.should eq("ephemeral")
+    end
+
+    it "marks the last history message before the current user message" do
+      anthropic = TestableHttpProvider.new(api_key: api_key, model: "anthropic/claude-sonnet-4-5")
+      anthropic.chat([
+        chat_message("system", "You are a test assistant."),
+        chat_message("user", "first question"),
+        chat_message("assistant", "first answer"),
+        chat_message("user", "second question\n\nCurrent time: 2026-09-17 10:00 UTC"),
+      ], tools: cache_test_tools)
+
+      body = anthropic.last_api_body.should_not be_nil
+      cache_mark_paths(body).sort.should eq(["", ".messages[1].content[0]", ".system[0]", ".tools[0]"])
+      body["messages"][1]["content"][0]["text"].as_s.should eq("first answer")
+      body["messages"][2]["content"].as_s.should start_with("second question")
+    end
+
+    it "keeps the history mark in place during a tool loop" do
+      anthropic = TestableHttpProvider.new(api_key: api_key, model: "anthropic/claude-sonnet-4-5")
+      tool_call = JSON::Any.new({
+        "id"       => JSON::Any.new("tc_1"),
+        "type"     => JSON::Any.new("function"),
+        "function" => JSON::Any.new({
+          "name"      => JSON::Any.new("read_file"),
+          "arguments" => JSON::Any.new(%({"path":"a.cr"})),
+        } of String => JSON::Any),
+      } of String => JSON::Any)
+      anthropic.chat([
+        chat_message("system", "You are a test assistant."),
+        chat_message("user", "first question"),
+        chat_message("assistant", "first answer"),
+        chat_message("user", "second question"),
+        chat_message("assistant", "").merge({"tool_calls" => JSON::Any.new([tool_call])}),
+        chat_message("tool", "file body").merge({"tool_call_id" => JSON::Any.new("tc_1")}),
+      ], tools: cache_test_tools)
+
+      body = anthropic.last_api_body.should_not be_nil
+      cache_mark_paths(body).sort.should eq(["", ".messages[1].content[0]", ".system[0]", ".tools[0]"])
+    end
+
+    it "adds no history mark when there is no history" do
+      anthropic = TestableHttpProvider.new(api_key: api_key, model: "anthropic/claude-sonnet-4-5")
+      anthropic.chat([
+        chat_message("system", "You are a test assistant."),
+        chat_message("user", "only question"),
+      ], tools: cache_test_tools)
+
+      body = anthropic.last_api_body.should_not be_nil
+      cache_mark_paths(body).sort.should eq(["", ".system[0]", ".tools[0]"])
+    end
+  end
+
+  describe "prompt_cache_key" do
+    messages = [{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}]
+    expected_key = Digest::SHA256.hexdigest("telegram:42")
+
+    it "sends a hashed session key to OpenAI" do
+      provider = TestableHttpProvider.new(api_key: api_key, model: "openai/gpt-5-mini", provider_name: "openai")
+      provider.chat(messages, session_key: "telegram:42")
+
+      body = provider.last_api_body.should_not be_nil
+      body["prompt_cache_key"].as_s.should eq(expected_key)
+    end
+
+    it "sends a hashed session key to OpenRouter" do
+      provider = TestableHttpProvider.new(api_key: "sk-or-test", model: "openrouter/anthropic/claude-sonnet-4-5", provider_name: "openrouter")
+      provider.chat(messages, session_key: "telegram:42")
+
+      body = provider.last_api_body.should_not be_nil
+      body["prompt_cache_key"].as_s.should eq(expected_key)
+    end
+
+    it "sends the key to OpenAI at its default api_base" do
+      provider = TestableHttpProvider.new(api_key: api_key, api_base: "https://api.openai.com/v1", model: "gpt-5-mini", provider_name: "openai")
+      provider.chat(messages, session_key: "telegram:42")
+
+      body = provider.last_api_body.should_not be_nil
+      body["prompt_cache_key"].as_s.should eq(expected_key)
+    end
+
+    it "omits the key when OpenAI uses a custom api_base" do
+      {
+        "https://my-resource.openai.azure.com/openai/v1",
+        "http://localhost:4000/v1",
+      }.each do |base|
+        provider = TestableHttpProvider.new(api_key: api_key, api_base: base, model: "gpt-5-mini", provider_name: "openai")
+        provider.chat(messages, session_key: "telegram:42")
+
+        body = provider.last_api_body.should_not be_nil
+        body["prompt_cache_key"]?.should be_nil
+      end
+    end
+
+    it "sends the key to OpenRouter at its api_base" do
+      provider = TestableHttpProvider.new(api_key: "sk-or-test", api_base: "https://openrouter.ai/api/v1", model: "anthropic/claude-sonnet-4-5", provider_name: "openrouter")
+      provider.chat(messages, session_key: "telegram:42")
+
+      body = provider.last_api_body.should_not be_nil
+      body["prompt_cache_key"].as_s.should eq(expected_key)
+    end
+
+    it "omits the key when no session key is given" do
+      provider = TestableHttpProvider.new(api_key: api_key, model: "openai/gpt-5-mini", provider_name: "openai")
+      provider.chat(messages)
+
+      body = provider.last_api_body.should_not be_nil
+      body["prompt_cache_key"]?.should be_nil
+    end
+
+    it "omits the key for other OpenAI-compatible providers" do
+      {
+        {"deepseek", "deepseek/deepseek-chat", nil},
+        {"groq", "groq/openai/gpt-oss-120b", "https://api.groq.com/openai/v1"},
+        {"vllm", "vllm/gpt-oss-20b", "http://localhost:8000/v1"},
+        {"aihubmix", "gpt-5-mini", "https://aihubmix.com/v1"},
+      }.each do |name, model, base|
+        provider = TestableHttpProvider.new(api_key: api_key, api_base: base, model: model, provider_name: name)
+        provider.chat(messages, session_key: "telegram:42")
+
+        body = provider.last_api_body.should_not be_nil
+        body["prompt_cache_key"]?.should be_nil
+      end
+    end
+
+    it "omits the key for Anthropic" do
+      provider = TestableHttpProvider.new(api_key: api_key, model: "anthropic/claude-sonnet-4-5", provider_name: "anthropic")
+      provider.chat(messages, session_key: "telegram:42")
+
+      body = provider.last_api_body.should_not be_nil
+      body["prompt_cache_key"]?.should be_nil
     end
   end
 

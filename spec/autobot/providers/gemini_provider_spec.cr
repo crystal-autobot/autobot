@@ -4,9 +4,23 @@ class TestableGeminiProvider < Autobot::Providers::GeminiProvider
   def test_map_messages_to_native(messages)
     map_messages_to_native(messages)
   end
+
+  def test_parse_native_response(body : String)
+    parse_native_response(body)
+  end
 end
 
 describe Autobot::Providers::GeminiProvider do
+  it "reads cached content tokens from usage metadata" do
+    provider = TestableGeminiProvider.new(api_key: "test_key", model: "gemini-3.7-flash")
+    body = %({"candidates":[{"content":{"role":"model","parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5000,"candidatesTokenCount":10,"totalTokenCount":5010,"cachedContentTokenCount":4096}})
+
+    usage = provider.test_parse_native_response(body).usage
+
+    usage.prompt_tokens.should eq(5000)
+    usage.cache_read_tokens.should eq(4096)
+  end
+
   it "maps multimodal text and image blocks to native inlineData parts" do
     provider = TestableGeminiProvider.new(api_key: "test_key", model: "gemini-3.7-flash")
 

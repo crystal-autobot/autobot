@@ -3,6 +3,7 @@ require "../../spec_helper"
 # Mock provider that returns a simple text response (no tool calls).
 class MockProvider < Autobot::Providers::HttpProvider
   getter call_count = 0
+  getter sent_bodies = [] of String
 
   def initialize(@response_content : String = "Mock response", @responses : Array(String)? = nil)
     super(api_key: "test-key", model: "mock-model")
@@ -11,6 +12,7 @@ class MockProvider < Autobot::Providers::HttpProvider
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     @call_count += 1
+    @sent_bodies << body
     if responses = @responses
       resp = responses[@response_index]? || responses.last
       @response_index += 1
@@ -327,6 +329,25 @@ describe Autobot::Agent::Loop do
       user_turn = sessions.get_or_create("telegram:user1").get_history.first["content"]
       user_turn.should start_with("Add to notes\n\n<attachment type=\"audio\"")
       user_turn.should contain("the dealer offered a discount")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "sends the current time with the user message but stores only the user's words" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      provider = MockProvider.new
+      loop_inst = create_test_loop(workspace: tmp, provider: provider, sessions: sessions)
+
+      ["First", "Second"].each do |text|
+        loop_inst.test_process_message(Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "user1", chat_id: "chat1", content: text))
+      end
+
+      sent = provider.sent_bodies.map { |body| JSON.parse(body)["messages"].as_a }
+      sent[0][0].should eq(sent[1][0])
+      sent[1][1]["content"].as_s.should eq("First")
+      sent[1].last["content"].as_s.should match(/\ASecond\n\n\[Current time: .+ \(UTC\)\]\z/)
+      sessions.get_or_create("telegram:chat1").get_history.map(&.["content"]).should eq(["First", "Mock response", "Second", "Mock response"])
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

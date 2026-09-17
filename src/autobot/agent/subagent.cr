@@ -155,8 +155,8 @@ module Autobot
 
       private def build_initial_messages(task : String) : Array(Hash(String, JSON::Any))
         [
-          {"role" => JSON::Any.new(Constants::ROLE_SYSTEM), "content" => JSON::Any.new(build_subagent_prompt(task))},
-          {"role" => JSON::Any.new(Constants::ROLE_USER), "content" => JSON::Any.new(task)},
+          {"role" => JSON::Any.new(Constants::ROLE_SYSTEM), "content" => JSON::Any.new(build_subagent_prompt)},
+          {"role" => JSON::Any.new(Constants::ROLE_USER), "content" => JSON::Any.new(@context.with_current_time(task))},
         ]
       end
 
@@ -192,14 +192,9 @@ module Autobot
         Log.debug { "Subagent [#{task_id}] announced result to #{origin["channel"]}:#{origin["chat_id"]}" }
       end
 
-      private def build_subagent_prompt(task : String) : String
-        now = Time.utc.to_s("%Y-%m-%d %H:%M (%A)")
-
+      private def build_subagent_prompt : String
         <<-PROMPT
         # Subagent
-
-        ## Current Time
-        #{now} (UTC)
 
         You are a subagent spawned by the main agent to complete a specific task.
 

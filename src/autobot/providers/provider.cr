@@ -25,17 +25,11 @@ module Autobot
         model : String? = nil,
         max_tokens : Int32 = DEFAULT_MAX_TOKENS,
         temperature : Float64 = DEFAULT_TEMPERATURE,
+        session_key : String? = nil,
       ) : Response
 
       # The default model identifier for this provider.
       abstract def default_model : String
-
-      # Whether this provider benefits from progressive tool disclosure.
-      # Providers with caching (like Gemini) should disable this so the
-      # tool schemas remain stable and don't bust the cache.
-      def supports_progressive_disclosure? : Bool
-        true
-      end
 
       private def parse_data_uri(url : String) : {String, String}?
         return unless url.starts_with?(DATA_URI_PREFIX) && url.includes?(BASE64_URI_SEPARATOR)

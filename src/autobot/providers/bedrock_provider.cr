@@ -58,6 +58,7 @@ module Autobot::Providers
       model : String? = nil,
       max_tokens : Int32 = DEFAULT_MAX_TOKENS,
       temperature : Float64 = DEFAULT_TEMPERATURE,
+      session_key : String? = nil,
     ) : Response
       effective_model = strip_prefix(model || @model)
       body = build_request_body(messages, tools, max_tokens, temperature)
@@ -239,12 +240,16 @@ module Autobot::Providers
 
     private def parse_bedrock_usage(node : JSON::Any?) : TokenUsage
       return TokenUsage.new unless node
-      input = node["inputTokens"]?.try(&.as_i?) || 0
+      cache_read = node["cacheReadInputTokens"]?.try(&.as_i?) || 0
+      cache_write = node["cacheWriteInputTokens"]?.try(&.as_i?) || 0
+      prompt = (node["inputTokens"]?.try(&.as_i?) || 0) + cache_read + cache_write
       output = node["outputTokens"]?.try(&.as_i?) || 0
       TokenUsage.new(
-        prompt_tokens: input,
+        prompt_tokens: prompt,
         completion_tokens: output,
-        total_tokens: node["totalTokens"]?.try(&.as_i?) || (input + output),
+        total_tokens: node["totalTokens"]?.try(&.as_i?) || (prompt + output),
+        cache_creation_tokens: cache_write,
+        cache_read_tokens: cache_read,
       )
     end
 

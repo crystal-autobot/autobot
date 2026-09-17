@@ -42,16 +42,6 @@ describe Autobot::Providers::TokenUsage do
     )
     usage.cache_creation_tokens.should eq(80)
     usage.cache_read_tokens.should eq(0)
-    usage.cached?.should be_true
-  end
-
-  it "reports not cached when no cache tokens" do
-    usage = Autobot::Providers::TokenUsage.new(
-      prompt_tokens: 100,
-      completion_tokens: 50,
-      total_tokens: 150,
-    )
-    usage.cached?.should be_false
   end
 end
 

@@ -1,11 +1,14 @@
 require "../../spec_helper"
 
 private class MockSubagentProvider < Autobot::Providers::HttpProvider
+  getter sent_bodies = [] of String
+
   def initialize
     super(api_key: "test-key", model: "mock-model")
   end
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
+    @sent_bodies << body
     HTTP::Client::Response.new(200, body: %({"choices":[{"message":{"content":"Subagent finished"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}))
   end
 end
@@ -77,6 +80,26 @@ private class TrackingSubagentManager < Autobot::Agent::SubagentManager
 end
 
 describe Autobot::Agent::SubagentManager do
+  it "gives the current time in the task message, not the system prompt" do
+    tmp = TestHelper.tmp_dir
+    provider = MockSubagentProvider.new
+    manager = TrackingSubagentManager.new(
+      provider: provider,
+      workspace: tmp,
+      bus: Autobot::Bus::MessageBus.new(capacity: 10),
+      sandbox_config: "none",
+    )
+
+    manager.spawn("Summarize logs")
+    manager.completed.receive
+
+    messages = JSON.parse(provider.sent_bodies.first)["messages"].as_a
+    messages[0]["content"].as_s.should_not match(/\d{2}:\d{2}/)
+    messages[1]["content"].as_s.should match(/\ASummarize logs\n\n\[Current time: .+ \(UTC\)\]\z/)
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "tracks running task count while subagent is running and cleans up on completion" do
     tmp = TestHelper.tmp_dir
     bus = Autobot::Bus::MessageBus.new(capacity: 10)

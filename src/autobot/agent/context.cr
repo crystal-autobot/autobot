@@ -37,6 +37,11 @@ module Autobot::Agent
         (text.empty? ? blocks : [text, *blocks]).join("\n\n")
       end
 
+      def with_current_time(text : String) : String
+        note = "[Current time: #{Time.utc.to_s(TIMESTAMP_FORMAT)} (UTC)]"
+        text.empty? ? note : "#{text}\n\n#{note}"
+      end
+
       # Build complete message array for LLM.
       # When `background` is true, uses a minimal system prompt (no formatting rules,
       # skills summary, or session info) to reduce token usage for background tasks.
@@ -148,10 +153,6 @@ module Autobot::Agent
         bootstrap = load_bootstrap_files
         parts << bootstrap unless bootstrap.empty?
 
-        # Memory context
-        memory_ctx = @memory.memory_context
-        parts << "# Memory\n\n#{memory_ctx}" unless memory_ctx.empty?
-
         # Auto-loaded skills: always=true + tool-linked skills
         auto_skills = @skills.always_skills
         if tool_names && !tool_names.empty?
@@ -178,6 +179,9 @@ module Autobot::Agent
             SKILLS
           end
         end
+
+        memory_ctx = @memory.memory_context
+        parts << "# Memory\n\n#{memory_ctx}" unless memory_ctx.empty?
 
         parts.join("\n\n---\n\n")
       end
@@ -207,16 +211,14 @@ module Autobot::Agent
       end
 
       # Minimal identity for background tasks (cron turns, subagent work).
-      # Keeps: time, workspace, security. Drops: formatting, conversation rules, skills hints.
+      # Keeps: workspace, security. Drops: formatting, conversation rules, skills hints.
       private def background_identity_section : String
-        now = Time.utc.to_s(TIMESTAMP_FORMAT)
         workspace_path = @workspace.expand(home: true).to_s
 
         <<-IDENTITY
         # autobot (background task)
 
         You are Autobot, executing a scheduled background task.
-        Current time: #{now} (UTC)
         Workspace: #{workspace_path}
         #{build_security_policy(workspace_path)}
         #{ATTACHMENT_RULE}
@@ -224,13 +226,12 @@ module Autobot::Agent
       end
 
       private def identity_section : String
-        now = Time.utc.to_s(TIMESTAMP_FORMAT)
         workspace_path = @workspace.expand(home: true).to_s
 
         <<-IDENTITY
         # autobot
 
-        You are Autobot, an AI agent. Time: #{now} (UTC). Workspace: #{workspace_path}
+        You are Autobot, an AI agent. Workspace: #{workspace_path}
 
         Key files: memory/MEMORY.md (long-term), memory/HISTORY.md (grep-searchable log), skills/*/SKILL.md
         #{build_security_policy(workspace_path)}
@@ -247,7 +248,7 @@ module Autobot::Agent
       end
 
       private def build_user_content(text : String, media : Array(Bus::MediaAttachment)?) : JSON::Any
-        content = render_user_text(text, media)
+        content = with_current_time(render_user_text(text, media))
         return JSON::Any.new(content) unless media && media.any?(&.data)
 
         build_multimodal_content(content, media)

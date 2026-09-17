@@ -25,10 +25,6 @@ module Autobot
       def zero? : Bool
         total_tokens == 0
       end
-
-      def cached? : Bool
-        cache_creation_tokens > 0 || cache_read_tokens > 0
-      end
     end
 
     # A tool/function call requested by the LLM.

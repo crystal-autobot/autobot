@@ -1,3 +1,4 @@
+require "digest/sha256"
 require "http/client"
 require "json"
 require "uri"
@@ -30,6 +31,7 @@ module Autobot
       getter extra_headers : Hash(String, String)
 
       @gateway : ProviderSpec?
+      @named_spec : ProviderSpec?
 
       def initialize(
         api_key : String,
@@ -40,6 +42,7 @@ module Autobot
       )
         super(api_key, api_base)
         @gateway = Providers.find_gateway(provider_name, api_key, api_base)
+        @named_spec = provider_name.try { |name| Providers.find_by_name(name) }
       end
 
       def default_model : String
@@ -52,6 +55,7 @@ module Autobot
         model : String? = nil,
         max_tokens : Int32 = DEFAULT_MAX_TOKENS,
         temperature : Float64 = DEFAULT_TEMPERATURE,
+        session_key : String? = nil,
       ) : Response
         effective_model = model || @model
         spec = resolve_spec(effective_model)
@@ -60,7 +64,7 @@ module Autobot
         if anthropic_native?(spec, effective_model)
           chat_anthropic(messages, tools, bare_model, max_tokens, temperature, spec)
         else
-          chat_compatible(messages, tools, bare_model, max_tokens, temperature, spec)
+          chat_compatible(messages, tools, bare_model, max_tokens, temperature, spec, session_key)
         end
       rescue ex
         Log.error { "LLM request failed: #{ex.message}" }
@@ -72,9 +76,9 @@ module Autobot
       # OpenAI-compatible (standard) request
       # -----------------------------------------------------------------
       private def chat_compatible(
-        messages, tools, model, max_tokens, temperature, spec,
+        messages, tools, model, max_tokens, temperature, spec, session_key,
       ) : Response
-        body = build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
+        body = build_compatible_body(messages, tools, model, max_tokens, temperature, spec, session_key)
         url = resolve_url(spec)
 
         headers = HTTP::Headers{
@@ -88,7 +92,7 @@ module Autobot
         parse_compatible_response(response)
       end
 
-      private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
+      private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec, session_key)
         token_param = max_tokens_param_name(model, spec)
         effective_messages = maybe_merge_system_role(messages, spec)
 
@@ -111,7 +115,33 @@ module Autobot
           body["tool_choice"] = JSON::Any.new("auto")
         end
 
+        apply_prompt_cache_key(body, spec, session_key)
         body
+      end
+
+      private def apply_prompt_cache_key(body, spec : ProviderSpec?, session_key : String?) : Nil
+        return unless session_key
+        return unless prompt_cache_key_supported?(spec)
+
+        body["prompt_cache_key"] = JSON::Any.new(Digest::SHA256.hexdigest(session_key))
+      end
+
+      private def prompt_cache_key_supported?(spec : ProviderSpec?) : Bool
+        if gateway = @gateway
+          return gateway.supports_prompt_cache_key?
+        end
+
+        target = @named_spec || spec
+        return false unless target && target.supports_prompt_cache_key?
+
+        official_endpoint?(target)
+      end
+
+      private def official_endpoint?(spec : ProviderSpec) : Bool
+        return true unless base = @api_base
+
+        base_host = URI.parse(base).host.try(&.downcase)
+        !base_host.nil? && base_host == URI.parse(spec.api_url).host.try(&.downcase)
       end
 
       private def parse_compatible_response(response : HTTP::Client::Response) : Response
@@ -186,6 +216,7 @@ module Autobot
           body["tool_choice"] = JSON::Any.new({"type" => JSON::Any.new("auto")} of String => JSON::Any)
         end
 
+        body["cache_control"] = ephemeral_cache_control
         body
       end
 
@@ -205,13 +236,47 @@ module Autobot
           JSON::Any.new({
             "type"          => JSON::Any.new("text"),
             "text"          => JSON::Any.new(text),
-            "cache_control" => JSON::Any.new({"type" => JSON::Any.new("ephemeral")} of String => JSON::Any),
+            "cache_control" => ephemeral_cache_control,
           } of String => JSON::Any),
         ]
       end
 
+      private def ephemeral_cache_control : JSON::Any
+        JSON::Any.new({"type" => JSON::Any.new("ephemeral")} of String => JSON::Any)
+      end
+
       private def convert_to_anthropic_messages(messages) : Array(JSON::Any)
-        reject_system_messages(messages).map { |message| convert_single_anthropic_message(message) }
+        conversation = reject_system_messages(messages)
+        converted = conversation.map { |message| convert_single_anthropic_message(message) }
+        mark_history_end(converted, conversation)
+        converted
+      end
+
+      private def mark_history_end(converted : Array(JSON::Any), conversation : Array(Hash(String, JSON::Any))) : Nil
+        current_index = conversation.rindex { |message| message["role"]?.try(&.as_s?) == Constants::ROLE_USER }
+        return unless current_index && current_index > 0
+
+        history_end = current_index - 1
+        converted[history_end] = with_cache_control_on_last_block(converted[history_end])
+      end
+
+      private def with_cache_control_on_last_block(message : JSON::Any) : JSON::Any
+        blocks = anthropic_content_blocks(message["content"]? || JSON::Any.new(""))
+        return message if blocks.empty?
+
+        apply_cache_control_to_last(blocks)
+        updated = message.as_h.dup
+        updated["content"] = JSON::Any.new(blocks)
+        JSON::Any.new(updated)
+      end
+
+      private def anthropic_content_blocks(content : JSON::Any) : Array(JSON::Any)
+        if text = content.as_s?
+          return [] of JSON::Any if text.empty?
+          return [JSON::Any.new({"type" => JSON::Any.new("text"), "text" => JSON::Any.new(text)} of String => JSON::Any)]
+        end
+
+        content.as_a?.try(&.dup) || [] of JSON::Any
       end
 
       private def convert_single_anthropic_message(message : Hash(String, JSON::Any)) : JSON::Any
@@ -339,7 +404,7 @@ module Autobot
         return unless hash = last_item.as_h?
 
         updated = hash.dup
-        updated["cache_control"] = JSON::Any.new({"type" => JSON::Any.new("ephemeral")} of String => JSON::Any)
+        updated["cache_control"] = ephemeral_cache_control
         items[-1] = JSON::Any.new(updated)
       end
 
@@ -628,23 +693,28 @@ module Autobot
 
       private def parse_usage(node : JSON::Any?) : TokenUsage
         return TokenUsage.new unless node
+        details = node["prompt_tokens_details"]?.try(&.as_h?)
+        cache_read = details.try(&.["cached_tokens"]?) || node["prompt_cache_hit_tokens"]?
+        cache_write = details.try(&.["cache_write_tokens"]?)
         TokenUsage.new(
           prompt_tokens: node["prompt_tokens"]?.try(&.as_i?) || 0,
           completion_tokens: node["completion_tokens"]?.try(&.as_i?) || 0,
           total_tokens: node["total_tokens"]?.try(&.as_i?) || 0,
+          cache_creation_tokens: cache_write.try(&.as_i?) || 0,
+          cache_read_tokens: cache_read.try(&.as_i?) || 0,
         )
       end
 
       private def parse_anthropic_usage(node : JSON::Any?) : TokenUsage
         return TokenUsage.new unless node
-        input = node["input_tokens"]?.try(&.as_i?) || 0
-        output = node["output_tokens"]?.try(&.as_i?) || 0
         cache_creation = node["cache_creation_input_tokens"]?.try(&.as_i?) || 0
         cache_read = node["cache_read_input_tokens"]?.try(&.as_i?) || 0
+        prompt = (node["input_tokens"]?.try(&.as_i?) || 0) + cache_creation + cache_read
+        output = node["output_tokens"]?.try(&.as_i?) || 0
         TokenUsage.new(
-          prompt_tokens: input,
+          prompt_tokens: prompt,
           completion_tokens: output,
-          total_tokens: input + output,
+          total_tokens: prompt + output,
           cache_creation_tokens: cache_creation,
           cache_read_tokens: cache_read,
         )
