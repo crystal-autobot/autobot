@@ -9,8 +9,8 @@ class SequenceMockProvider < Autobot::Providers::HttpProvider
   getter call_count : Int32 = 0
   getter sent_bodies : Array(String) = [] of String
 
-  def initialize(@responses : Array(String), provider_name : String? = nil)
-    super(api_key: "test-key", model: "mock-model", provider_name: provider_name)
+  def initialize(@responses : Array(String))
+    super(api_key: "test-key", model: "mock-model")
   end
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
@@ -127,14 +127,14 @@ class MessageMockTool < Autobot::Tools::Tool
   end
 end
 
-private def build_executor(provider : Autobot::Providers::Provider, max_iterations : Int32 = 20) : Autobot::Agent::ToolExecutor
+private def build_executor(provider : Autobot::Providers::Provider, max_iterations : Int32 = 20, model : String = "mock-model") : Autobot::Agent::ToolExecutor
   workspace = TestHelper.tmp_dir("tool_executor_test")
   context = Autobot::Agent::Context::Builder.new(workspace)
 
   Autobot::Agent::ToolExecutor.new(
     provider: provider,
     context: context,
-    model: "mock-model",
+    model: model,
     max_iterations: max_iterations
   )
 end
@@ -434,22 +434,13 @@ describe Autobot::Agent::ToolExecutor do
       provider = SequenceMockProvider.new([
         tool_call_response("echo", "tc_1", %({"text":"a"})),
         text_response("Done"),
-      ], provider_name: "openai")
-      executor = build_executor(provider)
+      ])
+      executor = build_executor(provider, model: "gpt-5-mini")
 
       executor.execute(build_messages, create_echo_tool, session_key: "telegram:42")
 
       keys = provider.sent_bodies.map { |body| JSON.parse(body)["prompt_cache_key"].as_s }
       keys.should eq([Digest::SHA256.hexdigest("telegram:42")] * 2)
-    end
-
-    it "sends no prompt cache key without a session key" do
-      provider = SequenceMockProvider.new([text_response("Done")], provider_name: "openai")
-      executor = build_executor(provider)
-
-      executor.execute(build_messages, create_echo_tool)
-
-      JSON.parse(provider.sent_bodies.first)["prompt_cache_key"]?.should be_nil
     end
   end
 end

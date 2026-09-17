@@ -459,80 +459,45 @@ describe Autobot::Providers::HttpProvider do
   end
 
   describe "prompt_cache_key" do
-    messages = [{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}]
-    expected_key = Digest::SHA256.hexdigest("telegram:42")
+    messages = [chat_message("user", "hi")]
 
-    it "sends a hashed session key to OpenAI" do
-      provider = TestableHttpProvider.new(api_key: api_key, model: "openai/gpt-5-mini", provider_name: "openai")
-      provider.chat(messages, session_key: "telegram:42")
-
-      body = provider.last_api_body.should_not be_nil
-      body["prompt_cache_key"].as_s.should eq(expected_key)
-    end
-
-    it "sends a hashed session key to OpenRouter" do
-      provider = TestableHttpProvider.new(api_key: "sk-or-test", model: "openrouter/anthropic/claude-sonnet-4-5", provider_name: "openrouter")
-      provider.chat(messages, session_key: "telegram:42")
-
-      body = provider.last_api_body.should_not be_nil
-      body["prompt_cache_key"].as_s.should eq(expected_key)
-    end
-
-    it "sends the key to OpenAI at its default api_base" do
-      provider = TestableHttpProvider.new(api_key: api_key, api_base: "https://api.openai.com/v1", model: "gpt-5-mini", provider_name: "openai")
-      provider.chat(messages, session_key: "telegram:42")
-
-      body = provider.last_api_body.should_not be_nil
-      body["prompt_cache_key"].as_s.should eq(expected_key)
-    end
-
-    it "omits the key when OpenAI uses a custom api_base" do
+    it "sends a hashed session key to OpenAI and OpenRouter at their own endpoints" do
       {
-        "https://my-resource.openai.azure.com/openai/v1",
-        "http://localhost:4000/v1",
-      }.each do |base|
-        provider = TestableHttpProvider.new(api_key: api_key, api_base: base, model: "gpt-5-mini", provider_name: "openai")
+        {"openai", "openai/gpt-5-mini", api_key, nil},
+        {"openai", "gpt-5-mini", api_key, "https://api.openai.com/v1"},
+        {"openrouter", "openrouter/anthropic/claude-sonnet-4-5", "sk-or-test", nil},
+        {"openrouter", "anthropic/claude-sonnet-4-5", "sk-or-test", "https://openrouter.ai/api/v1"},
+      }.each do |name, model, key, base|
+        provider = TestableHttpProvider.new(api_key: key, api_base: base, model: model, provider_name: name)
+        provider.chat(messages, session_key: "telegram:42")
+
+        body = provider.last_api_body.should_not be_nil
+        body["prompt_cache_key"].as_s.should eq(Digest::SHA256.hexdigest("telegram:42"))
+      end
+    end
+
+    it "omits the key for custom endpoints and other providers" do
+      {
+        {"openai", "gpt-5-mini", api_key, "https://my-resource.openai.azure.com/openai/v1"},
+        {"openai", "gpt-5-mini", api_key, "http://localhost:4000/v1"},
+        {"openrouter", "anthropic/claude-sonnet-4-5", "sk-or-test", "https://openrouter-proxy.example.com/v1"},
+        {"deepseek", "deepseek/deepseek-chat", api_key, nil},
+        {"groq", "groq/openai/gpt-oss-120b", api_key, "https://api.groq.com/openai/v1"},
+        {"vllm", "vllm/gpt-oss-20b", api_key, "http://localhost:8000/v1"},
+        {"aihubmix", "gpt-5-mini", api_key, "https://aihubmix.com/v1"},
+        {"anthropic", "anthropic/claude-sonnet-4-5", api_key, nil},
+      }.each do |name, model, key, base|
+        provider = TestableHttpProvider.new(api_key: key, api_base: base, model: model, provider_name: name)
         provider.chat(messages, session_key: "telegram:42")
 
         body = provider.last_api_body.should_not be_nil
         body["prompt_cache_key"]?.should be_nil
       end
-    end
-
-    it "sends the key to OpenRouter at its api_base" do
-      provider = TestableHttpProvider.new(api_key: "sk-or-test", api_base: "https://openrouter.ai/api/v1", model: "anthropic/claude-sonnet-4-5", provider_name: "openrouter")
-      provider.chat(messages, session_key: "telegram:42")
-
-      body = provider.last_api_body.should_not be_nil
-      body["prompt_cache_key"].as_s.should eq(expected_key)
     end
 
     it "omits the key when no session key is given" do
       provider = TestableHttpProvider.new(api_key: api_key, model: "openai/gpt-5-mini", provider_name: "openai")
       provider.chat(messages)
-
-      body = provider.last_api_body.should_not be_nil
-      body["prompt_cache_key"]?.should be_nil
-    end
-
-    it "omits the key for other OpenAI-compatible providers" do
-      {
-        {"deepseek", "deepseek/deepseek-chat", nil},
-        {"groq", "groq/openai/gpt-oss-120b", "https://api.groq.com/openai/v1"},
-        {"vllm", "vllm/gpt-oss-20b", "http://localhost:8000/v1"},
-        {"aihubmix", "gpt-5-mini", "https://aihubmix.com/v1"},
-      }.each do |name, model, base|
-        provider = TestableHttpProvider.new(api_key: api_key, api_base: base, model: model, provider_name: name)
-        provider.chat(messages, session_key: "telegram:42")
-
-        body = provider.last_api_body.should_not be_nil
-        body["prompt_cache_key"]?.should be_nil
-      end
-    end
-
-    it "omits the key for Anthropic" do
-      provider = TestableHttpProvider.new(api_key: api_key, model: "anthropic/claude-sonnet-4-5", provider_name: "anthropic")
-      provider.chat(messages, session_key: "telegram:42")
 
       body = provider.last_api_body.should_not be_nil
       body["prompt_cache_key"]?.should be_nil

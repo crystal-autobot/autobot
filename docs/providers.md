@@ -104,7 +104,7 @@ Most providers can reuse work for a prompt that starts exactly like an earlier o
 
 What autobot adds per provider:
 
-- **OpenAI and OpenRouter** get a `prompt_cache_key` with a hash of the chat session, which helps send a chat's requests to the same cache. OpenAI gets it only when `api_base` is unset or points to `api.openai.com`, so self-hosted servers, Azure and proxies do not receive it. Other OpenAI-compatible providers do not get this field.
+- **OpenAI and OpenRouter** get a `prompt_cache_key` with a hash of the chat session, which helps send a chat's requests to the same cache. They get it only when the request goes to the provider's own host (`api.openai.com` or `openrouter.ai`), so self-hosted servers, Azure and proxies do not receive it. Other OpenAI-compatible providers do not get this field.
 - **Anthropic** gets up to four cache marks: the system prompt, the tool list, the last history message before the current user message (so the conversation up to the previous turn is reused on the next turn), and the end of the request (so each step of a tool loop reuses the one before it).
 - **Gemini** uses its own context cache, see [Gemini](gemini.md).
 - Other providers cache on their own when they support it.

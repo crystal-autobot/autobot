@@ -31,7 +31,6 @@ module Autobot
       getter extra_headers : Hash(String, String)
 
       @gateway : ProviderSpec?
-      @named_spec : ProviderSpec?
 
       def initialize(
         api_key : String,
@@ -42,7 +41,6 @@ module Autobot
       )
         super(api_key, api_base)
         @gateway = Providers.find_gateway(provider_name, api_key, api_base)
-        @named_spec = provider_name.try { |name| Providers.find_by_name(name) }
       end
 
       def default_model : String
@@ -78,8 +76,9 @@ module Autobot
       private def chat_compatible(
         messages, tools, model, max_tokens, temperature, spec, session_key,
       ) : Response
-        body = build_compatible_body(messages, tools, model, max_tokens, temperature, spec, session_key)
+        body = build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
         url = resolve_url(spec)
+        apply_prompt_cache_key(body, spec, url, session_key)
 
         headers = HTTP::Headers{
           "Content-Type" => "application/json",
@@ -92,7 +91,7 @@ module Autobot
         parse_compatible_response(response)
       end
 
-      private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec, session_key)
+      private def build_compatible_body(messages, tools, model, max_tokens, temperature, spec)
         token_param = max_tokens_param_name(model, spec)
         effective_messages = maybe_merge_system_role(messages, spec)
 
@@ -115,33 +114,19 @@ module Autobot
           body["tool_choice"] = JSON::Any.new("auto")
         end
 
-        apply_prompt_cache_key(body, spec, session_key)
         body
       end
 
-      private def apply_prompt_cache_key(body, spec : ProviderSpec?, session_key : String?) : Nil
-        return unless session_key
-        return unless prompt_cache_key_supported?(spec)
+      private def apply_prompt_cache_key(body, spec : ProviderSpec?, url : String, session_key : String?) : Nil
+        return unless session_key && spec && spec.supports_prompt_cache_key?
+        return unless official_endpoint?(url, spec)
 
         body["prompt_cache_key"] = JSON::Any.new(Digest::SHA256.hexdigest(session_key))
       end
 
-      private def prompt_cache_key_supported?(spec : ProviderSpec?) : Bool
-        if gateway = @gateway
-          return gateway.supports_prompt_cache_key?
-        end
-
-        target = @named_spec || spec
-        return false unless target && target.supports_prompt_cache_key?
-
-        official_endpoint?(target)
-      end
-
-      private def official_endpoint?(spec : ProviderSpec) : Bool
-        return true unless base = @api_base
-
-        base_host = URI.parse(base).host.try(&.downcase)
-        !base_host.nil? && base_host == URI.parse(spec.api_url).host.try(&.downcase)
+      private def official_endpoint?(url : String, spec : ProviderSpec) : Bool
+        host = URI.parse(url).host.try(&.downcase)
+        !host.nil? && host == URI.parse(spec.api_url).host.try(&.downcase)
       end
 
       private def parse_compatible_response(response : HTTP::Client::Response) : Response
