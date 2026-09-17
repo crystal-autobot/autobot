@@ -232,8 +232,7 @@ module Autobot::Agent
     # Returns nil because cron turns deliver via the message tool explicitly.
     private def process_cron_message(msg : Bus::InboundMessage) : Nil
       origin_channel, origin_chat_id = msg.origin
-      session = @sessions.get_or_create("#{origin_channel}:#{origin_chat_id}")
-      @memory_manager.trim_if_disabled(session)
+      session = origin_session(origin_channel, origin_chat_id)
       update_tool_contexts(origin_channel, origin_chat_id)
       @message_tool.try(&.clear_last_sent)
 
@@ -269,8 +268,7 @@ module Autobot::Agent
     # Runs with full session history, saves the exchange, and returns a response.
     private def process_subagent_message(msg : Bus::InboundMessage) : Bus::OutboundMessage
       origin_channel, origin_chat_id = msg.origin
-      session = @sessions.get_or_create("#{origin_channel}:#{origin_chat_id}")
-      @memory_manager.trim_if_disabled(session)
+      session = origin_session(origin_channel, origin_chat_id)
       update_tool_contexts(origin_channel, origin_chat_id)
       sent_at = Time.utc
 
@@ -286,7 +284,7 @@ module Autobot::Agent
       result = @executor.execute(messages, @tools, session_key: session.key)
       final_content = result.content.presence || "Background task completed."
 
-      session.add_message(Constants::ROLE_USER, @context.render_user_message(msg.content, nil, sent_at))
+      session.add_message(Constants::ROLE_USER, @context.with_current_time(msg.content, sent_at))
       session.add_message(Constants::ROLE_ASSISTANT, final_content)
       @sessions.save(session)
 
@@ -361,6 +359,12 @@ module Autobot::Agent
 
       @message_tool.try(&.send_callback = send_cb)
       @image_tool.try(&.send_callback = send_cb)
+    end
+
+    private def origin_session(channel : String, chat_id : String) : Session::Session
+      session = @sessions.get_or_create("#{channel}:#{chat_id}")
+      @memory_manager.trim_if_disabled(session)
+      session
     end
 
     # Update tool contexts for current session.

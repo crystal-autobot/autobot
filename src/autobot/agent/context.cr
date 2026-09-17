@@ -30,7 +30,7 @@ module Autobot::Agent
         @skills = SkillsLoader.new(@workspace)
       end
 
-      def render_user_message(text : String, media : Array(Bus::MediaAttachment)?, now : Time = Time.utc) : String
+      def render_user_message(text : String, media : Array(Bus::MediaAttachment)?, now : Time) : String
         with_current_time(render_user_text(text, media), now)
       end
 
