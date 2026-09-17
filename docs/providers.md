@@ -92,3 +92,23 @@ All providers support the same autobot features:
 - All chat channels (Telegram, Slack, WhatsApp, Zulip, CLI)
 
 The only exception is voice transcription, which requires Groq or OpenAI (see above).
+
+## Prompt caching
+
+Most providers can reuse work for a prompt that starts exactly like an earlier one, and they bill those cached tokens at a lower price. Autobot keeps the start of each request the same across turns and inside a tool loop, so the cache can be hit:
+
+- The system prompt holds no clock. The current date and time (UTC) go at the end of the current user message, and the session stores that message exactly as it was sent, time line included. Each request of the next turn starts with the exact text of the previous turn's first request.
+- With `memory_window: 0`, the session is trimmed in chunks: once it holds more than 20 messages, it drops to the last 10. The start of the history stays the same for several turns instead of moving on every turn.
+- Skills are listed in name order, and long-term memory comes after the skills. On providers that cache by prefix (OpenAI, DeepSeek), a memory update does not undo the cached skills. Anthropic and Gemini cache the system prompt as one block, so any change to it, memory included, writes that block again.
+- Every step of a tool loop sends the same full tool list. A tool result longer than 20,000 characters is cut once, when it is added, and earlier tool results are never shortened or rewritten after that.
+
+What autobot adds per provider:
+
+- **OpenAI and OpenRouter** get a `prompt_cache_key` with a hash of the chat session, which helps send a chat's requests to the same cache. They get it only when the request goes to the provider's own host (`api.openai.com` or `openrouter.ai`), so self-hosted servers, Azure and proxies do not receive it. Other OpenAI-compatible providers do not get this field.
+- **Anthropic** gets up to four cache marks: the system prompt, the tool list, the last history message before the current user message (so the conversation up to the previous turn is reused on the next turn), and the end of the request (so each step of a tool loop reuses the one before it).
+- **Gemini** uses its own context cache, see [Gemini](gemini.md).
+- Other providers cache on their own when they support it.
+
+Each model call logs a `Tokens:` line with `cache_read` (tokens served from the cache) and `cache_create` (tokens written to the cache, when the provider reports them). Prompt tokens include cached tokens for every provider.
+
+Because tool results stay whole for the rest of a turn, a long tool loop with many large results sends more tokens than a short one. On providers with caching, most of those tokens are billed at the cached rate.

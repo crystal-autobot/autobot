@@ -74,8 +74,10 @@ class RefusingTool < Autobot::Tools::Tool
   end
 end
 
-# Tool that returns a large result for truncation tests.
 class LargeOutputTool < Autobot::Tools::Tool
+  def initialize(@size : Int32 = 1000)
+  end
+
   def name : String
     "read_file"
   end
@@ -94,7 +96,7 @@ class LargeOutputTool < Autobot::Tools::Tool
   end
 
   def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
-    Autobot::Tools::ToolResult.success("x" * 1000)
+    Autobot::Tools::ToolResult.success("x" * @size)
   end
 end
 
@@ -125,14 +127,14 @@ class MessageMockTool < Autobot::Tools::Tool
   end
 end
 
-private def build_executor(provider : Autobot::Providers::Provider, max_iterations : Int32 = 20) : Autobot::Agent::ToolExecutor
+private def build_executor(provider : Autobot::Providers::Provider, max_iterations : Int32 = 20, model : String = "mock-model") : Autobot::Agent::ToolExecutor
   workspace = TestHelper.tmp_dir("tool_executor_test")
   context = Autobot::Agent::Context::Builder.new(workspace)
 
   Autobot::Agent::ToolExecutor.new(
     provider: provider,
     context: context,
-    model: "mock-model",
+    model: model,
     max_iterations: max_iterations
   )
 end
@@ -367,86 +369,8 @@ describe Autobot::Agent::ToolExecutor do
     end
   end
 
-  describe "tool result truncation" do
-    it "truncates large tool results from old iterations" do
-      # 3 iterations: read_file (large) -> read_file (large) -> text response
-      provider = SequenceMockProvider.new([
-        tool_call_response("read_file", "tc_1", %({"path":"a.cr"})),
-        tool_call_response("read_file", "tc_2", %({"path":"b.cr"})),
-        text_response("Done"),
-      ])
-      executor = build_executor(provider)
-      tools = Autobot::Tools::Registry.new
-      tools.register(LargeOutputTool.new)
-
-      result = executor.execute(build_messages, tools)
-      result.content.should eq("Done")
-
-      # On the 3rd LLM call, the first iteration's tool result should be truncated.
-      # Parse the messages sent in the last request body.
-      last_body = JSON.parse(provider.sent_bodies.last)
-      messages = last_body["messages"].as_a
-
-      # Find tool result messages
-      tool_results = messages.select { |msg| msg["role"]?.try(&.as_s?) == "tool" }
-      tool_results.size.should eq(2)
-
-      # First tool result (old) should be truncated
-      first_result = tool_results[0]["content"].as_s
-      first_result.should contain("truncated")
-      first_result.should contain("read_file")
-
-      # Second tool result (recent) should be intact
-      second_result = tool_results[1]["content"].as_s
-      second_result.should eq("x" * 1000)
-    end
-
-    it "preserves small tool results even from old iterations" do
-      # 3 iterations with small results — nothing should be truncated
-      provider = SequenceMockProvider.new([
-        tool_call_response("echo", "tc_1", %({"text":"small"})),
-        tool_call_response("echo", "tc_2", %({"text":"also small"})),
-        text_response("Done"),
-      ])
-      executor = build_executor(provider)
-      tools = create_echo_tool
-
-      result = executor.execute(build_messages, tools)
-      result.content.should eq("Done")
-
-      last_body = JSON.parse(provider.sent_bodies.last)
-      messages = last_body["messages"].as_a
-
-      tool_results = messages.select { |msg| msg["role"]?.try(&.as_s?) == "tool" }
-      tool_results.each do |tool_result|
-        tool_result["content"].as_s.should_not contain("truncated")
-      end
-    end
-
-    it "does not truncate on first or second iteration" do
-      # 2 iterations: one tool call then text. No truncation should happen.
-      provider = SequenceMockProvider.new([
-        tool_call_response("read_file", "tc_1", %({"path":"a.cr"})),
-        text_response("Done"),
-      ])
-      executor = build_executor(provider)
-      tools = Autobot::Tools::Registry.new
-      tools.register(LargeOutputTool.new)
-
-      result = executor.execute(build_messages, tools)
-      result.content.should eq("Done")
-
-      # Second call should still have the full tool result
-      last_body = JSON.parse(provider.sent_bodies.last)
-      messages = last_body["messages"].as_a
-
-      tool_results = messages.select { |msg| msg["role"]?.try(&.as_s?) == "tool" }
-      tool_results.size.should eq(1)
-      tool_results[0]["content"].as_s.should eq("x" * 1000)
-    end
-
-    it "truncates multiple old iterations while keeping the latest" do
-      # 4 iterations: 3 tool calls then text
+  describe "stable request prefix" do
+    it "never rewrites earlier messages inside a tool loop" do
       provider = SequenceMockProvider.new([
         tool_call_response("read_file", "tc_1", %({"path":"a.cr"})),
         tool_call_response("read_file", "tc_2", %({"path":"b.cr"})),
@@ -457,64 +381,40 @@ describe Autobot::Agent::ToolExecutor do
       tools = Autobot::Tools::Registry.new
       tools.register(LargeOutputTool.new)
 
-      result = executor.execute(build_messages, tools)
-      result.content.should eq("Done")
+      executor.execute(build_messages, tools).content.should eq("Done")
 
-      last_body = JSON.parse(provider.sent_bodies.last)
-      messages = last_body["messages"].as_a
-
-      tool_results = messages.select { |msg| msg["role"]?.try(&.as_s?) == "tool" }
-      tool_results.size.should eq(3)
-
-      # First two (old iterations) should be truncated
-      tool_results[0]["content"].as_s.should contain("truncated")
-      tool_results[1]["content"].as_s.should contain("truncated")
-
-      # Last one (most recent iteration) should be intact
-      tool_results[2]["content"].as_s.should eq("x" * 1000)
+      sent = sent_messages(provider.sent_bodies)
+      sent.each_cons_pair do |earlier, later|
+        later[0, earlier.size].should eq(earlier)
+      end
+      tool_results = sent.last.select { |msg| msg["role"].as_s == "tool" }
+      tool_results.map(&.["content"].as_s).should eq(["x" * 1000] * 3)
     end
-  end
 
-  describe "progressive tool disclosure" do
-    it "sends full tool definitions on first iteration" do
+    it "caps an oversized tool result once and keeps it identical afterwards" do
+      max = Autobot::Agent::ToolExecutor::MAX_TOOL_RESULT_CHARS
       provider = SequenceMockProvider.new([
-        tool_call_response("echo", "tc_1", %({"text":"hi"})),
+        tool_call_response("read_file", "tc_1", %({"path":"big.log"})),
+        tool_call_response("read_file", "tc_2", %({"path":"small.log"})),
         text_response("Done"),
       ])
       executor = build_executor(provider)
-      tools = create_echo_tool
+      tools = Autobot::Tools::Registry.new
+      tools.register(LargeOutputTool.new(max + 5_000))
 
-      executor.execute(build_messages, tools)
+      executor.execute(build_messages, tools).content.should eq("Done")
 
-      # First call should include full tool description
-      first_body = JSON.parse(provider.sent_bodies.first)
-      tool_defs = first_body["tools"].as_a
-      tool_defs.size.should eq(1)
-      tool_defs[0]["function"]["description"].as_s.should eq("Echoes input back")
+      capped = "#{"x" * max}\n... (result truncated at #{max} of #{max + 5_000} chars)"
+      first_results = sent_messages(provider.sent_bodies).map do |messages|
+        messages.find { |msg| msg["role"].as_s == "tool" }.try(&.["content"].as_s)
+      end
+      first_results.should eq([nil, capped, capped])
     end
 
-    it "sends compact schemas for called tools on subsequent iterations" do
+    it "sends identical full tool definitions on every iteration" do
       provider = SequenceMockProvider.new([
         tool_call_response("echo", "tc_1", %({"text":"a"})),
-        tool_call_response("echo", "tc_2", %({"text":"b"})),
-        text_response("Done"),
-      ])
-      executor = build_executor(provider)
-      tools = create_echo_tool
-
-      executor.execute(build_messages, tools)
-
-      # Third call (after echo was called): echo should be compact
-      third_body = JSON.parse(provider.sent_bodies[2])
-      tool_defs = third_body["tools"].as_a
-      tool_defs.size.should eq(1)
-      tool_defs[0]["function"]["name"].as_s.should eq("echo")
-      tool_defs[0]["function"]["description"]?.should be_nil
-    end
-
-    it "keeps full schema for uncalled tools while compacting called ones" do
-      provider = SequenceMockProvider.new([
-        tool_call_response("echo", "tc_1", %({"text":"a"})),
+        tool_call_response("message", "tc_2", %({"content":"b"})),
         text_response("Done"),
       ])
       executor = build_executor(provider)
@@ -524,18 +424,22 @@ describe Autobot::Agent::ToolExecutor do
 
       executor.execute(build_messages, tools)
 
-      # Second call: echo was called, message was not
-      second_body = JSON.parse(provider.sent_bodies[1])
-      tool_defs = second_body["tools"].as_a
+      sent_tools = provider.sent_bodies.map { |body| JSON.parse(body)["tools"].to_json }
+      sent_tools.size.should eq(3)
+      sent_tools.uniq.should eq([tools.definitions.to_json])
+    end
 
-      echo_def = tool_defs.find! { |tool_def| tool_def["function"]["name"].as_s == "echo" }
-      message_def = tool_defs.find! { |tool_def| tool_def["function"]["name"].as_s == "message" }
+    it "sends a prompt cache key derived from the session key" do
+      provider = SequenceMockProvider.new([
+        tool_call_response("echo", "tc_1", %({"text":"a"})),
+        text_response("Done"),
+      ])
+      executor = build_executor(provider, model: "gpt-5-mini")
 
-      # Echo should be compact (no description)
-      echo_def["function"]["description"]?.should be_nil
+      executor.execute(build_messages, create_echo_tool, session_key: "telegram:42")
 
-      # Message should still have full description
-      message_def["function"]["description"].as_s.should eq("Send a message")
+      keys = provider.sent_bodies.map { |body| JSON.parse(body)["prompt_cache_key"].as_s }
+      keys.should eq([Digest::SHA256.hexdigest("telegram:42")] * 2)
     end
   end
 end

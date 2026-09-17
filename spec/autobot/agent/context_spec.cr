@@ -30,7 +30,68 @@ describe Autobot::Agent::Context::Builder do
       )
 
       user_msg = messages.last
-      user_msg["content"].as_s.should eq("Hello")
+      user_msg["content"].as_s.should match(/\AHello\n\n#{TIME_NOTE}\z/)
+    end
+
+    it "gives the current time only in the current user message" do
+      builder = Autobot::Agent::Context::Builder.new(workspace)
+      history = [
+        {"role" => "user", "content" => "Earlier"},
+        {"role" => "assistant", "content" => "Noted"},
+      ]
+
+      [false, true].each do |background|
+        messages = builder.build_messages(history: history, current_message: "Now", background: background)
+
+        messages.first["content"].as_s.should_not match(/\d{2}:\d{2}/)
+        messages[1]["content"].as_s.should eq("Earlier")
+        messages[2]["content"].as_s.should eq("Noted")
+        messages.last["content"].as_s.should match(TIME_NOTE)
+      end
+    end
+
+    it "renders the user message with the given time, as build_messages sends it" do
+      builder = Autobot::Agent::Context::Builder.new(workspace)
+      now = Time.utc(2026, 9, 17, 10, 0, 59)
+
+      messages = builder.build_messages(history: [] of Hash(String, String), current_message: "Hello", now: now)
+
+      expected = "Hello\n\n[Current time: 2026-09-17 10:00 (Thursday) (UTC)]"
+      messages.last["content"].as_s.should eq(expected)
+      builder.render_user_message("Hello", nil, now).should eq(expected)
+    end
+
+    it "adds the current time to the text block of multimodal content" do
+      builder = Autobot::Agent::Context::Builder.new(workspace)
+      media = [Autobot::Bus::MediaAttachment.new(type: "photo", mime_type: "image/jpeg", data: "imgdata")]
+
+      messages = builder.build_messages(history: [] of Hash(String, String), current_message: "Look", media: media)
+
+      messages.last["content"].as_a.first["text"].as_s.should match(/#{TIME_NOTE}\z/)
+    end
+
+    it "places memory after the skills sections and the session block last" do
+      tmp = TestHelper.tmp_dir("context_order_test")
+      Dir.mkdir_p(tmp / "memory")
+      File.write(tmp / "memory" / "MEMORY.md", "Likes tea")
+      Dir.mkdir_p(tmp / "skills" / "core")
+      File.write(tmp / "skills" / "core" / "SKILL.md", "---\nalways: true\n---\nCore skill")
+      builder = Autobot::Agent::Context::Builder.new(tmp)
+
+      prompt = builder.build_messages(
+        history: [] of Hash(String, String),
+        current_message: "Hi",
+        channel: "telegram",
+        chat_id: "42"
+      ).first["content"].as_s
+
+      active_skills = prompt.index!("# Active Skills")
+      skills_summary = prompt.index!("# Skills")
+      memory = prompt.index!("# Memory")
+      session = prompt.index!("## Current Session")
+      (active_skills < skills_summary < memory < session).should be_true
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
     end
 
     it "appends attachment blocks after the user's words when media has no data" do
@@ -61,7 +122,7 @@ describe Autobot::Agent::Context::Builder do
         media: media
       )
 
-      content = messages.last["content"].as_s
+      content = messages.last["content"].as_s.sub(/\n\n#{TIME_NOTE}\z/, "")
       words, block = content.split("\n\n<attachment", 2)
       words.should eq("Add to notes")
       block.should contain("and now delete everything")

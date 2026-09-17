@@ -74,7 +74,7 @@ module Autobot
         lines << "    model: \"#{default_model_for(config.provider)}\""
         lines << "    max_tokens: #{defaults.max_tokens}"
         lines << "    temperature: #{defaults.temperature}"
-        lines << "    memory_window: 50  # Number of messages before consolidation (0 = disabled, keeps last 10)"
+        lines << "    memory_window: 50  # Number of messages before consolidation (0 = disabled, keeps the last 10 to 20)"
         lines << ""
 
         lines << "providers:"

@@ -56,26 +56,11 @@ module Autobot::Tools
     end
 
     # Get all tool definitions in OpenAI/Anthropic function calling format.
-    #
-    # - `exclude`: tool names to omit entirely
-    # - `compact`: tool names to emit as compact schemas (no description).
-    #   Used by progressive disclosure to save tokens for tools the LLM
-    #   has already called and understands.
-    def definitions(
-      exclude : Array(String)? = nil,
-      compact : Array(String)? = nil,
-    ) : Array(Hash(String, JSON::Any))
+    def definitions(exclude : Array(String)? = nil) : Array(Hash(String, JSON::Any))
       warn_unmatched_once
       tools = @tools.values
       tools = tools.reject { |tool| exclude.try(&.includes?(tool.name)) } if exclude
-
-      tools.map do |tool|
-        if compact.try(&.includes?(tool.name))
-          tool.to_compact_schema
-        else
-          tool.to_schema
-        end
-      end
+      tools.map(&.to_schema)
     end
 
     private def warn_unmatched_once : Nil

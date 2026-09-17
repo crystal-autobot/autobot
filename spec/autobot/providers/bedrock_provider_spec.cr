@@ -1,5 +1,11 @@
 require "../../spec_helper"
 
+class TestableBedrockProvider < Autobot::Providers::BedrockProvider
+  def test_parse_response(body : String) : Autobot::Providers::Response
+    parse_response(body)
+  end
+end
+
 describe Autobot::Providers::BedrockProvider do
   access_key = "AKIAIOSFODNN7EXAMPLE"
   secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
@@ -41,6 +47,18 @@ describe Autobot::Providers::BedrockProvider do
   end
 
   describe "response parsing" do
+    it "counts cache read and write tokens as prompt tokens" do
+      provider = TestableBedrockProvider.new(access_key_id: access_key, secret_access_key: secret_key, region: region)
+      json = %({"output":{"message":{"role":"assistant","content":[{"text":"ok"}]}},"stopReason":"end_turn","usage":{"inputTokens":12,"outputTokens":30,"totalTokens":1554,"cacheReadInputTokens":1400,"cacheWriteInputTokens":112}})
+
+      usage = provider.test_parse_response(json).usage
+
+      usage.prompt_tokens.should eq(1524)
+      usage.total_tokens.should eq(1554)
+      usage.cache_read_tokens.should eq(1400)
+      usage.cache_creation_tokens.should eq(112)
+    end
+
     it "parses a text response" do
       json = <<-JSON
       {

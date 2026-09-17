@@ -81,6 +81,8 @@ module Autobot
           end
         end
 
+        skills.sort_by!(&.name)
+
         if filter_unavailable
           skills.select { |skill_info| check_requirements(get_skill_metadata(skill_info.name)) }
         else

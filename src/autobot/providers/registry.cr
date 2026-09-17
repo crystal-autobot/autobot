@@ -35,6 +35,8 @@ module Autobot
       # Whether the provider supports the "system" role in messages
       getter? supports_system_role : Bool
 
+      getter? supports_prompt_cache_key : Bool
+
       def initialize(
         @name,
         @keywords,
@@ -53,6 +55,7 @@ module Autobot
         @max_tokens_legacy_patterns = [] of String,
         @user_agent = nil,
         @supports_system_role = true,
+        @supports_prompt_cache_key = false,
       )
         @display_name = @name.capitalize if @display_name.empty?
       end
@@ -74,6 +77,7 @@ module Autobot
         gateway: true,
         detect_by_key_prefix: "sk-or-",
         detect_by_base_keyword: "openrouter",
+        supports_prompt_cache_key: true,
       ),
 
       ProviderSpec.new(
@@ -102,6 +106,7 @@ module Autobot
         api_url: "https://api.openai.com/v1/chat/completions",
         use_max_completion_tokens: true,
         max_tokens_legacy_patterns: ["gpt-4", "gpt-3"],
+        supports_prompt_cache_key: true,
       ),
 
       ProviderSpec.new(

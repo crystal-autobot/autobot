@@ -80,17 +80,7 @@ class SchemaDemoTool < Autobot::Tools::Tool
   end
 end
 
-describe "Tool#to_compact_schema" do
-  it "omits description from compact schema" do
-    tool = SchemaDemoTool.new
-    schema = tool.to_compact_schema
-    func = schema["function"]
-
-    func["name"].as_s.should eq("demo")
-    func["parameters"].should_not be_nil
-    func["description"]?.should be_nil
-  end
-
+describe "Tool#to_schema" do
   it "includes full description in regular schema" do
     tool = SchemaDemoTool.new
     schema = tool.to_schema

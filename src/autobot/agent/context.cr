@@ -30,11 +30,13 @@ module Autobot::Agent
         @skills = SkillsLoader.new(@workspace)
       end
 
-      def render_user_text(text : String, media : Array(Bus::MediaAttachment)?) : String
-        return text if media.nil? || media.empty?
+      def render_user_message(text : String, media : Array(Bus::MediaAttachment)?, now : Time) : String
+        with_current_time(render_user_text(text, media), now)
+      end
 
-        blocks = media.map { |attachment| Attachments.render(attachment, @workspace_root) }
-        (text.empty? ? blocks : [text, *blocks]).join("\n\n")
+      def with_current_time(text : String, now : Time = Time.utc) : String
+        note = "[Current time: #{now.to_utc.to_s(TIMESTAMP_FORMAT)} (UTC)]"
+        text.empty? ? note : "#{text}\n\n#{note}"
       end
 
       # Build complete message array for LLM.
@@ -48,6 +50,7 @@ module Autobot::Agent
         chat_id : String? = nil,
         background : Bool = false,
         tool_names : Array(String)? = nil,
+        now : Time = Time.utc,
       ) : Array(Hash(String, JSON::Any))
         messages = [] of Hash(String, JSON::Any)
 
@@ -74,7 +77,7 @@ module Autobot::Agent
         # Add current user message
         messages << {
           "role"    => JSON::Any.new(Constants::ROLE_USER),
-          "content" => build_user_content(current_message, media),
+          "content" => build_user_content(current_message, media, now),
         }
 
         messages
@@ -148,10 +151,6 @@ module Autobot::Agent
         bootstrap = load_bootstrap_files
         parts << bootstrap unless bootstrap.empty?
 
-        # Memory context
-        memory_ctx = @memory.memory_context
-        parts << "# Memory\n\n#{memory_ctx}" unless memory_ctx.empty?
-
         # Auto-loaded skills: always=true + tool-linked skills
         auto_skills = @skills.always_skills
         if tool_names && !tool_names.empty?
@@ -178,6 +177,9 @@ module Autobot::Agent
             SKILLS
           end
         end
+
+        memory_ctx = @memory.memory_context
+        parts << "# Memory\n\n#{memory_ctx}" unless memory_ctx.empty?
 
         parts.join("\n\n---\n\n")
       end
@@ -207,16 +209,14 @@ module Autobot::Agent
       end
 
       # Minimal identity for background tasks (cron turns, subagent work).
-      # Keeps: time, workspace, security. Drops: formatting, conversation rules, skills hints.
+      # Keeps: workspace, security. Drops: formatting, conversation rules, skills hints.
       private def background_identity_section : String
-        now = Time.utc.to_s(TIMESTAMP_FORMAT)
         workspace_path = @workspace.expand(home: true).to_s
 
         <<-IDENTITY
         # autobot (background task)
 
         You are Autobot, executing a scheduled background task.
-        Current time: #{now} (UTC)
         Workspace: #{workspace_path}
         #{build_security_policy(workspace_path)}
         #{ATTACHMENT_RULE}
@@ -224,13 +224,12 @@ module Autobot::Agent
       end
 
       private def identity_section : String
-        now = Time.utc.to_s(TIMESTAMP_FORMAT)
         workspace_path = @workspace.expand(home: true).to_s
 
         <<-IDENTITY
         # autobot
 
-        You are Autobot, an AI agent. Time: #{now} (UTC). Workspace: #{workspace_path}
+        You are Autobot, an AI agent. Workspace: #{workspace_path}
 
         Key files: memory/MEMORY.md (long-term), memory/HISTORY.md (grep-searchable log), skills/*/SKILL.md
         #{build_security_policy(workspace_path)}
@@ -246,8 +245,15 @@ module Autobot::Agent
         IDENTITY
       end
 
-      private def build_user_content(text : String, media : Array(Bus::MediaAttachment)?) : JSON::Any
-        content = render_user_text(text, media)
+      private def render_user_text(text : String, media : Array(Bus::MediaAttachment)?) : String
+        return text if media.nil? || media.empty?
+
+        blocks = media.map { |attachment| Attachments.render(attachment, @workspace_root) }
+        (text.empty? ? blocks : [text, *blocks]).join("\n\n")
+      end
+
+      private def build_user_content(text : String, media : Array(Bus::MediaAttachment)?, now : Time) : JSON::Any
+        content = render_user_message(text, media, now)
         return JSON::Any.new(content) unless media && media.any?(&.data)
 
         build_multimodal_content(content, media)

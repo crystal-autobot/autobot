@@ -73,10 +73,6 @@ module Autobot
         @model
       end
 
-      def supports_progressive_disclosure? : Bool
-        false
-      end
-
       private def use_oauth? : Bool
         !@refresh_token.nil? && !@refresh_token.try(&.empty?)
       end
@@ -198,6 +194,7 @@ module Autobot
         model : String? = nil,
         max_tokens : Int32 = DEFAULT_MAX_TOKENS,
         temperature : Float64 = DEFAULT_TEMPERATURE,
+        session_key : String? = nil,
       ) : Response
         effective_model = (model || @model).sub(/^gemini\//, "")
         bare_model = effective_model.includes?("/") ? effective_model.split("/", 2).last : effective_model

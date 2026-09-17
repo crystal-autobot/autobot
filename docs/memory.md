@@ -139,7 +139,7 @@ agents:
 **Behavior:**
 
 - No consolidation happens
-- Keeps only last 10 messages (simple trim)
+- Keeps the last 10 to 20 messages: once the session grows past 20 messages, it is trimmed to the last 10 (see [Prompt caching](providers.md#prompt-caching))
 - No MEMORY.md or HISTORY.md updates
 - Eventually hits context limits on very long conversations
 
@@ -176,7 +176,8 @@ Memory behavior is controlled by these constants in `MemoryManager`:
 | `DISABLED_MEMORY_WINDOW` | 0 | Setting `memory_window: 0` disables consolidation |
 | `MIN_KEEP_COUNT` | 2 | Minimum messages to keep after consolidation |
 | `MAX_KEEP_COUNT` | 10 | Maximum messages to keep after consolidation |
-| `MAX_MESSAGES_WITHOUT_CONSOLIDATION` | 10 | When disabled, trim to this many messages |
+| `KEEP_COUNT_WITHOUT_CONSOLIDATION` | 10 | When disabled, trim to this many messages |
+| `MAX_MESSAGES_WITHOUT_CONSOLIDATION` | 20 | When disabled, trim once the session has more messages than this |
 
 ---
 
@@ -236,9 +237,10 @@ agents:
 
 **Behavior:**
 ```
-Messages 1-10:  Normal conversation
-Message 11:     Trim to last 10 messages (keep 2-11)
-Message 12:     Trim to last 10 messages (keep 3-12)
+Turns 1-11:  Normal conversation (the session grows to 22 messages)
+Turn 12:     Trim to the last 10 messages, then answer
+Turns 13-17: Normal conversation (the history keeps the same start)
+Turn 18:     Trim to the last 10 messages again
 ...
 No consolidation, no MEMORY.md updates, no HISTORY.md entries
 ```

@@ -21,7 +21,8 @@ describe Autobot::Agent::MemoryManager do
   describe "constants" do
     it "has proper constant values for memory management" do
       Autobot::Agent::MemoryManager::DISABLED_MEMORY_WINDOW.should eq(0)
-      Autobot::Agent::MemoryManager::MAX_MESSAGES_WITHOUT_CONSOLIDATION.should eq(10)
+      Autobot::Agent::MemoryManager::KEEP_COUNT_WITHOUT_CONSOLIDATION.should eq(10)
+      Autobot::Agent::MemoryManager::MAX_MESSAGES_WITHOUT_CONSOLIDATION.should eq(20)
       Autobot::Agent::MemoryManager::MIN_KEEP_COUNT.should eq(2)
       Autobot::Agent::MemoryManager::MAX_KEEP_COUNT.should eq(10)
     end
@@ -66,7 +67,7 @@ describe Autobot::Agent::MemoryManager do
   end
 
   describe "#trim_if_disabled" do
-    it "trims messages when disabled and over limit" do
+    it "trims to the keep count once the session grows past the limit" do
       tmp = TestHelper.tmp_dir
       provider = MemoryMockProvider.new
       sessions = Autobot::Session::Manager.new(tmp)
@@ -80,14 +81,38 @@ describe Autobot::Agent::MemoryManager do
       )
 
       session = sessions.get_or_create("test:trim")
-      15.times { |i| session.add_message("user", "Message #{i}") }
-      session.messages.size.should eq(15)
+      21.times { |i| session.add_message("user", "Message #{i}") }
 
       manager.trim_if_disabled(session)
 
       session.messages.size.should eq(10)
-      session.messages.first.content.should eq("Message 5")
-      session.messages.last.content.should eq("Message 14")
+      session.messages.first.content.should eq("Message 11")
+      session.messages.last.content.should eq("Message 20")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "keeps the start of history until the session grows past the limit" do
+      tmp = TestHelper.tmp_dir
+      provider = MemoryMockProvider.new
+      sessions = Autobot::Session::Manager.new(tmp)
+
+      manager = Autobot::Agent::MemoryManager.new(
+        workspace: tmp,
+        provider: provider,
+        model: "mock-model",
+        memory_window: 0,
+        sessions: sessions
+      )
+
+      session = sessions.get_or_create("test:chunked_trim")
+      20.times { |i| session.add_message("user", "Message #{i}") }
+
+      manager.trim_if_disabled(session)
+
+      session.messages.size.should eq(20)
+      session.messages.first.content.should eq("Message 0")
+      session.get_history.size.should eq(20)
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end

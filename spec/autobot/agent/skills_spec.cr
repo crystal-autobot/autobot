@@ -128,6 +128,20 @@ describe Autobot::Agent::SkillsLoader do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  it "lists workspace and builtin skills sorted by name" do
+    tmp = TestHelper.tmp_dir
+    builtin = tmp / "builtin"
+    {tmp / "skills" / "zeta", builtin / "alpha", tmp / "skills" / "mid", builtin / "beta"}.each do |dir|
+      Dir.mkdir_p(dir)
+      File.write(dir / "SKILL.md", "# Skill")
+    end
+
+    loader = Autobot::Agent::SkillsLoader.new(workspace: tmp, builtin_skills_dir: builtin)
+    loader.list_skills(filter_unavailable: false).map(&.name).should eq(["alpha", "beta", "mid", "zeta"])
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "gets always-on skills" do
     tmp = TestHelper.tmp_dir
 

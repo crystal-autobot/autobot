@@ -3,6 +3,7 @@ require "../../spec_helper"
 # Mock provider that returns a simple text response (no tool calls).
 class MockProvider < Autobot::Providers::HttpProvider
   getter call_count = 0
+  getter sent_bodies = [] of String
 
   def initialize(@response_content : String = "Mock response", @responses : Array(String)? = nil)
     super(api_key: "test-key", model: "mock-model")
@@ -11,6 +12,7 @@ class MockProvider < Autobot::Providers::HttpProvider
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     @call_count += 1
+    @sent_bodies << body
     if responses = @responses
       resp = responses[@response_index]? || responses.last
       @response_index += 1
@@ -331,6 +333,63 @@ describe Autobot::Agent::Loop do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "stores the user message exactly as it was sent, so the next turn extends the previous request" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      provider = MockProvider.new
+      loop_inst = create_test_loop(workspace: tmp, provider: provider, sessions: sessions)
+
+      ["First", "Second"].each do |text|
+        loop_inst.test_process_message(Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "user1", chat_id: "chat1", content: text))
+      end
+
+      sent = sent_messages(provider.sent_bodies)
+      sent[1][0, sent[0].size].should eq(sent[0])
+      sent[1].last["content"].as_s.should match(/\ASecond\n\n#{TIME_NOTE}\z/)
+      history = sessions.get_or_create("telegram:chat1").get_history.map(&.["content"])
+      history.should eq([sent[0][1]["content"].as_s, "Mock response", sent[1].last["content"].as_s, "Mock response"])
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "trims a long session before a subagent turn when consolidation is disabled" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      session = sessions.get_or_create("telegram:chat1")
+      22.times { |i| session.add_message(i.even? ? "user" : "assistant", "Message #{i}") }
+      sessions.save(session)
+      provider = MockProvider.new
+      loop_inst = create_test_loop(workspace: tmp, provider: provider, sessions: sessions)
+
+      loop_inst.test_process_message(Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM, sender_id: "subagent:task1", chat_id: "telegram:chat1", content: "Result"
+      ))
+
+      sent = sent_messages(provider.sent_bodies).first
+      sent.size.should eq(1 + Autobot::Agent::MemoryManager::KEEP_COUNT_WITHOUT_CONSOLIDATION + 1)
+      sent[1]["content"].as_s.should eq("Message 12")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "stores a subagent result exactly as it was sent" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      provider = MockProvider.new
+      loop_inst = create_test_loop(workspace: tmp, provider: provider, sessions: sessions)
+
+      loop_inst.test_process_message(Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM, sender_id: "subagent:task1", chat_id: "telegram:chat1", content: "Result"
+      ))
+      loop_inst.test_process_message(Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "user1", chat_id: "chat1", content: "Thanks"))
+
+      sent = sent_messages(provider.sent_bodies)
+      sent[0].last["content"].as_s.should match(/\AResult\n\n#{TIME_NOTE}\z/)
+      sent[1][0, sent[0].size].should eq(sent[0])
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "returns outbound message for non-cron system messages" do
       tmp = TestHelper.tmp_dir
       loop_inst = create_test_loop(workspace: tmp)
@@ -519,7 +578,7 @@ describe Autobot::Agent::Loop do
       session = sessions.get_or_create("telegram:chat1")
       history = session.get_history
       history.map(&.["role"]).should eq(["user", "assistant"])
-      history.first["content"].should eq("what is the status?")
+      history.first["content"].should match(/\Awhat is the status\?\n\n#{TIME_NOTE}\z/)
       history.last["content"].should eq("# sent")
       session.messages.last.tools_used.should eq(["deliver"])
     ensure
