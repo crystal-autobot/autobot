@@ -233,7 +233,7 @@ module Autobot
             return Tools::ToolResult.error(apply_result.content)
           end
 
-          record_sql = "INSERT INTO schema_migrations (version) VALUES (#{shell_escape(file)});"
+          record_sql = "INSERT INTO schema_migrations (version) VALUES (#{sql_quote(file)});"
           record_result = @executor.exec(
             "sqlite3 -safe #{shell_escape(path)} #{shell_escape(record_sql)}",
             timeout: INIT_TIMEOUT
@@ -320,6 +320,10 @@ module Autobot
 
         private def no_tables_message(db_name : String) : Tools::ToolResult
           Tools::ToolResult.success("Database '#{db_name}' has no tables yet.")
+        end
+
+        private def sql_quote(val : String) : String
+          "'#{val.gsub("'", "''")}'"
         end
 
         private def shell_escape(arg : String) : String
