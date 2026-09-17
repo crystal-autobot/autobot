@@ -22,6 +22,17 @@ module Autobot
       )
       end
 
+      def self.with_cached_input(input : Int32, output : Int32, cache_read : Int32, cache_write : Int32, total : Int32? = nil) : TokenUsage
+        prompt = input + cache_read + cache_write
+        new(
+          prompt_tokens: prompt,
+          completion_tokens: output,
+          total_tokens: total || prompt + output,
+          cache_creation_tokens: cache_write,
+          cache_read_tokens: cache_read,
+        )
+      end
+
       def zero? : Bool
         total_tokens == 0
       end

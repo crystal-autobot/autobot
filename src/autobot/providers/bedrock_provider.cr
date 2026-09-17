@@ -240,16 +240,12 @@ module Autobot::Providers
 
     private def parse_bedrock_usage(node : JSON::Any?) : TokenUsage
       return TokenUsage.new unless node
-      cache_read = node["cacheReadInputTokens"]?.try(&.as_i?) || 0
-      cache_write = node["cacheWriteInputTokens"]?.try(&.as_i?) || 0
-      prompt = (node["inputTokens"]?.try(&.as_i?) || 0) + cache_read + cache_write
-      output = node["outputTokens"]?.try(&.as_i?) || 0
-      TokenUsage.new(
-        prompt_tokens: prompt,
-        completion_tokens: output,
-        total_tokens: node["totalTokens"]?.try(&.as_i?) || (prompt + output),
-        cache_creation_tokens: cache_write,
-        cache_read_tokens: cache_read,
+      TokenUsage.with_cached_input(
+        input: node["inputTokens"]?.try(&.as_i?) || 0,
+        output: node["outputTokens"]?.try(&.as_i?) || 0,
+        cache_read: node["cacheReadInputTokens"]?.try(&.as_i?) || 0,
+        cache_write: node["cacheWriteInputTokens"]?.try(&.as_i?) || 0,
+        total: node["totalTokens"]?.try(&.as_i?),
       )
     end
 

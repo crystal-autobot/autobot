@@ -217,13 +217,13 @@ module Autobot
       # the block marked with cache_control, avoiding re-processing of
       # the static system prompt on subsequent calls.
       private def build_anthropic_system_block(text : String) : Array(JSON::Any)
-        [
-          JSON::Any.new({
-            "type"          => JSON::Any.new("text"),
-            "text"          => JSON::Any.new(text),
-            "cache_control" => ephemeral_cache_control,
-          } of String => JSON::Any),
-        ]
+        blocks = [anthropic_text_block(text)]
+        apply_cache_control_to_last(blocks)
+        blocks
+      end
+
+      private def anthropic_text_block(text : String) : JSON::Any
+        JSON::Any.new({"type" => JSON::Any.new("text"), "text" => JSON::Any.new(text)} of String => JSON::Any)
       end
 
       private def ephemeral_cache_control : JSON::Any
@@ -246,7 +246,7 @@ module Autobot
       end
 
       private def with_cache_control_on_last_block(message : JSON::Any) : JSON::Any
-        blocks = anthropic_content_blocks(message["content"]? || JSON::Any.new(""))
+        blocks = anthropic_content_blocks(message["content"])
         return message if blocks.empty?
 
         apply_cache_control_to_last(blocks)
@@ -258,7 +258,7 @@ module Autobot
       private def anthropic_content_blocks(content : JSON::Any) : Array(JSON::Any)
         if text = content.as_s?
           return [] of JSON::Any if text.empty?
-          return [JSON::Any.new({"type" => JSON::Any.new("text"), "text" => JSON::Any.new(text)} of String => JSON::Any)]
+          return [anthropic_text_block(text)]
         end
 
         content.as_a?.try(&.dup) || [] of JSON::Any
@@ -298,10 +298,7 @@ module Autobot
         content_blocks = [] of JSON::Any
 
         if text = message["content"]?.try(&.as_s?)
-          content_blocks << JSON::Any.new({
-            "type" => JSON::Any.new("text"),
-            "text" => JSON::Any.new(text),
-          } of String => JSON::Any) unless text.empty?
+          content_blocks << anthropic_text_block(text) unless text.empty?
         end
 
         if tc_array = message["tool_calls"]?.try(&.as_a?)
@@ -692,16 +689,11 @@ module Autobot
 
       private def parse_anthropic_usage(node : JSON::Any?) : TokenUsage
         return TokenUsage.new unless node
-        cache_creation = node["cache_creation_input_tokens"]?.try(&.as_i?) || 0
-        cache_read = node["cache_read_input_tokens"]?.try(&.as_i?) || 0
-        prompt = (node["input_tokens"]?.try(&.as_i?) || 0) + cache_creation + cache_read
-        output = node["output_tokens"]?.try(&.as_i?) || 0
-        TokenUsage.new(
-          prompt_tokens: prompt,
-          completion_tokens: output,
-          total_tokens: prompt + output,
-          cache_creation_tokens: cache_creation,
-          cache_read_tokens: cache_read,
+        TokenUsage.with_cached_input(
+          input: node["input_tokens"]?.try(&.as_i?) || 0,
+          output: node["output_tokens"]?.try(&.as_i?) || 0,
+          cache_read: node["cache_read_input_tokens"]?.try(&.as_i?) || 0,
+          cache_write: node["cache_creation_input_tokens"]?.try(&.as_i?) || 0,
         )
       end
 
