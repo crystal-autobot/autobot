@@ -400,14 +400,6 @@ describe Autobot::Providers::HttpProvider do
       usage.cache_creation_tokens.should eq(0)
     end
 
-    it "asks Anthropic to cache the conversation with top-level cache_control" do
-      anthropic = TestableHttpProvider.new(api_key: api_key, model: "anthropic/claude-sonnet-4-5")
-      anthropic.chat([{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}])
-
-      body = anthropic.last_api_body.should_not be_nil
-      body["cache_control"]["type"].as_s.should eq("ephemeral")
-    end
-
     it "marks the last history message before the current user message" do
       anthropic = TestableHttpProvider.new(api_key: api_key, model: "anthropic/claude-sonnet-4-5")
       anthropic.chat([

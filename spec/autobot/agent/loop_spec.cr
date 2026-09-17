@@ -343,9 +343,9 @@ describe Autobot::Agent::Loop do
         loop_inst.test_process_message(Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "user1", chat_id: "chat1", content: text))
       end
 
-      sent = provider.sent_bodies.map { |body| JSON.parse(body)["messages"].as_a }
+      sent = sent_messages(provider.sent_bodies)
       sent[1][0, sent[0].size].should eq(sent[0])
-      sent[1].last["content"].as_s.should match(/\ASecond\n\n\[Current time: .+ \(UTC\)\]\z/)
+      sent[1].last["content"].as_s.should match(/\ASecond\n\n#{TIME_NOTE}\z/)
       history = sessions.get_or_create("telegram:chat1").get_history.map(&.["content"])
       history.should eq([sent[0][1]["content"].as_s, "Mock response", sent[1].last["content"].as_s, "Mock response"])
     ensure
@@ -365,7 +365,7 @@ describe Autobot::Agent::Loop do
         channel: Autobot::Constants::CHANNEL_SYSTEM, sender_id: "subagent:task1", chat_id: "telegram:chat1", content: "Result"
       ))
 
-      sent = JSON.parse(provider.sent_bodies.first)["messages"].as_a
+      sent = sent_messages(provider.sent_bodies).first
       sent.size.should eq(1 + Autobot::Agent::MemoryManager::KEEP_COUNT_WITHOUT_CONSOLIDATION + 1)
       sent[1]["content"].as_s.should eq("Message 12")
     ensure
@@ -383,8 +383,8 @@ describe Autobot::Agent::Loop do
       ))
       loop_inst.test_process_message(Autobot::Bus::InboundMessage.new(channel: "telegram", sender_id: "user1", chat_id: "chat1", content: "Thanks"))
 
-      sent = provider.sent_bodies.map { |body| JSON.parse(body)["messages"].as_a }
-      sent[0].last["content"].as_s.should match(/\AResult\n\n\[Current time: .+ \(UTC\)\]\z/)
+      sent = sent_messages(provider.sent_bodies)
+      sent[0].last["content"].as_s.should match(/\AResult\n\n#{TIME_NOTE}\z/)
       sent[1][0, sent[0].size].should eq(sent[0])
     ensure
       FileUtils.rm_rf(tmp) if tmp
@@ -578,7 +578,7 @@ describe Autobot::Agent::Loop do
       session = sessions.get_or_create("telegram:chat1")
       history = session.get_history
       history.map(&.["role"]).should eq(["user", "assistant"])
-      history.first["content"].should start_with("what is the status?\n\n[Current time: ")
+      history.first["content"].should match(/\Awhat is the status\?\n\n#{TIME_NOTE}\z/)
       history.last["content"].should eq("# sent")
       session.messages.last.tools_used.should eq(["deliver"])
     ensure

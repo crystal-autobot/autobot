@@ -383,11 +383,11 @@ describe Autobot::Agent::ToolExecutor do
 
       executor.execute(build_messages, tools).content.should eq("Done")
 
-      sent_messages = provider.sent_bodies.map { |body| JSON.parse(body)["messages"].as_a }
-      sent_messages.each_cons_pair do |earlier, later|
+      sent = sent_messages(provider.sent_bodies)
+      sent.each_cons_pair do |earlier, later|
         later[0, earlier.size].should eq(earlier)
       end
-      tool_results = sent_messages.last.select { |msg| msg["role"].as_s == "tool" }
+      tool_results = sent.last.select { |msg| msg["role"].as_s == "tool" }
       tool_results.map(&.["content"].as_s).should eq(["x" * 1000] * 3)
     end
 
@@ -405,9 +405,8 @@ describe Autobot::Agent::ToolExecutor do
       executor.execute(build_messages, tools).content.should eq("Done")
 
       capped = "#{"x" * max}\n... (result truncated at #{max} of #{max + 5_000} chars)"
-      first_results = provider.sent_bodies.map do |body|
-        tool_message = JSON.parse(body)["messages"].as_a.find { |msg| msg["role"].as_s == "tool" }
-        tool_message.try(&.["content"].as_s)
+      first_results = sent_messages(provider.sent_bodies).map do |messages|
+        messages.find { |msg| msg["role"].as_s == "tool" }.try(&.["content"].as_s)
       end
       first_results.should eq([nil, capped, capped])
     end

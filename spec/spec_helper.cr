@@ -16,6 +16,12 @@ module TestHelper
   end
 end
 
+TIME_NOTE = /\[Current time: \d{4}-\d{2}-\d{2} \d{2}:\d{2} \(\w+\) \(UTC\)\]/
+
+def sent_messages(bodies : Array(String)) : Array(Array(JSON::Any))
+  bodies.map { |body| JSON.parse(body)["messages"].as_a }
+end
+
 def text_response(content : String) : String
   %({"choices":[{"message":{"content":#{content.to_json}},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
 end

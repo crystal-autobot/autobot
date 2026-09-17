@@ -1,7 +1,5 @@
 require "../../spec_helper"
 
-TIME_NOTE = /\[Current time: \d{4}-\d{2}-\d{2} \d{2}:\d{2} \(\w+\) \(UTC\)\]/
-
 describe Autobot::Agent::Context::Builder do
   workspace = TestHelper.tmp_dir("context_test")
 

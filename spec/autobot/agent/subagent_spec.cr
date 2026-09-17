@@ -93,9 +93,9 @@ describe Autobot::Agent::SubagentManager do
     manager.spawn("Summarize logs")
     manager.completed.receive
 
-    messages = JSON.parse(provider.sent_bodies.first)["messages"].as_a
+    messages = sent_messages(provider.sent_bodies).first
     messages[0]["content"].as_s.should_not match(/\d{2}:\d{2}/)
-    messages[1]["content"].as_s.should match(/\ASummarize logs\n\n\[Current time: .+ \(UTC\)\]\z/)
+    messages[1]["content"].as_s.should match(/\ASummarize logs\n\n#{TIME_NOTE}\z/)
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
