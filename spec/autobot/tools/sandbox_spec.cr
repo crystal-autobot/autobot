@@ -169,4 +169,29 @@ describe Autobot::Tools::Sandbox do
       Autobot::Tools::Sandbox::SANDBOX_IMAGE_TAG.should eq("autobot-sandbox")
     end
   end
+
+  describe ".wait_for_process" do
+    it "returns timeout status with exit code 124 on timeout" do
+      process = Process.new("true")
+      process.wait
+      completed = Channel(Process::Status).new(1)
+
+      status = Autobot::Tools::Sandbox.test_wait_for_process(process, completed, 0)
+
+      status.success?.should be_false
+      status.normal_exit?.should be_true
+      status.exit_code.should eq(Autobot::Tools::Sandbox::TIMEOUT_EXIT_CODE)
+    end
+  end
+end
+
+# Test seam exposing private wait_for_process to avoid sleeping for SIGNAL_GRACE_PERIOD in specs.
+class Autobot::Tools::Sandbox
+  def self.test_wait_for_process(
+    process : Process,
+    completed : Channel(Process::Status),
+    timeout : Int32,
+  ) : Process::Status
+    wait_for_process(process, completed, timeout)
+  end
 end
