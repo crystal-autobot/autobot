@@ -41,6 +41,7 @@ describe Autobot::HTTP do
           body = "ok"
           socket << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: keep-alive\r\nContent-Length: #{body.bytesize}\r\n\r\n#{body}"
           socket.flush
+          socket.close
         end
       end
 
