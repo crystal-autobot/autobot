@@ -359,12 +359,20 @@ module Autobot
             process.signal(Signal::TERM)
             sleep SIGNAL_GRACE_PERIOD
             process.signal(Signal::KILL) unless process.terminated?
-            status = process.wait
-            status
+            process.wait
           rescue
-            Process::Status.new(TIMEOUT_EXIT_CODE)
+            # Process already terminated or reaped
           end
+          timeout_status
         end
+      end
+
+      private def self.timeout_status : Process::Status
+        {% if compare_versions(Crystal::VERSION, "1.21.0") >= 0 %}
+          Process::Status[TIMEOUT_EXIT_CODE]
+        {% else %}
+          Process::Status.new({% if flag?(:unix) %} TIMEOUT_EXIT_CODE << 8 {% else %} TIMEOUT_EXIT_CODE {% end %})
+        {% end %}
       end
 
       def self.read_file(path : String, workspace : Path, max_size : Int32 = DEFAULT_MAX_FILE_SIZE) : {Bool, String}
