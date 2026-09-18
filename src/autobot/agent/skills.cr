@@ -181,8 +181,8 @@ module Autobot
       def self.parse_frontmatter(content : String) : SkillMetadata
         return SkillMetadata.new unless content.starts_with?("---")
 
-        if match = content.match(/\A---\n(.*?)\n---/m)
-          raw, params = parse_lines(match[1].split("\n"))
+        if match = content.match(/\A---\r?\n(.*?)\r?\n---(?:\r?\n|\z)/m)
+          raw, params = parse_lines(match[1].lines)
           bins, env = parse_requires(raw["metadata"]?)
 
           SkillMetadata.new(
@@ -239,7 +239,7 @@ module Autobot
 
       private def strip_frontmatter(content : String) : String
         if content.starts_with?("---")
-          if match = content.match(/\A---\n.*?\n---\n/m)
+          if match = content.match(/\A---\r?\n.*?\r?\n---(?:\r?\n|\z)/m)
             return content[match[0].size..].strip
           end
         end
