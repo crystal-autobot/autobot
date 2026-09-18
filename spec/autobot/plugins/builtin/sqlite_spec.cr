@@ -515,6 +515,24 @@ describe Autobot::Plugins::Builtin::SQLiteTool do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "records migration versions containing single quotes" do
+      require_sqlite3!
+      tmp = TestHelper.tmp_dir
+      Dir.cd(tmp) do
+        Dir.mkdir_p("data/migrations/test")
+        File.write("data/migrations/test/001_create_user's_profile.sql",
+          "CREATE TABLE profiles (id INTEGER PRIMARY KEY);")
+
+        tool = create_tool
+        result = tool.execute({"action" => json("migrate"), "db" => json("test")})
+        result.success?.should be_true
+        result.content.should contain("Applied 1 migration(s)")
+        result.content.should contain("001_create_user's_profile.sql")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "reports no pending migrations" do
       require_sqlite3!
       tmp = TestHelper.tmp_dir
