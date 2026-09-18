@@ -164,7 +164,7 @@ What the tool printed is kept in the session history as the bot's line, next to 
 
 ### Skill scripts as tools
 
-Every executable `skills/*.sh` in the workspace becomes a `bash_<name>` tool. The first comment line under the shebang is the tool's description, so write the usage there. By default the model passes one `args` string, split like a shell command line: quotes group words and are removed.
+Every executable `skills/*.sh` or `skills/*.bash` in the workspace becomes a `bash_<name>` tool. The first comment line under the shebang is the tool's description, so write the usage there. By default the model passes one `args` string, split like a shell command line: quotes group words and are removed.
 
 A script that takes structured input declares its parameters in the frontmatter of the skill next to it, `skills/<name>/SKILL.md`. Each parameter becomes a string property of the tool with its own description, all required, and the script receives the values as positional parameters in the declared order, verbatim, so a statement with its own quoting, such as SQL, arrives untouched:
 

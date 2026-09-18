@@ -50,6 +50,11 @@ describe Autobot::Tools::BashTool do
     params = Autobot::Tools::BashToolDiscovery.declared_params(tmp.to_s, "notify.sh")
 
     params.map(&.name).should eq(["sql"])
+
+    params_bash = Autobot::Tools::BashToolDiscovery.declared_params(tmp.to_s, "notify.bash")
+
+    params_bash.map(&.name).should eq(["sql"])
+
     Autobot::Tools::BashToolDiscovery.declared_params(tmp.to_s, "other.sh").should be_empty
   ensure
     FileUtils.rm_rf(tmp) if tmp
@@ -83,5 +88,35 @@ describe Autobot::Tools::BashTool do
     tool = bash_tool("/nonexistent/notify.sh")
 
     tool.execute({"args" => JSON::Any.new("")}).error?.should be_true
+  end
+
+  it "derives tool name and description from .bash extension" do
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
+    tool = Autobot::Tools::BashTool.new(executor, "/tmp/scripts/deploy.bash")
+    tool.name.should eq("bash_deploy")
+    tool.description.should eq("Run the 'deploy' bash script.")
+  end
+end
+
+describe Autobot::Tools::BashToolDiscovery do
+  it "discovers both .sh and .bash scripts and ignores other extensions" do
+    tmp = TestHelper.tmp_dir
+    skills = tmp / "skills"
+    Dir.mkdir_p(skills)
+
+    File.write(skills / "backup.sh", "#!/bin/sh\n# Backup databases\necho backup")
+    File.write(skills / "deploy.bash", "#!/bin/bash\n# Deploy cluster\necho deploy")
+    File.write(skills / "notes.txt", "not a script")
+
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
+    tools = Autobot::Tools::BashToolDiscovery.discover(executor, [skills.to_s])
+
+    tool_names = tools.map(&.name).sort!
+    tool_names.should eq(["bash_backup", "bash_deploy"])
+
+    deploy_tool = tools.find! { |tool| tool.name == "bash_deploy" }
+    deploy_tool.description.should eq("Deploy cluster")
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
   end
 end
