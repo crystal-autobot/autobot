@@ -88,13 +88,13 @@ Channel (Telegram) -> Download & base64 encode -> Context builder -> LLM provide
 1. **Channel** receives a photo and downloads the file bytes via the platform API
 2. **MediaAttachment** stores the base64-encoded data in a transient `data` field (excluded from JSON serialization to avoid bloating session files)
 3. **Context builder** detects attachments with `data` and builds an array of content blocks (text + image) in OpenAI's `image_url` format
-4. **Provider** sends the content blocks directly for OpenAI-compatible APIs, or converts them to Anthropic's `image/source/base64` format for the native Anthropic path
+4. **Provider** sends the content blocks directly for OpenAI-compatible APIs, converts them to Anthropic's `image/source/base64` format for the native Anthropic path, or maps them to `inlineData` (`mimeType` + `data`) parts for the native Google Gemini path
 
 ### Supported channels
 
 | Channel   | Status    | Notes                                    |
 |-----------|-----------|------------------------------------------|
-| Telegram  | Supported | Auto-downloads photos via Bot API        |
+| Telegram  | Supported | Auto-downloads photos and uncompressed image documents (`image/*`) via Bot API |
 | Slack     | Planned   | Needs `url_private` download with auth   |
 | WhatsApp  | Planned   | Needs bridge-side changes to forward images |
 | Zulip     | Not supported | Media handling not yet implemented |
@@ -103,8 +103,9 @@ Channel (Telegram) -> Download & base64 encode -> Context builder -> LLM provide
 
 All providers work with vision — the internal format uses OpenAI-compatible `image_url` content blocks:
 
-- **OpenAI-compatible** (OpenAI, DeepSeek, Groq, Gemini, OpenRouter, vLLM, etc.) — content blocks are serialized directly, no conversion needed
+- **OpenAI-compatible** (OpenAI, DeepSeek, Groq, OpenRouter, vLLM, etc.) — content blocks are serialized directly, no conversion needed
 - **Anthropic native** — `image_url` blocks are automatically converted to Anthropic's `image/source/base64` format
+- **Google Gemini native** — `image_url` data URIs are automatically converted to Gemini's `inlineData` (`mimeType` + `data`) parts
 
 > **Note:** The LLM model itself must support vision. Non-vision models will ignore or fail to interpret image content.
 
@@ -158,6 +159,15 @@ For Anthropic native, this is converted to:
 [
   {"type": "text", "text": "Analyze this image"},
   {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "..."}}
+]
+```
+
+For Google Gemini native, this is converted to:
+
+```json
+[
+  {"text": "Analyze this image"},
+  {"inlineData": {"mimeType": "image/jpeg", "data": "..."}}
 ]
 ```
 

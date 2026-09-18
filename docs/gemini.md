@@ -73,6 +73,12 @@ If your agent's system prompt and tools payload exceeds **8,000 characters**, Au
 
 This is highly recommended for autonomous agent execution as it routinely drops token costs by over 90%.
 
+## Multimodal & Vision Support
+
+Autobot supports native multimodal input with Gemini models. When images (photos or uncompressed image documents) arrive through supported channels such as Telegram, Autobot automatically converts incoming image blocks into Gemini's native `inlineData` parts containing the MIME type and base64-encoded payload.
+
+No extra provider configuration is required. See [Media support](media.md#vision) for platform details and limits.
+
 ## Configuration reference
 
 | Field | Required | Default | Description |

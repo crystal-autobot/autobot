@@ -101,7 +101,7 @@ channels:
 - **Reply context and quotes** — when replying to a message or selecting a quote excerpt, the replied-to text is prepended as context so the bot understands the reference
 - **Voice notes** — a note recorded in the chat is transcribed via Whisper into the message text (Groq or OpenAI key, or the bot's own `transcription.api_key`); with transcription off the bot replies that it could not hear the note
 - **Audio files and forwarded voice notes** — saved to the inbox as attachments; the transcript stays on the attachment, never in the message text
-- **Photos** — sent as image attachments to the LLM and saved to the inbox
+- **Photos and uncompressed image documents** — sent as image attachments to the LLM and saved to the inbox (uncompressed documents with `image/*` MIME types are automatically ingested for vision)
 - **Documents** — saved to the inbox and attached to the message context
 - **Forwards and stories** — forwarded messages and shared stories preserve sender attribution and origin metadata
 - **Polls, locations, and venues** — questions, choices, GPS coordinates, and venue details are formatted into prompt context
