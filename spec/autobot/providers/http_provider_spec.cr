@@ -457,6 +457,7 @@ describe Autobot::Providers::HttpProvider do
       {
         {"openai", "openai/gpt-5-mini", api_key, nil},
         {"openai", "gpt-5-mini", api_key, "https://api.openai.com/v1"},
+        {"openai", "codex-mini-latest", api_key, nil},
         {"openrouter", "openrouter/anthropic/claude-sonnet-4-5", "sk-or-test", nil},
         {"openrouter", "anthropic/claude-sonnet-4-5", "sk-or-test", "https://openrouter.ai/api/v1"},
       }.each do |name, model, key, base|
@@ -472,6 +473,7 @@ describe Autobot::Providers::HttpProvider do
       {
         {"openai", "gpt-5-mini", api_key, "https://my-resource.openai.azure.com/openai/v1"},
         {"openai", "gpt-5-mini", api_key, "http://localhost:4000/v1"},
+        {"openai", "codex-mini-latest", api_key, "https://my-resource.openai.azure.com/openai/v1"},
         {"openrouter", "anthropic/claude-sonnet-4-5", "sk-or-test", "https://openrouter-proxy.example.com/v1"},
         {"deepseek", "deepseek/deepseek-chat", api_key, nil},
         {"groq", "groq/openai/gpt-oss-120b", api_key, "https://api.groq.com/openai/v1"},

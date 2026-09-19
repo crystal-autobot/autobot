@@ -31,6 +31,7 @@ module Autobot
       getter extra_headers : Hash(String, String)
 
       @gateway : ProviderSpec?
+      @named_spec : ProviderSpec?
 
       def initialize(
         api_key : String,
@@ -41,6 +42,7 @@ module Autobot
       )
         super(api_key, api_base)
         @gateway = Providers.find_gateway(provider_name, api_key, api_base)
+        @named_spec = Providers.find_by_name(provider_name) if provider_name
       end
 
       def default_model : String
@@ -520,7 +522,7 @@ module Autobot
       end
 
       private def resolve_spec(model : String) : ProviderSpec?
-        @gateway || Providers.find_by_model(model)
+        @gateway || Providers.find_by_model(model) || @named_spec
       end
 
       private def resolve_url(spec : ProviderSpec?) : String
