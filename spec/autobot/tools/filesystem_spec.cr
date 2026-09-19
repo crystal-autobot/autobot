@@ -112,6 +112,25 @@ describe Autobot::Tools::EditFileTool do
     FileUtils.rm_rf(tmp) if tmp
   end
 
+  it "returns error when old_text is empty" do
+    tmp = TestHelper.tmp_dir
+    file = tmp / "edit.txt"
+    File.write(file, "Hello World")
+
+    executor = Autobot::Tools::SandboxExecutor.new(nil)
+    tool = Autobot::Tools::EditFileTool.new(executor)
+    result = tool.execute({
+      "path"     => JSON::Any.new(file.to_s),
+      "old_text" => JSON::Any.new(""),
+      "new_text" => JSON::Any.new("replacement"),
+    })
+
+    result.error?.should be_true
+    result.content.should contain("old_text cannot be empty")
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
   it "warns on ambiguous matches" do
     tmp = TestHelper.tmp_dir
     file = tmp / "edit.txt"

@@ -111,6 +111,10 @@ module Autobot
       end
 
       private def validate_and_replace(content : String, old_text : String, new_text : String) : ToolResult | String
+        if old_text.empty?
+          return ToolResult.error("old_text cannot be empty")
+        end
+
         unless content.includes?(old_text)
           return ToolResult.error("Text not found in file")
         end
@@ -124,6 +128,8 @@ module Autobot
       end
 
       private def count_occurrences(haystack : String, needle : String) : Int32
+        return 0 if needle.empty?
+
         count = 0
         index = 0
         while pos = haystack.index(needle, index)
