@@ -359,11 +359,11 @@ module Autobot
             process.signal(Signal::TERM)
             sleep SIGNAL_GRACE_PERIOD
             process.signal(Signal::KILL) unless process.terminated?
-            status = process.wait
-            status
+            process.wait
           rescue
-            Process::Status.new(TIMEOUT_EXIT_CODE)
+            # Process already terminated or reaped
           end
+          Process::Status[TIMEOUT_EXIT_CODE]
         end
       end
 
