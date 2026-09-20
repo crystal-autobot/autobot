@@ -115,11 +115,11 @@ module Autobot
           return ToolResult.error("old_text cannot be empty")
         end
 
-        unless content.includes?(old_text)
+        count = count_occurrences(content, old_text)
+        if count.zero?
           return ToolResult.error("Text not found in file")
         end
 
-        count = count_occurrences(content, old_text)
         if count > 1
           return ToolResult.error("Text appears #{count} times. Provide more context")
         end
