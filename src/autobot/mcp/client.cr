@@ -34,6 +34,7 @@ module Autobot
       @process : Process?
       @stdin : IO?
       @stdout : IO?
+      @responses : Channel(JSON::Any)?
       @mutex : Mutex
       @request_id : Int64
 
@@ -42,6 +43,7 @@ module Autobot
         @command : String,
         @args : Array(String) = [] of String,
         @env : Hash(String, String) = {} of String => String,
+        @call_timeout : Time::Span = CALL_TIMEOUT,
       )
         @mutex = Mutex.new
         @request_id = 0_i64
@@ -74,7 +76,15 @@ module Autobot
         @stdout = stdout_read
 
         drain_stderr(stderr_read)
-        perform_initialize
+        start_reader(stdout_read)
+
+        begin
+          perform_initialize
+        rescue ex
+          stop
+          raise ex
+        end
+
         Log.info { "[#{@server_name}] MCP server started (pid=#{process.pid})" }
       end
 
@@ -94,6 +104,8 @@ module Autobot
 
         @stdin.try(&.close) rescue nil
         @stdout.try(&.close) rescue nil
+        @responses.try(&.close) rescue nil
+        @responses = nil
         @process = nil
         Log.info { "[#{@server_name}] MCP server stopped" }
       end
@@ -115,12 +127,16 @@ module Autobot
 
       # Calls a tool on the MCP server and returns the text content.
       # Result is truncated at `MAX_RESPONSE_SIZE` bytes.
-      def call_tool(name : String, arguments : Hash(String, JSON::Any)) : CallResult
+      def call_tool(
+        name : String,
+        arguments : Hash(String, JSON::Any),
+        timeout : Time::Span = @call_timeout,
+      ) : CallResult
         params = {
           "name"      => JSON::Any.new(name),
           "arguments" => JSON::Any.new(arguments),
         }
-        response = send_request("tools/call", JSON::Any.new(params), timeout: CALL_TIMEOUT)
+        response = send_request("tools/call", JSON::Any.new(params), timeout: timeout)
 
         if error = response["error"]?
           message = error["message"]?.try(&.as_s?) || "Unknown MCP error"
@@ -196,41 +212,49 @@ module Autobot
         stdin.flush
       end
 
-      private def read_response(expected_id : Int64, timeout : Time::Span) : JSON::Any
-        stdout = @stdout
-        raise "MCP server not running" unless stdout
+      private def start_reader(stdout : IO) : Nil
+        responses = Channel(JSON::Any).new
+        @responses = responses
 
-        channel = Channel(JSON::Any | Exception).new(1)
-
-        spawn do
+        spawn(name: "mcp-reader-#{@server_name}") do
           begin
-            loop do
-              line = stdout.read_line
-              parsed = JSON.parse(line)
+            while line = stdout.gets
+              line = line.strip
+              next if line.empty?
 
-              # Skip server notifications (messages without id)
-              response_id = parsed["id"]?
-              next unless response_id
-
-              # Verify this is the response we're waiting for
-              if response_id.as_i64? == expected_id
-                channel.send(parsed)
-                break
+              parsed = begin
+                JSON.parse(line)
+              rescue JSON::ParseException
+                next
               end
+
+              # Skip server notifications (messages without id or with method)
+              next unless parsed["id"]? && parsed["method"]?.nil?
+
+              responses.send(parsed)
             end
-          rescue ex
-            channel.send(ex)
+          rescue IO::Error | Channel::ClosedError
+            # Stream or channel closed during shutdown
+          ensure
+            responses.close rescue nil
           end
         end
+      end
 
-        select
-        when result = channel.receive
-          if result.is_a?(Exception)
-            raise result
+      private def read_response(expected_id : Int64, timeout : Time::Span) : JSON::Any
+        responses = @responses
+        raise "MCP server not running" unless responses
+
+        deadline = Time.instant + timeout
+        loop do
+          remaining = {Time::Span.zero, deadline - Time.instant}.max
+          select
+          when response = responses.receive?
+            raise "MCP server closed the connection" unless response
+            return response if response["id"]?.try(&.as_i64?) == expected_id
+          when timeout(remaining)
+            raise "MCP request timed out after #{timeout.total_seconds.to_i}s"
           end
-          result
-        when timeout(timeout)
-          raise "MCP request timed out after #{timeout.total_seconds.to_i}s"
         end
       end
 
