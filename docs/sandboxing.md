@@ -83,12 +83,15 @@ Each `/etc` entry is bound only when it exists on the host. Nothing else from th
 
 ```bash
 docker run --rm \
+  --name autobot-sandbox-3f9a1c0b7d2e4a65 \
   -v /workspace:/workspace:rw \
   -w /workspace \
   --memory 512m --cpus 1 \
   alpine:latest \
   sh -c "cat file.txt"
 ```
+
+Each command gets its own container name. When a command times out, the container is removed with `docker rm --force`, because stopping the `docker run` client alone leaves the container running.
 
 ## Platform Support
 

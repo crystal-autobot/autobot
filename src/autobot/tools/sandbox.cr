@@ -12,6 +12,7 @@ module Autobot
       DOCKER_MEMORY_LIMIT   = "512m"
       DOCKER_CPU_LIMIT      = "1"
       DOCKER_DEFAULT_IMAGE  = "alpine:latest"
+      DOCKER_NAME_PREFIX    = "autobot-sandbox-"
       SANDBOX_DOCKERFILE    = "Dockerfile.sandbox"
       SANDBOX_IMAGE_TAG     = "autobot-sandbox"
       DEFAULT_MAX_FILE_SIZE = 1_000_000
@@ -187,9 +188,11 @@ module Autobot
 
         ensure_docker_image(image)
 
+        container = "#{DOCKER_NAME_PREFIX}#{Random::Secure.hex(8)}"
         args = [
           "run",
           "--rm",
+          "--name", container,
           "-v", "#{workspace_real}:#{workspace_real}:rw",
           "-w", workspace_real,
           "--network", "bridge",
@@ -200,7 +203,17 @@ module Autobot
         args << image
         args.concat(cmd_args)
 
-        CommandRunner.run("docker", args, timeout, max_output_size)
+        result = CommandRunner.run("docker", args, timeout, max_output_size)
+        remove_docker_container(container) if result.timed_out?
+        result
+      end
+
+      # Killing the docker client on timeout leaves its container running.
+      private def self.remove_docker_container(name : String) : Nil
+        Log.debug { "Removing timed out sandbox container: #{name}" }
+        Process.run("docker", ["rm", "--force", name],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close)
       end
 
       # Forward explicitly allowed environment variables to Docker container.
