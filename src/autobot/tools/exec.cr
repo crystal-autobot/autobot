@@ -1,5 +1,6 @@
 require "log"
 require "../constants"
+require "./command_runner"
 require "./sandbox"
 
 module Autobot
@@ -8,9 +9,7 @@ module Autobot
     class ExecTool < Tool
       Log = ::Log.for(self)
 
-      DEFAULT_TIMEOUT     =     60
-      MAX_OUTPUT_SIZE     = 10_000
-      SIGNAL_GRACE_PERIOD = 0.5.seconds
+      DEFAULT_TIMEOUT = 60
 
       # Deny patterns for dangerous operations (defense-in-depth)
       DEFAULT_DENY_PATTERNS = [
@@ -155,108 +154,8 @@ module Autobot
       end
 
       private def run_command_direct(command : String, cwd : String) : String
-        # Use pipes to prevent unbounded memory allocation
-        stdout_read, stdout_write = IO.pipe
-        stderr_read, stderr_write = IO.pipe
-
-        process = Process.new(
-          "sh", ["-c", command],
-          output: stdout_write,
-          error: stderr_write,
-          chdir: cwd,
-        )
-
-        # Close write ends in parent process
-        stdout_write.close
-        stderr_write.close
-
-        # Read output with size limits to prevent DoS
-        stdout_channel = Channel(String).new(1)
-        stderr_channel = Channel(String).new(1)
-
-        spawn { stdout_channel.send(read_limited_output(stdout_read, MAX_OUTPUT_SIZE)) }
-        spawn { stderr_channel.send(read_limited_output(stderr_read, MAX_OUTPUT_SIZE)) }
-
-        completed = Channel(Process::Status).new(1)
-        spawn do
-          status = process.wait
-          completed.send(status)
-        end
-
-        timed_out, status = wait_for_process(process, completed)
-
-        # Close read ends to break any blocking io.read in background fibers
-        # when daemon processes hold the write ends open
-        stdout_read.close unless stdout_read.closed?
-        stderr_read.close unless stderr_read.closed?
-
-        # Collect limited outputs
-        stdout_text = stdout_channel.receive
-        stderr_text = stderr_channel.receive
-
-        build_command_result(stdout_text, stderr_text, status, timed_out)
-      end
-
-      private def read_limited_output(io : IO, max_size : Int32) : String
-        buffer = IO::Memory.new
-        bytes_read = 0
-        chunk = Bytes.new(4096)
-
-        while (n = io.read(chunk)) > 0
-          bytes_read += n
-          if bytes_read > max_size
-            buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
-            buffer << "\n... (output truncated at #{max_size} bytes)"
-            # Drain the rest instead of closing the pipe: closing the read end
-            # sends SIGPIPE to a still-running child and can kill it before its
-            # side effects finish. The parent closes read ends after the process
-            # exits, which unblocks this drain for detached/daemon writers.
-            io.skip_to_end
-            break
-          end
-          buffer.write(chunk[0, n])
-        end
-
-        buffer.to_s
-      rescue
-        buffer.to_s
-      end
-
-      private def build_command_result(stdout_text : String, stderr_text : String, status : Process::Status?, timed_out : Bool) : String
-        parts = [] of String
-
-        if timed_out
-          parts << "Error: Command timed out after #{@timeout} seconds"
-        end
-
-        parts << stdout_text unless stdout_text.empty?
-
-        if !stderr_text.empty? && stderr_text.strip.size > 0
-          parts << "STDERR:\n#{stderr_text}"
-        end
-
-        if status && !status.success? && !timed_out
-          parts << "\nExit code: #{status.exit_code}"
-        end
-
-        parts.empty? ? Constants::NO_OUTPUT_MESSAGE : parts.join("\n")
-      end
-
-      private def wait_for_process(process : Process, completed : Channel(Process::Status)) : {Bool, Process::Status?}
-        select
-        when status = completed.receive
-          {false, status}
-        when timeout(@timeout.seconds)
-          begin
-            process.signal(Signal::TERM)
-            sleep SIGNAL_GRACE_PERIOD
-            process.signal(Signal::KILL) unless process.terminated?
-            process.wait
-          rescue
-            # Process already terminated
-          end
-          {true, nil}
-        end
+        result = CommandRunner.run("sh", ["-c", command], @timeout, chdir: cwd)
+        result.report.presence || Constants::NO_OUTPUT_MESSAGE
       end
 
       private def guard_command(command : String) : String?

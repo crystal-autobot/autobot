@@ -1,5 +1,6 @@
 require "log"
 require "base64"
+require "./command_runner"
 
 module Autobot
   module Tools
@@ -8,9 +9,6 @@ module Autobot
     class Sandbox
       Log = ::Log.for(self)
 
-      TIMEOUT_EXIT_CODE     =  124
-      IO_BUFFER_SIZE        = 4096
-      SIGNAL_GRACE_PERIOD   = 0.5.seconds
       DOCKER_MEMORY_LIMIT   = "512m"
       DOCKER_CPU_LIMIT      = "1"
       DOCKER_DEFAULT_IMAGE  = "alpine:latest"
@@ -23,7 +21,6 @@ module Autobot
       MKDIR_TIMEOUT         =         5
       MAX_WRITE_OUTPUT      =    10_000
       MAX_LIST_OUTPUT       =   100_000
-      DEFAULT_MAX_OUTPUT    =    10_000
 
       enum Type
         Bubblewrap
@@ -89,13 +86,12 @@ module Autobot
       end
 
       # Execute a shell command in sandbox (for arbitrary commands with pipes/redirects).
-      # Returns: {Process::Status, stdout, stderr}
       def self.exec(
         command : String,
         workspace : Path,
         timeout : Int32,
-        max_output_size : Int32 = DEFAULT_MAX_OUTPUT,
-      ) : {Process::Status, String, String}
+        max_output_size : Int32 = CommandRunner::DEFAULT_MAX_OUTPUT,
+      ) : CommandRunner::Result
         Log.debug { "Executing shell command in sandbox: #{command}" }
         run_in_sandbox(["sh", "-c", command], workspace, timeout, max_output_size)
       end
@@ -107,8 +103,8 @@ module Autobot
         args : Array(String),
         workspace : Path,
         timeout : Int32,
-        max_output_size : Int32 = DEFAULT_MAX_OUTPUT,
-      ) : {Process::Status, String, String}
+        max_output_size : Int32 = CommandRunner::DEFAULT_MAX_OUTPUT,
+      ) : CommandRunner::Result
         Log.debug { "Executing program in sandbox: #{program} #{args.join(" ")}" }
         run_in_sandbox([program] + args, workspace, timeout, max_output_size)
       end
@@ -118,7 +114,7 @@ module Autobot
         workspace : Path,
         timeout : Int32,
         max_output_size : Int32,
-      ) : {Process::Status, String, String}
+      ) : CommandRunner::Result
         case detect
         when Type::Bubblewrap
           run_in_bubblewrap(cmd_args, workspace, timeout, max_output_size)
@@ -151,7 +147,7 @@ module Autobot
         workspace : Path,
         timeout : Int32,
         max_output_size : Int32,
-      ) : {Process::Status, String, String}
+      ) : CommandRunner::Result
         workspace_real = File.realpath(workspace.to_s)
 
         args = [
@@ -173,7 +169,7 @@ module Autobot
         args.push("--")
         args.concat(cmd_args)
 
-        capture_command("bwrap", args, timeout, max_output_size)
+        CommandRunner.run("bwrap", args, timeout, max_output_size)
       end
 
       def self.system_config_binds(paths : Array(String) = SYSTEM_CONFIG_PATHS) : Array(String)
@@ -185,7 +181,7 @@ module Autobot
         workspace : Path,
         timeout : Int32,
         max_output_size : Int32,
-      ) : {Process::Status, String, String}
+      ) : CommandRunner::Result
         workspace_real = File.realpath(workspace.to_s)
         image = @@docker_image || DOCKER_DEFAULT_IMAGE
 
@@ -204,7 +200,7 @@ module Autobot
         args << image
         args.concat(cmd_args)
 
-        capture_command("docker", args, timeout, max_output_size)
+        CommandRunner.run("docker", args, timeout, max_output_size)
       end
 
       # Forward explicitly allowed environment variables to Docker container.
@@ -276,140 +272,49 @@ module Autobot
         false
       end
 
-      # Runs a process, capturing stdout/stderr through pipes with a timeout.
-      # The read ends are closed once the process settles so reader fibers never
-      # block on daemons that inherit and keep the pipe write ends open.
-      def self.capture_command(
-        command : String,
-        args : Array(String),
-        timeout : Int32,
-        max_output_size : Int32 = DEFAULT_MAX_OUTPUT,
-      ) : {Process::Status, String, String}
-        stdout_read, stdout_write = IO.pipe
-        stderr_read, stderr_write = IO.pipe
-
-        process = Process.new(
-          command,
-          args,
-          output: stdout_write,
-          error: stderr_write
-        )
-
-        stdout_write.close
-        stderr_write.close
-
-        stdout_channel = Channel(String).new(1)
-        stderr_channel = Channel(String).new(1)
-
-        spawn { stdout_channel.send(read_limited_output(stdout_read, max_output_size)) }
-        spawn { stderr_channel.send(read_limited_output(stderr_read, max_output_size)) }
-
-        completed = Channel(Process::Status).new(1)
-        spawn do
-          status = process.wait
-          completed.send(status)
-        end
-
-        status = wait_for_process(process, completed, timeout)
-
-        stdout_read.close unless stdout_read.closed?
-        stderr_read.close unless stderr_read.closed?
-
-        stdout_text = stdout_channel.receive
-        stderr_text = stderr_channel.receive
-
-        {status, stdout_text, stderr_text}
-      end
-
-      private def self.read_limited_output(io : IO, max_size : Int32) : String
-        buffer = IO::Memory.new
-        bytes_read = 0
-        chunk = Bytes.new(IO_BUFFER_SIZE)
-
-        while (n = io.read(chunk)) > 0
-          bytes_read += n
-          if bytes_read > max_size
-            buffer.write(chunk[0, Math.max(0, max_size - (bytes_read - n))])
-            buffer << "\n... (output truncated at #{max_size} bytes)"
-            # Drain the rest instead of closing the pipe: closing the read end
-            # sends SIGPIPE to a still-running child and can kill it before its
-            # side effects finish. The parent closes read ends after the process
-            # exits, which unblocks this drain for detached/daemon writers.
-            io.skip_to_end
-            break
-          end
-          buffer.write(chunk[0, n])
-        end
-
-        buffer.to_s
-      rescue
-        buffer.to_s
-      end
-
-      private def self.wait_for_process(
-        process : Process,
-        completed : Channel(Process::Status),
-        timeout : Int32,
-      ) : Process::Status
-        select
-        when status = completed.receive
-          status
-        when timeout(timeout.seconds)
-          begin
-            process.signal(Signal::TERM)
-            sleep SIGNAL_GRACE_PERIOD
-            process.signal(Signal::KILL) unless process.terminated?
-            status = process.wait
-            status
-          rescue
-            Process::Status.new(TIMEOUT_EXIT_CODE)
-          end
-        end
-      end
-
       def self.read_file(path : String, workspace : Path, max_size : Int32 = DEFAULT_MAX_FILE_SIZE) : {Bool, String}
-        status, stdout, stderr = exec_program("cat", [path], workspace, READ_FILE_TIMEOUT, max_size)
+        result = exec_program("cat", [path], workspace, READ_FILE_TIMEOUT, max_size)
 
-        {status.success?, status.success? ? stdout : stderr}
+        {result.success?, result.success? ? result.stdout : result.stderr}
       end
 
       # Read a file and return its contents as base64-encoded string.
       # Safe for binary files (images, GIFs, documents).
       def self.read_file_base64(path : String, workspace : Path, max_size : Int32 = DEFAULT_MAX_FILE_SIZE) : {Bool, String}
         b64_max = (max_size * 4 / 3).to_i + 100
-        status, stdout, stderr = exec_program("base64", [path], workspace, READ_FILE_TIMEOUT, b64_max)
+        result = exec_program("base64", [path], workspace, READ_FILE_TIMEOUT, b64_max)
 
-        if status.success?
-          {true, stdout.gsub(/\s/, "")}
+        if result.success?
+          {true, result.stdout.gsub(/\s/, "")}
         else
-          {false, stderr}
+          {false, result.stderr}
         end
       end
 
       def self.write_file(path : String, content : String, workspace : Path) : {Bool, String}
         dir = File.dirname(path)
         if dir != "." && dir != "/"
-          mkdir_status, _, mkdir_err = exec_program("mkdir", ["-p", dir], workspace, MKDIR_TIMEOUT)
-          return {false, mkdir_err} unless mkdir_status.success?
+          mkdir = exec_program("mkdir", ["-p", dir], workspace, MKDIR_TIMEOUT)
+          return {false, mkdir.stderr} unless mkdir.success?
         end
 
         # Base64 encoding prevents shell escaping issues with special characters.
         # The pipe and redirect require sh -c.
         encoded = Base64.strict_encode(content)
         command = "base64 -d > #{shell_escape(path)}"
-        status, _, stderr = exec(
+        result = exec(
           "printf '%s' '#{encoded}' | #{command}",
           workspace, timeout: WRITE_FILE_TIMEOUT, max_output_size: MAX_WRITE_OUTPUT
         )
 
-        message = status.success? ? "Wrote #{content.bytesize} bytes" : stderr
-        {status.success?, message}
+        message = result.success? ? "Wrote #{content.bytesize} bytes" : result.stderr
+        {result.success?, message}
       end
 
       def self.list_dir(path : String, workspace : Path) : {Bool, String}
-        status, stdout, stderr = exec_program("ls", ["-1a", path], workspace, LIST_DIR_TIMEOUT, MAX_LIST_OUTPUT)
+        result = exec_program("ls", ["-1a", path], workspace, LIST_DIR_TIMEOUT, MAX_LIST_OUTPUT)
 
-        {status.success?, status.success? ? stdout : stderr}
+        {result.success?, result.success? ? result.stdout : result.stderr}
       end
 
       def self.shell_escape(arg : String) : String
