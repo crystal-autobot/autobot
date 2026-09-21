@@ -37,6 +37,7 @@ module Autobot
         @on_exec : ExecCallback? = nil,
         @workspace : Path? = nil,
         @sandbox_config : String = "none",
+        @exec_timeout : Time::Span = EXEC_TIMEOUT,
       )
       end
 
@@ -452,12 +453,8 @@ module Autobot
         raise "Sandbox is enabled but no workspace configured for cron exec" unless workspace
 
         full_command = build_sandboxed_command(command, job)
-        result = Tools::Sandbox.exec(full_command, workspace, timeout: EXEC_TIMEOUT.total_seconds.to_i)
-
-        raise "command timed out after #{result.timeout} seconds" if result.timed_out?
-        raise "command exited with #{result.status}: #{result.stderr.strip}" unless result.success?
-
-        result.stdout.strip
+        result = Tools::Sandbox.exec(full_command, workspace, timeout: @exec_timeout.total_seconds.to_i)
+        handle_exec_result(result)
       end
 
       private def build_sandboxed_command(command : String, job : CronJob) : String
@@ -475,20 +472,21 @@ module Autobot
           env["PREV_OUTPUT"] = prev
         end
 
-        output = IO::Memory.new
-        error = IO::Memory.new
-        status = Process.run(
-          "sh", {"-c", command},
-          output: output,
-          error: error,
+        result = Tools::CommandRunner.run(
+          "sh",
+          ["-c", command],
+          timeout: @exec_timeout.total_seconds.to_i,
+          max_output_size: MAX_STORED_OUTPUT_BYTES,
           env: env,
         )
+        handle_exec_result(result)
+      end
 
-        unless status.success?
-          raise "command exited with #{status.exit_code}: #{error.to_s.strip}"
-        end
+      private def handle_exec_result(result : Tools::CommandRunner::Result) : String
+        raise "command timed out after #{result.timeout} seconds" if result.timed_out?
+        raise "command exited with #{result.status}: #{result.stderr.strip}" unless result.success?
 
-        output.to_s.strip
+        result.stdout.strip
       end
 
       private def schedule_next_run(job : CronJob) : Nil

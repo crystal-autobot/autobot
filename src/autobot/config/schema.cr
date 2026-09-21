@@ -347,6 +347,7 @@ module Autobot::Config
     include YAML::Serializable
     property? enabled : Bool = true
     property store_path : String = "./cron.json"
+    property exec_timeout : Int32 = 30
 
     def initialize
     end

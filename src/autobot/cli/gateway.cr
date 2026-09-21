@@ -94,12 +94,14 @@ module Autobot
         end
 
         sandbox_config = config.tools.try(&.sandbox) || "auto"
+        exec_timeout = config.cron.try(&.exec_timeout.seconds) || Cron::Service::EXEC_TIMEOUT
         cron_service = Cron::Service.new(
           cron_store_path,
           on_job: on_job,
           on_exec: on_exec,
           workspace: config.workspace_path,
           sandbox_config: sandbox_config,
+          exec_timeout: exec_timeout,
         )
         cron_service.start
 

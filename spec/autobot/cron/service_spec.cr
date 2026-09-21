@@ -1045,6 +1045,30 @@ describe Autobot::Cron::Service do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "times out hanging direct exec jobs and marks job as error" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(
+        store_path: tmp / "cron.json",
+        sandbox_config: "none",
+        exec_timeout: 1.second,
+      )
+
+      job = service.add_job(
+        name: "exec_hang",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "sleep 10"
+      )
+
+      service.run_job(job.id, force: true)
+
+      jobs = service.list_jobs
+      jobs.first.state.last_status.should eq(Autobot::Cron::JobStatus::Error)
+      jobs.first.state.last_error.to_s.should eq("command timed out after 1 seconds")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "limits stored exec command output size to prevent E2BIG errors" do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", sandbox_config: "none")
