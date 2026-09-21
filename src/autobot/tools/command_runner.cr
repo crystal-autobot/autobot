@@ -27,6 +27,7 @@ module Autobot
         args : Array(String),
         timeout : Int32,
         max_output_size : Int32 = DEFAULT_MAX_OUTPUT,
+        chdir : String? = nil,
       ) : Result
         stdout_read, stdout_write = IO.pipe
         stderr_read, stderr_write = IO.pipe
@@ -36,6 +37,7 @@ module Autobot
           args,
           output: stdout_write,
           error: stderr_write,
+          chdir: chdir,
         )
 
         stdout_write.close

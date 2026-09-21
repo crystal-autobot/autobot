@@ -64,5 +64,13 @@ describe Autobot::Tools::CommandRunner do
 
       result.stdout.should eq("abcd\n... (output truncated at 4 bytes)")
     end
+
+    it "runs the command in the given directory" do
+      dir = File.realpath(Dir.tempdir)
+
+      result = Autobot::Tools::CommandRunner.run("pwd", [] of String, 5, chdir: dir)
+
+      result.stdout.strip.should eq(dir)
+    end
   end
 end
