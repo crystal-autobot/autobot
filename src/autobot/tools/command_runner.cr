@@ -20,12 +20,15 @@ module Autobot
           parts << "Error: Command timed out after #{timeout} seconds" if timed_out?
           parts << stdout unless stdout.empty?
           parts << "STDERR:\n#{stderr}" unless stderr.blank?
-          exit_code.try { |code| parts << "\nExit code: #{code}" unless code.zero? }
+          failure.try { |failure| parts << "\n#{failure}" }
           parts.join("\n")
         end
 
-        private def exit_code : Int32?
-          status.try { |status| status.exit_code if status.normal_exit? }
+        private def failure : String?
+          status = self.status
+          return if status.nil? || status.success?
+
+          status.normal_exit? ? "Exit code: #{status.exit_code}" : "Killed by signal #{status}"
         end
       end
 

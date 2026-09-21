@@ -66,6 +66,10 @@ describe Autobot::Tools::CommandRunner do
       run("echo out; echo >&2").report.should eq("out\n")
     end
 
+    it "names the signal that killed the command" do
+      run("kill -KILL $$").report.should eq("\nKilled by signal KILL")
+    end
+
     it "starts with the timeout and has no exit code when the command timed out" do
       result = Autobot::Tools::CommandRunner::Result.new(nil, "working\n", "", 7)
 
