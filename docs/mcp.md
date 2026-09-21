@@ -107,7 +107,9 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 ### Timeouts
 
-If a server takes longer than 30s to initialize (e.g. downloading dependencies on first run), the handshake will fail. Pre-install dependencies before running autobot:
+Request execution is bounded by timeouts (30s for the initialization handshake, 60s for tool calls). If a tool call times out, the server remains running and subsequent tool calls proceed normally; late responses arriving after the deadline are automatically discarded so the stdio stream stays synchronized.
+
+If a server takes longer than 30s to initialize or fails the protocol handshake, Autobot terminates the process immediately to prevent leaked background processes. Pre-install dependencies before running autobot:
 
 ```bash
 # For Python-based servers
