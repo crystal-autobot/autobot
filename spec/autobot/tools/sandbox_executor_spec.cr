@@ -92,6 +92,7 @@ describe Autobot::Tools::SandboxExecutor do
     result = executor.exec_program("sh", ["-c", "echo working; sleep 5"], timeout: 1)
 
     result.error?.should be_true
+    result.content.should contain("Command timed out after 1 seconds")
     result.content.should contain("working")
     result.content.should_not contain("Exit code")
   end

@@ -1,4 +1,5 @@
 require "base64"
+require "./command_runner"
 require "./result"
 require "./sandbox"
 
@@ -130,13 +131,12 @@ module Autobot
       end
 
       private def exec_via_sandbox_exec(command : String, timeout : Int32, workspace : Path) : ToolResult
-        status, stdout, stderr = Sandbox.exec(command, workspace, timeout)
-        ToolResult.success(format_exec_output(status, stdout, stderr))
+        result = Sandbox.exec(command, workspace, timeout)
+        ToolResult.success(format_exec_output(result, timeout))
       end
 
       private def exec_program_via_sandbox_exec(program : String, args : Array(String), timeout : Int32, workspace : Path) : ToolResult
-        status, stdout, stderr = Sandbox.exec_program(program, args, workspace, timeout)
-        require_success(status, stdout, stderr)
+        require_success(Sandbox.exec_program(program, args, workspace, timeout), timeout)
       end
 
       # Direct execution (tests and non-sandbox mode)
@@ -204,27 +204,27 @@ module Autobot
       end
 
       private def exec_direct(command : String, timeout : Int32) : ToolResult
-        status, stdout, stderr = Sandbox.capture_command("sh", ["-c", command], timeout)
-        ToolResult.success(format_exec_output(status, stdout, stderr))
+        result = CommandRunner.run("sh", ["-c", command], timeout)
+        ToolResult.success(format_exec_output(result, timeout))
       end
 
       private def exec_program_direct(program : String, args : Array(String), timeout : Int32) : ToolResult
-        status, stdout, stderr = Sandbox.capture_command(program, args, timeout)
-        require_success(status, stdout, stderr)
+        require_success(CommandRunner.run(program, args, timeout), timeout)
       end
 
-      private def require_success(status : Process::Status, stdout : String, stderr : String) : ToolResult
-        output = format_exec_output(status, stdout, stderr)
-        status.success? ? ToolResult.success(output) : ToolResult.error(output)
+      private def require_success(result : CommandRunner::Result, timeout : Int32) : ToolResult
+        output = format_exec_output(result, timeout)
+        result.success? ? ToolResult.success(output) : ToolResult.error(output)
       end
 
-      private def format_exec_output(status : Process::Status, stdout : String, stderr : String) : String
+      private def format_exec_output(result : CommandRunner::Result, timeout : Int32) : String
         parts = [] of String
-        parts << stdout unless stdout.empty?
-        parts << "STDERR:\n#{stderr}" unless stderr.empty?
+        parts << "Error: Command timed out after #{timeout} seconds" if result.timed_out?
+        parts << result.stdout unless result.stdout.empty?
+        parts << "STDERR:\n#{result.stderr}" unless result.stderr.empty?
 
-        if !status.success? && status.normal_exit? && status.exit_code != Sandbox::TIMEOUT_EXIT_CODE
-          parts << "\nExit code: #{status.exit_code}"
+        if (exit_code = result.exit_code) && !result.success?
+          parts << "\nExit code: #{exit_code}"
         end
 
         parts.empty? ? "[no output]" : parts.join("\n")

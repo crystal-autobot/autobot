@@ -452,16 +452,13 @@ module Autobot
         raise "Sandbox is enabled but no workspace configured for cron exec" unless workspace
 
         full_command = build_sandboxed_command(command, job)
-        status, stdout, stderr = Tools::Sandbox.exec(
-          full_command, workspace,
-          timeout: EXEC_TIMEOUT.total_seconds.to_i,
-        )
+        timeout = EXEC_TIMEOUT.total_seconds.to_i
+        result = Tools::Sandbox.exec(full_command, workspace, timeout: timeout)
 
-        unless status.success?
-          raise "command exited with #{status.exit_code}: #{stderr.strip}"
-        end
+        raise "command timed out after #{timeout} seconds" if result.timed_out?
+        raise "command exited with #{result.status}: #{result.stderr.strip}" unless result.success?
 
-        stdout.strip
+        result.stdout.strip
       end
 
       private def build_sandboxed_command(command : String, job : CronJob) : String
