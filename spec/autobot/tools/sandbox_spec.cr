@@ -1,5 +1,15 @@
 require "../../spec_helper"
 
+private def docker_available? : Bool
+  Process.run("docker", ["info"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
+rescue
+  false
+end
+
+private def docker_containers_with(command : String) : Array(String)
+  `docker ps --all --no-trunc --format '{{.Names}} {{.Command}}'`.lines.select(&.includes?(command))
+end
+
 describe Autobot::Tools::Sandbox do
   describe ".resolve_type" do
     it "returns Bubblewrap for 'bubblewrap'" do
@@ -157,6 +167,24 @@ describe Autobot::Tools::Sandbox do
         target.should eq(source)
         File.exists?(source).should be_true
       end
+    end
+  end
+
+  describe ".exec in docker" do
+    it "removes the container when the command times out" do
+      pending! "docker is not available" unless docker_available?
+
+      workspace = TestHelper.tmp_dir("autobot_sandbox")
+      command = "trap '' TERM; sleep 31557"
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Docker
+
+      result = Autobot::Tools::Sandbox.exec(command, workspace, 2)
+
+      result.timed_out?.should be_true
+      docker_containers_with(command).should be_empty
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+      FileUtils.rm_rf(workspace.to_s) if workspace
     end
   end
 
