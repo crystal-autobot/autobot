@@ -6,7 +6,7 @@ module Autobot
       SIGNAL_GRACE_PERIOD = 0.5.seconds
       DEFAULT_MAX_OUTPUT  = 10_000
 
-      record Result, status : Process::Status?, stdout : String, stderr : String do
+      record Result, status : Process::Status?, stdout : String, stderr : String, timeout : Int32 do
         def timed_out? : Bool
           status.nil?
         end
@@ -15,7 +15,16 @@ module Autobot
           status.try(&.success?) || false
         end
 
-        def exit_code : Int32?
+        def report : String
+          parts = [] of String
+          parts << "Error: Command timed out after #{timeout} seconds" if timed_out?
+          parts << stdout unless stdout.empty?
+          parts << "STDERR:\n#{stderr}" unless stderr.blank?
+          exit_code.try { |code| parts << "\nExit code: #{code}" unless code.zero? }
+          parts.join("\n")
+        end
+
+        private def exit_code : Int32?
           status.try { |status| status.exit_code if status.normal_exit? }
         end
       end
@@ -57,7 +66,7 @@ module Autobot
         stdout_read.close unless stdout_read.closed?
         stderr_read.close unless stderr_read.closed?
 
-        Result.new(status, stdout_channel.receive, stderr_channel.receive)
+        Result.new(status, stdout_channel.receive, stderr_channel.receive, timeout)
       end
 
       private def self.read_limited_output(io : IO, max_size : Int32) : String

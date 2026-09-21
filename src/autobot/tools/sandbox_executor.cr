@@ -131,12 +131,11 @@ module Autobot
       end
 
       private def exec_via_sandbox_exec(command : String, timeout : Int32, workspace : Path) : ToolResult
-        result = Sandbox.exec(command, workspace, timeout)
-        ToolResult.success(format_exec_output(result, timeout))
+        ToolResult.success(format_exec_output(Sandbox.exec(command, workspace, timeout)))
       end
 
       private def exec_program_via_sandbox_exec(program : String, args : Array(String), timeout : Int32, workspace : Path) : ToolResult
-        require_success(Sandbox.exec_program(program, args, workspace, timeout), timeout)
+        require_success(Sandbox.exec_program(program, args, workspace, timeout))
       end
 
       # Direct execution (tests and non-sandbox mode)
@@ -204,30 +203,20 @@ module Autobot
       end
 
       private def exec_direct(command : String, timeout : Int32) : ToolResult
-        result = CommandRunner.run("sh", ["-c", command], timeout)
-        ToolResult.success(format_exec_output(result, timeout))
+        ToolResult.success(format_exec_output(CommandRunner.run("sh", ["-c", command], timeout)))
       end
 
       private def exec_program_direct(program : String, args : Array(String), timeout : Int32) : ToolResult
-        require_success(CommandRunner.run(program, args, timeout), timeout)
+        require_success(CommandRunner.run(program, args, timeout))
       end
 
-      private def require_success(result : CommandRunner::Result, timeout : Int32) : ToolResult
-        output = format_exec_output(result, timeout)
+      private def require_success(result : CommandRunner::Result) : ToolResult
+        output = format_exec_output(result)
         result.success? ? ToolResult.success(output) : ToolResult.error(output)
       end
 
-      private def format_exec_output(result : CommandRunner::Result, timeout : Int32) : String
-        parts = [] of String
-        parts << "Error: Command timed out after #{timeout} seconds" if result.timed_out?
-        parts << result.stdout unless result.stdout.empty?
-        parts << "STDERR:\n#{result.stderr}" unless result.stderr.empty?
-
-        if (exit_code = result.exit_code) && !result.success?
-          parts << "\nExit code: #{exit_code}"
-        end
-
-        parts.empty? ? "[no output]" : parts.join("\n")
+      private def format_exec_output(result : CommandRunner::Result) : String
+        result.report.presence || "[no output]"
       end
     end
   end

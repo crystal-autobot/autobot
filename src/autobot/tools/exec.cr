@@ -9,8 +9,7 @@ module Autobot
     class ExecTool < Tool
       Log = ::Log.for(self)
 
-      DEFAULT_TIMEOUT =     60
-      MAX_OUTPUT_SIZE = 10_000
+      DEFAULT_TIMEOUT = 60
 
       # Deny patterns for dangerous operations (defense-in-depth)
       DEFAULT_DENY_PATTERNS = [
@@ -155,25 +154,8 @@ module Autobot
       end
 
       private def run_command_direct(command : String, cwd : String) : String
-        result = CommandRunner.run("sh", ["-c", command], @timeout, MAX_OUTPUT_SIZE, chdir: cwd)
-        build_command_result(result)
-      end
-
-      private def build_command_result(result : CommandRunner::Result) : String
-        parts = [] of String
-
-        if result.timed_out?
-          parts << "Error: Command timed out after #{@timeout} seconds"
-        end
-
-        parts << result.stdout unless result.stdout.empty?
-        parts << "STDERR:\n#{result.stderr}" unless result.stderr.strip.empty?
-
-        if (exit_code = result.exit_code) && !result.success?
-          parts << "\nExit code: #{exit_code}"
-        end
-
-        parts.empty? ? Constants::NO_OUTPUT_MESSAGE : parts.join("\n")
+        result = CommandRunner.run("sh", ["-c", command], @timeout, chdir: cwd)
+        result.report.presence || Constants::NO_OUTPUT_MESSAGE
       end
 
       private def guard_command(command : String) : String?
