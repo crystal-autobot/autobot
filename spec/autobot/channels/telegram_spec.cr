@@ -133,9 +133,13 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     download_telegram_file_bytes(file_id)
   end
 
-  def test_send_media_request(chat_id : String, file_bytes : Bytes, caption : String, api_method : String, field_name : String, filename : String, content_type : String) : Nil
+  def test_send_media_request(chat_id : String, file_bytes : Bytes, caption : String, api_method : String, field_name : String, filename : String, content_type : String) : Bool
     send_media_request(chat_id, file_bytes, caption,
       api_method: api_method, field_name: field_name, filename: filename, content_type: content_type)
+  end
+
+  def test_send_media(chat_id : String, attachment : Autobot::Bus::MediaAttachment, caption : String) : Nil
+    send_media(chat_id, attachment, caption)
   end
 
   getter sent_replies = [] of String
@@ -170,6 +174,30 @@ private def build_channel(
     custom_commands: cmds,
     cron_service: cron_service,
   )
+end
+
+private def start_api_stub(statuses : Array(Int32)) : {TCPServer, Array(String)}
+  server = TCPServer.new("127.0.0.1", 0)
+  methods = [] of String
+
+  spawn do
+    statuses.each do |status|
+      socket = server.accept? || break
+      methods << socket.gets.to_s.split(' ')[1].split('/').last
+      length = 0
+      while (line = socket.gets) && !line.empty?
+        name, _, value = line.partition(':')
+        length = value.strip.to_i if name.downcase == "content-length"
+      end
+      socket.skip(length)
+      body = status == 200 ? %({"ok":true,"result":{}}) : %({"ok":false,"description":"Bad Request: IMAGE_PROCESS_FAILED"})
+      socket << "HTTP/1.1 #{status} #{HTTP::Status.new(status).description}\r\nContent-Type: application/json\r\nContent-Length: #{body.bytesize}\r\n\r\n#{body}"
+      socket.flush
+      socket.close
+    end
+  end
+
+  {server, methods}
 end
 
 private TOPIC_MESSAGE   = %({"message_id": 9, "message_thread_id": 57, "is_topic_message": true, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
@@ -1118,6 +1146,47 @@ describe Autobot::Channels::TelegramChannel do
       when timeout(5.seconds)
         fail("proxy did not receive a CONNECT request")
       end
+    ensure
+      server.close if server
+    end
+  end
+
+  describe "#send_media" do
+    photo = Autobot::Bus::MediaAttachment.new(type: "photo", file_path: ".output/chart.png", mime_type: "image/png", data: Base64.strict_encode("png"))
+
+    it "retries a rejected photo as a document" do
+      server, methods = start_api_stub([400, 200])
+      channel = build_channel
+      channel.target_uri = URI.parse("http://127.0.0.1:#{server.local_address.port}")
+
+      channel.test_send_media("123", photo, "chart")
+
+      methods.should eq(["sendPhoto", "sendDocument"])
+    ensure
+      server.close if server
+    end
+
+    it "falls back to the caption when the document is rejected too" do
+      server, methods = start_api_stub([400, 400, 200])
+      channel = build_channel
+      channel.target_uri = URI.parse("http://127.0.0.1:#{server.local_address.port}")
+
+      channel.test_send_media("123", photo, "chart")
+
+      methods.should eq(["sendPhoto", "sendDocument", "sendMessage"])
+    ensure
+      server.close if server
+    end
+
+    it "sends the caption right after a rejected document" do
+      server, methods = start_api_stub([400, 200])
+      channel = build_channel
+      channel.target_uri = URI.parse("http://127.0.0.1:#{server.local_address.port}")
+      document = Autobot::Bus::MediaAttachment.new(type: "document", data: Base64.strict_encode("pdf"))
+
+      channel.test_send_media("123", document, "report")
+
+      methods.should eq(["sendDocument", "sendMessage"])
     ensure
       server.close if server
     end
