@@ -440,8 +440,8 @@ module Autobot::Channels
       media.find { |attachment| attachment.type == "photo" && attachment.data }
     end
 
-    private def get_media_params(attachment : Bus::MediaAttachment)
-      case attachment.type
+    private def get_media_params(attachment : Bus::MediaAttachment, type = attachment.type)
+      case type
       when "photo"
         {api_method: "sendPhoto", field_name: "photo", filename: media_filename(attachment, "image.png"), content_type: attachment.mime_type || "image/png"}
       when "animation"
@@ -464,13 +464,11 @@ module Autobot::Channels
       end
 
       file_bytes = Base64.decode(data)
-      params = get_media_params(attachment)
+      [get_media_params(attachment), get_media_params(attachment, "document")].uniq.each do |params|
+        return if send_media_request(chat_id, file_bytes, caption, **params)
+      end
 
-      send_media_request(chat_id, file_bytes, caption,
-        api_method: params[:api_method],
-        field_name: params[:field_name],
-        filename: params[:filename],
-        content_type: params[:content_type])
+      send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
     rescue ex
       Log.error { "Error sending media: #{ex.message}" }
       send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
@@ -484,7 +482,7 @@ module Autobot::Channels
       field_name : String,
       filename : String,
       content_type : String,
-    ) : Nil
+    ) : Bool
       body = build_media_multipart(chat_id, file_bytes, caption,
         field_name: field_name, filename: filename, content_type: content_type)
 
@@ -492,20 +490,13 @@ module Autobot::Channels
         "Content-Type" => "multipart/form-data; boundary=#{MULTIPART_BOUNDARY}",
       }
 
-      fallback_needed = false
-
       with_api_client do |client|
         response = client.post("/bot#{@token}/#{api_method}", headers: headers, body: body)
+        return true if response.status_code == 200
 
-        unless response.status_code == 200
-          Log.error { "#{api_method} failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
-          fallback_needed = true
-        end
+        Log.error { "#{api_method} failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
       end
-
-      if fallback_needed
-        send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
-      end
+      false
     end
 
     private def build_media_multipart(
