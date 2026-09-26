@@ -51,6 +51,18 @@ describe Autobot::Tools::CommandRunner do
 
       result.stdout.strip.should eq(dir)
     end
+
+    it "forwards environment variables" do
+      result = Autobot::Tools::CommandRunner.run(
+        "sh",
+        ["-c", "echo $TEST_VAR"],
+        5,
+        env: {"TEST_VAR" => "runner_val"}
+      )
+
+      result.success?.should be_true
+      result.stdout.strip.should eq("runner_val")
+    end
   end
 
   describe "Result#report" do

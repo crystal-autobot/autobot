@@ -775,3 +775,17 @@ describe Autobot::Config::BedrockProviderConfig do
     cfg.guardrail_version.should eq("1")
   end
 end
+
+describe Autobot::Config::CronConfig do
+  it "has correct defaults" do
+    config = Autobot::Config::CronConfig.from_yaml("--- {}")
+    config.enabled?.should be_true
+    config.store_path.should eq("./cron.json")
+    config.exec_timeout.should eq(30)
+  end
+
+  it "parses custom exec_timeout" do
+    config = Autobot::Config::CronConfig.from_yaml("exec_timeout: 60")
+    config.exec_timeout.should eq(60)
+  end
+end
