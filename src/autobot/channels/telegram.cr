@@ -440,8 +440,8 @@ module Autobot::Channels
       media.find { |attachment| attachment.type == "photo" && attachment.data }
     end
 
-    private def get_media_params(attachment : Bus::MediaAttachment)
-      case attachment.type
+    private def get_media_params(attachment : Bus::MediaAttachment, type = attachment.type)
+      case type
       when "photo"
         {api_method: "sendPhoto", field_name: "photo", filename: media_filename(attachment, "image.png"), content_type: attachment.mime_type || "image/png"}
       when "animation"
@@ -451,12 +451,8 @@ module Autobot::Channels
       when "audio"
         {api_method: "sendAudio", field_name: "audio", filename: media_filename(attachment, "audio.mp3"), content_type: attachment.mime_type || "audio/mpeg"}
       else
-        document_params(attachment)
+        {api_method: "sendDocument", field_name: "document", filename: media_filename(attachment, "file"), content_type: attachment.mime_type || "application/octet-stream"}
       end
-    end
-
-    private def document_params(attachment : Bus::MediaAttachment)
-      {api_method: "sendDocument", field_name: "document", filename: media_filename(attachment, "file"), content_type: attachment.mime_type || "application/octet-stream"}
     end
 
     private def send_media(chat_id : String, attachment : Bus::MediaAttachment, caption : String) : Nil
@@ -468,12 +464,8 @@ module Autobot::Channels
       end
 
       file_bytes = Base64.decode(data)
-      params = get_media_params(attachment)
-      return if send_media_request(chat_id, file_bytes, caption, **params)
-
-      unless params[:api_method] == "sendDocument"
-        Log.warn { "Retrying the rejected #{attachment.type} as a document" }
-        return if send_media_request(chat_id, file_bytes, caption, **document_params(attachment))
+      [get_media_params(attachment), get_media_params(attachment, "document")].uniq.each do |params|
+        return if send_media_request(chat_id, file_bytes, caption, **params)
       end
 
       send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
