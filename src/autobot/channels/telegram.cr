@@ -451,8 +451,12 @@ module Autobot::Channels
       when "audio"
         {api_method: "sendAudio", field_name: "audio", filename: media_filename(attachment, "audio.mp3"), content_type: attachment.mime_type || "audio/mpeg"}
       else
-        {api_method: "sendDocument", field_name: "document", filename: media_filename(attachment, "file"), content_type: attachment.mime_type || "application/octet-stream"}
+        document_params(attachment)
       end
+    end
+
+    private def document_params(attachment : Bus::MediaAttachment)
+      {api_method: "sendDocument", field_name: "document", filename: media_filename(attachment, "file"), content_type: attachment.mime_type || "application/octet-stream"}
     end
 
     private def send_media(chat_id : String, attachment : Bus::MediaAttachment, caption : String) : Nil
@@ -465,12 +469,14 @@ module Autobot::Channels
 
       file_bytes = Base64.decode(data)
       params = get_media_params(attachment)
+      return if send_media_request(chat_id, file_bytes, caption, **params)
 
-      send_media_request(chat_id, file_bytes, caption,
-        api_method: params[:api_method],
-        field_name: params[:field_name],
-        filename: params[:filename],
-        content_type: params[:content_type])
+      unless params[:api_method] == "sendDocument"
+        Log.warn { "Retrying the rejected #{attachment.type} as a document" }
+        return if send_media_request(chat_id, file_bytes, caption, **document_params(attachment))
+      end
+
+      send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
     rescue ex
       Log.error { "Error sending media: #{ex.message}" }
       send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
@@ -484,7 +490,7 @@ module Autobot::Channels
       field_name : String,
       filename : String,
       content_type : String,
-    ) : Nil
+    ) : Bool
       body = build_media_multipart(chat_id, file_bytes, caption,
         field_name: field_name, filename: filename, content_type: content_type)
 
@@ -492,20 +498,13 @@ module Autobot::Channels
         "Content-Type" => "multipart/form-data; boundary=#{MULTIPART_BOUNDARY}",
       }
 
-      fallback_needed = false
-
       with_api_client do |client|
         response = client.post("/bot#{@token}/#{api_method}", headers: headers, body: body)
+        return true if response.status_code == 200
 
-        unless response.status_code == 200
-          Log.error { "#{api_method} failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
-          fallback_needed = true
-        end
+        Log.error { "#{api_method} failed (HTTP #{response.status_code}): #{parse_error_description(response.body)}" }
       end
-
-      if fallback_needed
-        send_html_chunk(chat_id, MarkdownToTelegramHTML.escape_html(caption))
-      end
+      false
     end
 
     private def build_media_multipart(
