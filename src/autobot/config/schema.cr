@@ -524,6 +524,10 @@ module Autobot::Config
       plugins.try(&.enabled?(name)) != false
     end
 
+    def cron_exec_timeout : Time::Span
+      (cron || CronConfig.new).exec_timeout.seconds
+    end
+
     def validate! : Nil
       has_provider = false
       if p = providers
