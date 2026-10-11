@@ -57,14 +57,19 @@ module Autobot
         stderr_read, stderr_write = IO.pipe
         stdin_read, stdin_write = IO.pipe
 
-        process = Process.new(
-          @command, @args,
-          input: stdin_read,
-          output: stdout_write,
-          error: stderr_write,
-          env: env,
-          clear_env: true,
-        )
+        process = begin
+          Process.new(
+            @command, @args,
+            input: stdin_read,
+            output: stdout_write,
+            error: stderr_write,
+            env: env,
+            clear_env: true,
+          )
+        rescue ex
+          {stdin_read, stdin_write, stdout_read, stdout_write, stderr_read, stderr_write}.each(&.close)
+          raise ex
+        end
 
         # Close child-side ends in parent
         stdin_read.close
