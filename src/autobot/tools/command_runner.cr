@@ -92,9 +92,9 @@ module Autobot
           buffer.write(chunk[0, n])
         end
 
-        buffer.to_s
+        buffer.to_s.scrub
       rescue
-        buffer.to_s
+        buffer.to_s.scrub
       end
 
       private def self.wait_for_process(
