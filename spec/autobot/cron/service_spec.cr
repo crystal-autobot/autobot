@@ -1086,10 +1086,9 @@ describe Autobot::Cron::Service do
       last_output = jobs.first.state.last_output
       last_output.should_not be_nil
       if output = last_output
-        max = Autobot::Cron::Service::MAX_STORED_OUTPUT_BYTES +
-              Autobot::Cron::Service::OUTPUT_TRUNCATION_NOTICE.bytesize
-        output.bytesize.should be <= max
-        output.should contain("Output truncated due to size limit")
+        max = Autobot::Cron::Service::MAX_STORED_OUTPUT_BYTES
+        output.bytesize.should be <= max + "\n... (output truncated at #{max} bytes)".bytesize
+        output.should contain("output truncated at #{max} bytes")
       end
     ensure
       FileUtils.rm_rf(tmp) if tmp
@@ -1114,7 +1113,7 @@ describe Autobot::Cron::Service do
       last_output.should_not be_nil
       if output = last_output
         output.valid_encoding?.should be_true
-        output.should contain("Output truncated due to size limit")
+        output.should contain("output truncated at")
       end
     ensure
       FileUtils.rm_rf(tmp) if tmp

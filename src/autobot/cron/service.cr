@@ -18,8 +18,7 @@ module Autobot
 
       # Cap stored exec output so it can be safely re-exported as PREV_OUTPUT on
       # the next run without tripping E2BIG (argument list too long).
-      MAX_STORED_OUTPUT_BYTES  = 32_768
-      OUTPUT_TRUNCATION_NOTICE = "\n...[Output truncated due to size limit]"
+      MAX_STORED_OUTPUT_BYTES = 32_768
 
       @store_path : Path
       @on_job : JobCallback?
@@ -407,7 +406,7 @@ module Autobot
       end
 
       private def run_exec_job(job : CronJob, start_ms : Int64) : Nil
-        output = truncate_output(exec_command(job))
+        output = exec_command(job)
 
         job.state = job.state.copy(
           last_run_at_ms: start_ms,
@@ -422,15 +421,6 @@ module Autobot
       rescue ex
         job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
         Log.error { "Cron: exec job '#{job.name}' failed: #{ex.message}" }
-      end
-
-      # Bound stored output to MAX_STORED_OUTPUT_BYTES. byte_slice can cut a
-      # multi-byte character in half, so scrub drops the dangling bytes to keep
-      # the result valid UTF-8 for JSON persistence and the PREV_OUTPUT export.
-      private def truncate_output(output : String) : String
-        return output if output.bytesize <= MAX_STORED_OUTPUT_BYTES
-
-        output.byte_slice(0, MAX_STORED_OUTPUT_BYTES).scrub("") + OUTPUT_TRUNCATION_NOTICE
       end
 
       private def exec_command(job : CronJob) : String
@@ -453,7 +443,12 @@ module Autobot
         raise "Sandbox is enabled but no workspace configured for cron exec" unless workspace
 
         full_command = build_sandboxed_command(command, job)
-        result = Tools::Sandbox.exec(full_command, workspace, timeout: @exec_timeout.total_seconds.to_i)
+        result = Tools::Sandbox.exec(
+          full_command,
+          workspace,
+          timeout: @exec_timeout.total_seconds.to_i,
+          max_output_size: MAX_STORED_OUTPUT_BYTES,
+        )
         handle_exec_result(result)
       end
 
