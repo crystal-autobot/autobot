@@ -1045,6 +1045,15 @@ describe Autobot::Cron::Service do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "rejects an exec timeout below one second" do
+      tmp = TestHelper.tmp_dir
+      expect_raises(ArgumentError, "exec_timeout must be at least") do
+        Autobot::Cron::Service.new(store_path: tmp / "cron.json", exec_timeout: 0.seconds)
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "times out hanging direct exec jobs and marks job as error" do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(

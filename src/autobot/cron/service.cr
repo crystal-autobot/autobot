@@ -19,6 +19,7 @@ module Autobot
       # Cap stored exec output so it can be safely re-exported as PREV_OUTPUT on
       # the next run without tripping E2BIG (argument list too long).
       MAX_STORED_OUTPUT_BYTES = 32_768
+      MIN_EXEC_TIMEOUT        = 1.second
 
       @store_path : Path
       @on_job : JobCallback?
@@ -38,6 +39,7 @@ module Autobot
         @sandbox_config : String = "none",
         @exec_timeout : Time::Span = EXEC_TIMEOUT,
       )
+        raise ArgumentError.new("exec_timeout must be at least #{MIN_EXEC_TIMEOUT}") if @exec_timeout < MIN_EXEC_TIMEOUT
       end
 
       # Start the cron service timer loop.
