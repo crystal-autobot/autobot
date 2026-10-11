@@ -243,6 +243,7 @@ Tools are auto-discovered at startup and registered as `mcp_{server}_{tool}`. MC
 cron:
   enabled: true
   store_path: "./cron.json"
+  exec_timeout: 30  # Timeout in seconds for exec jobs in both sandbox and direct modes
 ```
 
 ## Gateway
@@ -361,6 +362,7 @@ tools:
 cron:
   enabled: true
   store_path: "./cron.json"
+  exec_timeout: 30
 
 # MCP servers (external tool providers)
 mcp:

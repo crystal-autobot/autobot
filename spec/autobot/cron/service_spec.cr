@@ -1045,6 +1045,39 @@ describe Autobot::Cron::Service do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "rejects an exec timeout below one second" do
+      tmp = TestHelper.tmp_dir
+      expect_raises(ArgumentError, "exec_timeout must be at least") do
+        Autobot::Cron::Service.new(store_path: tmp / "cron.json", exec_timeout: 0.seconds)
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "times out hanging direct exec jobs and marks job as error" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(
+        store_path: tmp / "cron.json",
+        sandbox_config: "none",
+        exec_timeout: 1.second,
+      )
+
+      job = service.add_job(
+        name: "exec_hang",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "sleep 10"
+      )
+
+      service.run_job(job.id, force: true)
+
+      jobs = service.list_jobs
+      jobs.first.state.last_status.should eq(Autobot::Cron::JobStatus::Error)
+      jobs.first.state.last_error.to_s.should eq("command timed out after 1 seconds")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "limits stored exec command output size to prevent E2BIG errors" do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", sandbox_config: "none")
@@ -1062,10 +1095,9 @@ describe Autobot::Cron::Service do
       last_output = jobs.first.state.last_output
       last_output.should_not be_nil
       if output = last_output
-        max = Autobot::Cron::Service::MAX_STORED_OUTPUT_BYTES +
-              Autobot::Cron::Service::OUTPUT_TRUNCATION_NOTICE.bytesize
-        output.bytesize.should be <= max
-        output.should contain("Output truncated due to size limit")
+        max = Autobot::Cron::Service::MAX_STORED_OUTPUT_BYTES
+        output.bytesize.should be <= max + "\n... (output truncated at #{max} bytes)".bytesize
+        output.should contain("output truncated at #{max} bytes")
       end
     ensure
       FileUtils.rm_rf(tmp) if tmp
@@ -1090,7 +1122,7 @@ describe Autobot::Cron::Service do
       last_output.should_not be_nil
       if output = last_output
         output.valid_encoding?.should be_true
-        output.should contain("Output truncated due to size limit")
+        output.should contain("output truncated at")
       end
     ensure
       FileUtils.rm_rf(tmp) if tmp

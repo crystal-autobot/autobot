@@ -151,7 +151,7 @@ module Autobot
       end
 
       def self.run_job(config_path : String?, job_id : String, force : Bool) : Nil
-        if cron_service.run_job(job_id, force: force)
+        if runnable_cron_service(config_path).run_job(job_id, force: force)
           puts "✓ Job executed"
         else
           STDERR.puts "Failed to run job #{job_id}"
@@ -161,6 +161,11 @@ module Autobot
 
       private def self.cron_service : Cron::Service
         Cron::Service.new(Config::Loader.cron_store_path)
+      end
+
+      private def self.runnable_cron_service(config_path : String?) : Cron::Service
+        config = Config::Loader.load(config_path, validate: false)
+        Cron::Service.new(Config::Loader.cron_store_path, exec_timeout: config.cron_exec_timeout)
       end
 
       private def self.format_time_ms(time_ms : Int64?) : String

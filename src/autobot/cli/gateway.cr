@@ -100,6 +100,7 @@ module Autobot
           on_exec: on_exec,
           workspace: config.workspace_path,
           sandbox_config: sandbox_config,
+          exec_timeout: config.cron_exec_timeout,
         )
         cron_service.start
 

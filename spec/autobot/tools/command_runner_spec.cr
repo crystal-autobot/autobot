@@ -51,6 +51,45 @@ describe Autobot::Tools::CommandRunner do
 
       result.stdout.strip.should eq(dir)
     end
+
+    it "forwards environment variables" do
+      result = Autobot::Tools::CommandRunner.run(
+        "sh",
+        ["-c", "echo $TEST_VAR"],
+        5,
+        env: {"TEST_VAR" => "runner_val"}
+      )
+
+      result.success?.should be_true
+      result.stdout.strip.should eq("runner_val")
+    end
+
+    it "keeps truncated output valid utf-8 when the cut splits a character" do
+      result = Autobot::Tools::CommandRunner.run(
+        "sh",
+        ["-c", "yes € | head -n 100 | tr -d '\\n'"],
+        5,
+        max_output_size: 10
+      )
+
+      result.stdout.valid_encoding?.should be_true
+      result.stdout.should contain("output truncated at 10 bytes")
+    end
+
+    it "closes pipes when the process cannot be started" do
+      attempts = 10
+      open_fds = Dir.children("/dev/fd").size
+
+      attempts.times do
+        expect_raises(File::NotFoundError) do
+          Autobot::Tools::CommandRunner.run("autobot-missing-binary", [] of String, 5)
+        end
+      end
+
+      # the stdlib leaves one stray fd per failed exec until GC runs; a leaked pipe pair adds four
+      leaked = Dir.children("/dev/fd").size - open_fds
+      leaked.should be < attempts * 2
+    end
   end
 
   describe "Result#report" do
