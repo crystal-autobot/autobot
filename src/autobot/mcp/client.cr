@@ -34,7 +34,8 @@ module Autobot
       @process : Process?
       @stdin : IO?
       @stdout : IO?
-      @responses : Channel(JSON::Any)?
+      @pending : Channel(JSON::Any)?
+      @stream_closed : Bool = false
       @mutex : Mutex
       @request_id : Int64
 
@@ -109,8 +110,7 @@ module Autobot
 
         @stdin.try(&.close) rescue nil
         @stdout.try(&.close) rescue nil
-        @responses.try(&.close) rescue nil
-        @responses = nil
+        @pending.try(&.close)
         @process = nil
         Log.info { "[#{@server_name}] MCP server stopped" }
       end
@@ -118,7 +118,7 @@ module Autobot
       def alive? : Bool
         process = @process
         return false unless process
-        !process.terminated?
+        !process.terminated? && !@stream_closed
       end
 
       # Sends `tools/list` to the server and returns the tool definitions.
@@ -186,6 +186,8 @@ module Autobot
 
       private def send_request(method : String, params : JSON::Any, timeout : Time::Span = CALL_TIMEOUT) : JSON::Any
         @mutex.synchronize do
+          raise "MCP server closed the connection" if @stream_closed
+
           @request_id += 1
           id = @request_id
 
@@ -196,20 +198,29 @@ module Autobot
             "params"  => params,
           }
 
-          write_message(JSON::Any.new(request))
-          read_response(id, timeout)
+          pending = Channel(JSON::Any).new(1)
+          @pending = pending
+          begin
+            write_message(JSON::Any.new(request))
+            read_response(pending, id, timeout)
+          ensure
+            @pending = nil
+            pending.close
+          end
         end
       end
 
       private def send_notification(method : String, params : JSON::Any) : Nil
-        @mutex.synchronize do
-          message = {
-            "jsonrpc" => JSON::Any.new("2.0"),
-            "method"  => JSON::Any.new(method),
-            "params"  => params,
-          }
-          write_message(JSON::Any.new(message))
-        end
+        @mutex.synchronize { write_notification(method, params) }
+      end
+
+      private def write_notification(method : String, params : JSON::Any) : Nil
+        message = {
+          "jsonrpc" => JSON::Any.new("2.0"),
+          "method"  => JSON::Any.new(method),
+          "params"  => params,
+        }
+        write_message(JSON::Any.new(message))
       end
 
       private def write_message(message : JSON::Any) : Nil
@@ -219,52 +230,79 @@ module Autobot
         data = message.to_json
         stdin.print(data + "\n")
         stdin.flush
+      rescue IO::Error
+        raise "MCP server closed the connection"
       end
 
       private def start_reader(stdout : IO) : Nil
-        responses = Channel(JSON::Any).new
-        @responses = responses
+        @stream_closed = false
 
         spawn(name: "mcp-reader-#{@server_name}") do
           begin
             while line = stdout.gets
-              line = line.strip
-              next if line.empty?
-
-              parsed = begin
-                JSON.parse(line)
-              rescue JSON::ParseException
-                next
-              end
-
-              # Skip server notifications (messages without id or with method)
-              next unless parsed["id"]? && parsed["method"]?.nil?
-
-              responses.send(parsed)
+              dispatch(line)
             end
-          rescue IO::Error | Channel::ClosedError
-            # Stream or channel closed during shutdown
+          rescue ex
+            Log.warn { "[#{@server_name}] stdout reader stopped: #{ex.message}" }
           ensure
-            responses.close rescue nil
+            @stream_closed = true
+            @pending.try(&.close)
           end
         end
       end
 
-      private def read_response(expected_id : Int64, timeout : Time::Span) : JSON::Any
-        responses = @responses
-        raise "MCP server not running" unless responses
+      private def dispatch(line : String) : Nil
+        response = parse_response(line)
+        return unless response
 
+        @pending.try(&.send(response))
+      rescue Channel::ClosedError
+      end
+
+      private def parse_response(line : String) : JSON::Any?
+        return if line.blank?
+
+        message = JSON.parse(line).as_h?
+        unless message
+          Log.warn { "[#{@server_name}] ignoring non-object stdout line: #{line}" }
+          return
+        end
+        return if message.has_key?("method") || !message.has_key?("id")
+
+        JSON::Any.new(message)
+      rescue ex : JSON::ParseException
+        Log.warn { "[#{@server_name}] ignoring unparsable stdout line: #{ex.message}" }
+        nil
+      end
+
+      private def read_response(pending : Channel(JSON::Any), expected_id : Int64, timeout : Time::Span) : JSON::Any
         deadline = Time.instant + timeout
         loop do
           remaining = {Time::Span.zero, deadline - Time.instant}.max
           select
-          when response = responses.receive?
+          when response = pending.receive?
             raise "MCP server closed the connection" unless response
-            return response if response["id"]?.try(&.as_i64?) == expected_id
+            return response if response_for?(response, expected_id)
           when timeout(remaining)
-            raise "MCP request timed out after #{timeout.total_seconds.to_i}s"
+            cancel_request(expected_id)
+            raise "MCP request timed out after #{timeout.total_seconds}s"
           end
         end
+      end
+
+      private def response_for?(response : JSON::Any, expected_id : Int64) : Bool
+        id = response["id"]
+        id.raw.nil? || id.as_i64? == expected_id
+      end
+
+      private def cancel_request(id : Int64) : Nil
+        params = {
+          "requestId" => JSON::Any.new(id),
+          "reason"    => JSON::Any.new("timeout"),
+        }
+        write_notification("notifications/cancelled", JSON::Any.new(params))
+      rescue ex
+        Log.debug { "[#{@server_name}] could not cancel request #{id}: #{ex.message}" }
       end
 
       private def extract_content(response : JSON::Any) : String
