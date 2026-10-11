@@ -34,6 +34,8 @@ module Autobot
       @process : Process?
       @stdin : IO?
       @stdout : IO?
+      @pending : Channel(JSON::Any)?
+      @stream_closed : Bool = false
       @mutex : Mutex
       @request_id : Int64
 
@@ -42,6 +44,7 @@ module Autobot
         @command : String,
         @args : Array(String) = [] of String,
         @env : Hash(String, String) = {} of String => String,
+        @call_timeout : Time::Span = CALL_TIMEOUT,
       )
         @mutex = Mutex.new
         @request_id = 0_i64
@@ -55,14 +58,19 @@ module Autobot
         stderr_read, stderr_write = IO.pipe
         stdin_read, stdin_write = IO.pipe
 
-        process = Process.new(
-          @command, @args,
-          input: stdin_read,
-          output: stdout_write,
-          error: stderr_write,
-          env: env,
-          clear_env: true,
-        )
+        process = begin
+          Process.new(
+            @command, @args,
+            input: stdin_read,
+            output: stdout_write,
+            error: stderr_write,
+            env: env,
+            clear_env: true,
+          )
+        rescue ex
+          {stdin_read, stdin_write, stdout_read, stdout_write, stderr_read, stderr_write}.each(&.close)
+          raise ex
+        end
 
         # Close child-side ends in parent
         stdin_read.close
@@ -74,7 +82,15 @@ module Autobot
         @stdout = stdout_read
 
         drain_stderr(stderr_read)
-        perform_initialize
+        start_reader(stdout_read)
+
+        begin
+          perform_initialize
+        rescue ex
+          stop
+          raise ex
+        end
+
         Log.info { "[#{@server_name}] MCP server started (pid=#{process.pid})" }
       end
 
@@ -94,6 +110,7 @@ module Autobot
 
         @stdin.try(&.close) rescue nil
         @stdout.try(&.close) rescue nil
+        @pending.try(&.close)
         @process = nil
         Log.info { "[#{@server_name}] MCP server stopped" }
       end
@@ -101,7 +118,7 @@ module Autobot
       def alive? : Bool
         process = @process
         return false unless process
-        !process.terminated?
+        !process.terminated? && !@stream_closed
       end
 
       # Sends `tools/list` to the server and returns the tool definitions.
@@ -115,12 +132,16 @@ module Autobot
 
       # Calls a tool on the MCP server and returns the text content.
       # Result is truncated at `MAX_RESPONSE_SIZE` bytes.
-      def call_tool(name : String, arguments : Hash(String, JSON::Any)) : CallResult
+      def call_tool(
+        name : String,
+        arguments : Hash(String, JSON::Any),
+        timeout : Time::Span = @call_timeout,
+      ) : CallResult
         params = {
           "name"      => JSON::Any.new(name),
           "arguments" => JSON::Any.new(arguments),
         }
-        response = send_request("tools/call", JSON::Any.new(params), timeout: CALL_TIMEOUT)
+        response = send_request("tools/call", JSON::Any.new(params), timeout: timeout)
 
         if error = response["error"]?
           message = error["message"]?.try(&.as_s?) || "Unknown MCP error"
@@ -155,12 +176,18 @@ module Autobot
           }),
         }
 
-        send_request("initialize", JSON::Any.new(params), timeout: INIT_TIMEOUT)
+        response = send_request("initialize", JSON::Any.new(params), timeout: INIT_TIMEOUT)
+        if error = response["error"]?
+          raise "MCP initialize failed: #{error["message"]?.try(&.as_s?) || error.to_json}"
+        end
+
         send_notification("notifications/initialized", JSON::Any.new({} of String => JSON::Any))
       end
 
       private def send_request(method : String, params : JSON::Any, timeout : Time::Span = CALL_TIMEOUT) : JSON::Any
         @mutex.synchronize do
+          raise "MCP server closed the connection" if @stream_closed
+
           @request_id += 1
           id = @request_id
 
@@ -171,20 +198,29 @@ module Autobot
             "params"  => params,
           }
 
-          write_message(JSON::Any.new(request))
-          read_response(id, timeout)
+          pending = Channel(JSON::Any).new(1)
+          @pending = pending
+          begin
+            write_message(JSON::Any.new(request))
+            read_response(pending, id, timeout)
+          ensure
+            @pending = nil
+            pending.close
+          end
         end
       end
 
       private def send_notification(method : String, params : JSON::Any) : Nil
-        @mutex.synchronize do
-          message = {
-            "jsonrpc" => JSON::Any.new("2.0"),
-            "method"  => JSON::Any.new(method),
-            "params"  => params,
-          }
-          write_message(JSON::Any.new(message))
-        end
+        @mutex.synchronize { write_notification(method, params) }
+      end
+
+      private def write_notification(method : String, params : JSON::Any) : Nil
+        message = {
+          "jsonrpc" => JSON::Any.new("2.0"),
+          "method"  => JSON::Any.new(method),
+          "params"  => params,
+        }
+        write_message(JSON::Any.new(message))
       end
 
       private def write_message(message : JSON::Any) : Nil
@@ -194,44 +230,79 @@ module Autobot
         data = message.to_json
         stdin.print(data + "\n")
         stdin.flush
+      rescue IO::Error
+        raise "MCP server closed the connection"
       end
 
-      private def read_response(expected_id : Int64, timeout : Time::Span) : JSON::Any
-        stdout = @stdout
-        raise "MCP server not running" unless stdout
+      private def start_reader(stdout : IO) : Nil
+        @stream_closed = false
 
-        channel = Channel(JSON::Any | Exception).new(1)
-
-        spawn do
+        spawn(name: "mcp-reader-#{@server_name}") do
           begin
-            loop do
-              line = stdout.read_line
-              parsed = JSON.parse(line)
-
-              # Skip server notifications (messages without id)
-              response_id = parsed["id"]?
-              next unless response_id
-
-              # Verify this is the response we're waiting for
-              if response_id.as_i64? == expected_id
-                channel.send(parsed)
-                break
-              end
+            while line = stdout.gets
+              dispatch(line)
             end
           rescue ex
-            channel.send(ex)
+            Log.warn { "[#{@server_name}] stdout reader stopped: #{ex.message}" }
+          ensure
+            @stream_closed = true
+            @pending.try(&.close)
           end
         end
+      end
 
-        select
-        when result = channel.receive
-          if result.is_a?(Exception)
-            raise result
-          end
-          result
-        when timeout(timeout)
-          raise "MCP request timed out after #{timeout.total_seconds.to_i}s"
+      private def dispatch(line : String) : Nil
+        response = parse_response(line)
+        return unless response
+
+        @pending.try(&.send(response))
+      rescue Channel::ClosedError
+      end
+
+      private def parse_response(line : String) : JSON::Any?
+        return if line.blank?
+
+        message = JSON.parse(line).as_h?
+        unless message
+          Log.warn { "[#{@server_name}] ignoring non-object stdout line: #{line}" }
+          return
         end
+        return if message.has_key?("method") || !message.has_key?("id")
+
+        JSON::Any.new(message)
+      rescue ex : JSON::ParseException
+        Log.warn { "[#{@server_name}] ignoring unparsable stdout line: #{ex.message}" }
+        nil
+      end
+
+      private def read_response(pending : Channel(JSON::Any), expected_id : Int64, timeout : Time::Span) : JSON::Any
+        deadline = Time.instant + timeout
+        loop do
+          remaining = {Time::Span.zero, deadline - Time.instant}.max
+          select
+          when response = pending.receive?
+            raise "MCP server closed the connection" unless response
+            return response if response_for?(response, expected_id)
+          when timeout(remaining)
+            cancel_request(expected_id)
+            raise "MCP request timed out after #{timeout.total_seconds}s"
+          end
+        end
+      end
+
+      private def response_for?(response : JSON::Any, expected_id : Int64) : Bool
+        id = response["id"]
+        id.raw.nil? || id.as_i64? == expected_id
+      end
+
+      private def cancel_request(id : Int64) : Nil
+        params = {
+          "requestId" => JSON::Any.new(id),
+          "reason"    => JSON::Any.new("timeout"),
+        }
+        write_notification("notifications/cancelled", JSON::Any.new(params))
+      rescue ex
+        Log.debug { "[#{@server_name}] could not cancel request #{id}: #{ex.message}" }
       end
 
       private def extract_content(response : JSON::Any) : String

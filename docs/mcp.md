@@ -107,7 +107,9 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 ### Timeouts
 
-If a server takes longer than 30s to initialize (e.g. downloading dependencies on first run), the handshake will fail. Pre-install dependencies before running autobot:
+Request execution is bounded by timeouts (30s for the initialization handshake, 60s for tool calls). If a tool call times out, Autobot sends `notifications/cancelled` for that request and keeps the server running. A late response to the cancelled request is discarded, so later tool calls stay in sync with the stdio stream. If the server closes its stdout, calls fail with `MCP server closed the connection` and the server is reported as not alive.
+
+If a server takes longer than 30s to initialize or fails the protocol handshake, Autobot terminates the process immediately to prevent leaked background processes. Pre-install dependencies before running autobot:
 
 ```bash
 # For Python-based servers
