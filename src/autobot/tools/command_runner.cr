@@ -40,17 +40,17 @@ module Autobot
         timeout : Int32,
         max_output_size : Int32 = DEFAULT_MAX_OUTPUT,
         chdir : String? = nil,
+        env : Process::Env = nil,
       ) : Result
         stdout_read, stdout_write = IO.pipe
         stderr_read, stderr_write = IO.pipe
 
-        process = Process.new(
-          command,
-          args,
-          output: stdout_write,
-          error: stderr_write,
-          chdir: chdir,
-        )
+        process = begin
+          Process.new(command, args, output: stdout_write, error: stderr_write, chdir: chdir, env: env)
+        rescue ex
+          {stdout_read, stdout_write, stderr_read, stderr_write}.each(&.close)
+          raise ex
+        end
 
         stdout_write.close
         stderr_write.close
@@ -92,9 +92,9 @@ module Autobot
           buffer.write(chunk[0, n])
         end
 
-        buffer.to_s
+        buffer.to_s.scrub
       rescue
-        buffer.to_s
+        buffer.to_s.scrub
       end
 
       private def self.wait_for_process(
@@ -107,19 +107,25 @@ module Autobot
           status
         when timeout(timeout.seconds)
           terminate(process, completed)
-          nil
         end
       end
 
-      private def self.terminate(process : Process, completed : Channel(Process::Status)) : Nil
+      private def self.terminate(process : Process, completed : Channel(Process::Status)) : Process::Status?
         process.signal(Signal::TERM)
-
+      rescue RuntimeError
+        completed.receive
+      else
         select
         when completed.receive
         when timeout(SIGNAL_GRACE_PERIOD)
-          process.signal(Signal::KILL)
+          kill(process)
           completed.receive
         end
+        nil
+      end
+
+      private def self.kill(process : Process) : Nil
+        process.signal(Signal::KILL)
       rescue RuntimeError
         # signalling fails once the process has already exited
       end

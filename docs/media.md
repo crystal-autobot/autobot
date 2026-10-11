@@ -266,6 +266,8 @@ LLM generates file (exec tool) -> message(content, file_path) -> Read & base64 e
 | `.txt` | document | `sendDocument` |
 | Other | document | `sendDocument` |
 
+If Telegram rejects a photo, animation, voice note or audio file (for example `IMAGE_PROCESS_FAILED`), the same file is sent again with `sendDocument`. If that fails too, only the caption is sent as text.
+
 ### Supported channels
 
 | Channel   | Status    | Notes                                    |

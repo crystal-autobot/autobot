@@ -347,6 +347,7 @@ module Autobot::Config
     include YAML::Serializable
     property? enabled : Bool = true
     property store_path : String = "./cron.json"
+    property exec_timeout : Int32 = 30
 
     def initialize
     end
@@ -521,6 +522,10 @@ module Autobot::Config
     # Check if a named plugin is enabled (defaults to true if unconfigured).
     def plugin_enabled?(name : String) : Bool
       plugins.try(&.enabled?(name)) != false
+    end
+
+    def cron_exec_timeout : Time::Span
+      (cron || CronConfig.new).exec_timeout.seconds
     end
 
     def validate! : Nil

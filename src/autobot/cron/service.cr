@@ -18,8 +18,8 @@ module Autobot
 
       # Cap stored exec output so it can be safely re-exported as PREV_OUTPUT on
       # the next run without tripping E2BIG (argument list too long).
-      MAX_STORED_OUTPUT_BYTES  = 32_768
-      OUTPUT_TRUNCATION_NOTICE = "\n...[Output truncated due to size limit]"
+      MAX_STORED_OUTPUT_BYTES = 32_768
+      MIN_EXEC_TIMEOUT        = 1.second
 
       @store_path : Path
       @on_job : JobCallback?
@@ -37,7 +37,9 @@ module Autobot
         @on_exec : ExecCallback? = nil,
         @workspace : Path? = nil,
         @sandbox_config : String = "none",
+        @exec_timeout : Time::Span = EXEC_TIMEOUT,
       )
+        raise ArgumentError.new("exec_timeout must be at least #{MIN_EXEC_TIMEOUT}") if @exec_timeout < MIN_EXEC_TIMEOUT
       end
 
       # Start the cron service timer loop.
@@ -406,7 +408,7 @@ module Autobot
       end
 
       private def run_exec_job(job : CronJob, start_ms : Int64) : Nil
-        output = truncate_output(exec_command(job))
+        output = exec_command(job)
 
         job.state = job.state.copy(
           last_run_at_ms: start_ms,
@@ -421,15 +423,6 @@ module Autobot
       rescue ex
         job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
         Log.error { "Cron: exec job '#{job.name}' failed: #{ex.message}" }
-      end
-
-      # Bound stored output to MAX_STORED_OUTPUT_BYTES. byte_slice can cut a
-      # multi-byte character in half, so scrub drops the dangling bytes to keep
-      # the result valid UTF-8 for JSON persistence and the PREV_OUTPUT export.
-      private def truncate_output(output : String) : String
-        return output if output.bytesize <= MAX_STORED_OUTPUT_BYTES
-
-        output.byte_slice(0, MAX_STORED_OUTPUT_BYTES).scrub("") + OUTPUT_TRUNCATION_NOTICE
       end
 
       private def exec_command(job : CronJob) : String
@@ -452,12 +445,13 @@ module Autobot
         raise "Sandbox is enabled but no workspace configured for cron exec" unless workspace
 
         full_command = build_sandboxed_command(command, job)
-        result = Tools::Sandbox.exec(full_command, workspace, timeout: EXEC_TIMEOUT.total_seconds.to_i)
-
-        raise "command timed out after #{result.timeout} seconds" if result.timed_out?
-        raise "command exited with #{result.status}: #{result.stderr.strip}" unless result.success?
-
-        result.stdout.strip
+        result = Tools::Sandbox.exec(
+          full_command,
+          workspace,
+          timeout: @exec_timeout.total_seconds.to_i,
+          max_output_size: MAX_STORED_OUTPUT_BYTES,
+        )
+        handle_exec_result(result)
       end
 
       private def build_sandboxed_command(command : String, job : CronJob) : String
@@ -475,20 +469,21 @@ module Autobot
           env["PREV_OUTPUT"] = prev
         end
 
-        output = IO::Memory.new
-        error = IO::Memory.new
-        status = Process.run(
-          "sh", {"-c", command},
-          output: output,
-          error: error,
+        result = Tools::CommandRunner.run(
+          "sh",
+          ["-c", command],
+          timeout: @exec_timeout.total_seconds.to_i,
+          max_output_size: MAX_STORED_OUTPUT_BYTES,
           env: env,
         )
+        handle_exec_result(result)
+      end
 
-        unless status.success?
-          raise "command exited with #{status.exit_code}: #{error.to_s.strip}"
-        end
+      private def handle_exec_result(result : Tools::CommandRunner::Result) : String
+        raise "command timed out after #{result.timeout} seconds" if result.timed_out?
+        raise "command exited with #{result.status}: #{result.stderr.strip}" unless result.success?
 
-        output.to_s.strip
+        result.stdout.strip
       end
 
       private def schedule_next_run(job : CronJob) : Nil

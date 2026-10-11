@@ -172,6 +172,24 @@ private def build_channel(
   )
 end
 
+private def sent_methods(attachment : Autobot::Bus::MediaAttachment, statuses : Array(Int32)) : Array(String)
+  methods = [] of String
+  server = HTTP::Server.new do |context|
+    methods << context.request.path.split('/').last
+    context.response.status_code = statuses.shift
+    context.response.print(%({"ok":true,"result":{}}))
+  end
+  port = server.bind_tcp("127.0.0.1", 0).port
+  spawn { server.listen }
+
+  channel = build_channel
+  channel.target_uri = URI.parse("http://127.0.0.1:#{port}")
+  channel.send_message(Autobot::Bus::OutboundMessage.new(channel: "telegram", chat_id: "123", content: "caption", media: [attachment]))
+  methods
+ensure
+  server.try &.close
+end
+
 private TOPIC_MESSAGE   = %({"message_id": 9, "message_thread_id": 57, "is_topic_message": true, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
 private GENERAL_REPLY   = %({"message_id": 9, "message_thread_id": 3, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
 private PRIVATE_MESSAGE = %({"message_id": 1, "chat": {"id": 5, "type": "private"}, "from": {"id": 1, "first_name": "Ann"}, "text": "/help"})
@@ -1120,6 +1138,23 @@ describe Autobot::Channels::TelegramChannel do
       end
     ensure
       server.close if server
+    end
+  end
+
+  describe "media fallback" do
+    photo = Autobot::Bus::MediaAttachment.new(type: "photo", data: Base64.strict_encode("png"))
+    document = Autobot::Bus::MediaAttachment.new(type: "document", data: Base64.strict_encode("pdf"))
+
+    it "retries a rejected photo as a document" do
+      sent_methods(photo, [400, 200]).should eq(["sendPhoto", "sendDocument"])
+    end
+
+    it "sends the caption when the document is rejected too" do
+      sent_methods(photo, [400, 400, 200]).should eq(["sendPhoto", "sendDocument", "sendMessage"])
+    end
+
+    it "sends the caption right after a rejected document" do
+      sent_methods(document, [400, 200]).should eq(["sendDocument", "sendMessage"])
     end
   end
 
