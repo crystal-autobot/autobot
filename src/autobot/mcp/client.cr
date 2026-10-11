@@ -176,7 +176,11 @@ module Autobot
           }),
         }
 
-        send_request("initialize", JSON::Any.new(params), timeout: INIT_TIMEOUT)
+        response = send_request("initialize", JSON::Any.new(params), timeout: INIT_TIMEOUT)
+        if error = response["error"]?
+          raise "MCP initialize failed: #{error["message"]?.try(&.as_s?) || error.to_json}"
+        end
+
         send_notification("notifications/initialized", JSON::Any.new({} of String => JSON::Any))
       end
 

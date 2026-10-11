@@ -83,4 +83,22 @@ describe Autobot::Mcp::Client do
   ensure
     client.try(&.stop)
   end
+
+  it "fails to start when the server rejects the handshake" do
+    script = <<-BASH
+      read line
+      echo '{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Unsupported protocol version"}}'
+      exec sleep 5
+    BASH
+
+    client = Autobot::Mcp::Client.new(server_name: "handshake_reject", command: "bash", args: ["-c", script])
+
+    expect_raises(Exception, /Unsupported protocol version/) do
+      client.start
+    end
+
+    client.alive?.should be_false
+  ensure
+    client.try(&.stop)
+  end
 end
