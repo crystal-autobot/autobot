@@ -63,6 +63,21 @@ describe Autobot::Tools::CommandRunner do
       result.success?.should be_true
       result.stdout.strip.should eq("runner_val")
     end
+
+    it "closes pipes when the process cannot be started" do
+      attempts = 10
+      open_fds = Dir.children("/dev/fd").size
+
+      attempts.times do
+        expect_raises(File::NotFoundError) do
+          Autobot::Tools::CommandRunner.run("autobot-missing-binary", [] of String, 5)
+        end
+      end
+
+      # the stdlib leaves one stray fd per failed exec until GC runs; a leaked pipe pair adds four
+      leaked = Dir.children("/dev/fd").size - open_fds
+      leaked.should be < attempts * 2
+    end
   end
 
   describe "Result#report" do

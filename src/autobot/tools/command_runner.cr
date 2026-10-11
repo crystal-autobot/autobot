@@ -45,14 +45,12 @@ module Autobot
         stdout_read, stdout_write = IO.pipe
         stderr_read, stderr_write = IO.pipe
 
-        process = Process.new(
-          command,
-          args,
-          output: stdout_write,
-          error: stderr_write,
-          chdir: chdir,
-          env: env,
-        )
+        process = begin
+          Process.new(command, args, output: stdout_write, error: stderr_write, chdir: chdir, env: env)
+        rescue ex
+          {stdout_read, stdout_write, stderr_read, stderr_write}.each(&.close)
+          raise ex
+        end
 
         stdout_write.close
         stderr_write.close
