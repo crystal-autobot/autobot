@@ -141,7 +141,7 @@ Exec commands run inside the sandbox (bubblewrap or Docker) by default. Set `san
 
 ### Execution timeouts & limits
 
-Command execution is bounded by a 30-second timeout by default in both sandboxed and direct (`sandbox: none`) modes. When a command exceeds the timeout, it is terminated, the job is marked as failed with a `command timed out` error, and it runs again on its next scheduled interval. Values below one second are rejected at startup.
+Command execution is bounded by a 30-second timeout by default in both sandboxed and direct (`sandbox: none`) modes. When a command exceeds the timeout, its shell is terminated, the job is marked as failed with a `command timed out` error, and recurring jobs run again at their next scheduled time. Values below one second are rejected at startup.
 
 The timeout can be customized in `config.yml`:
 
