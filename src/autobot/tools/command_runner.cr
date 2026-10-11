@@ -107,19 +107,25 @@ module Autobot
           status
         when timeout(timeout.seconds)
           terminate(process, completed)
-          nil
         end
       end
 
-      private def self.terminate(process : Process, completed : Channel(Process::Status)) : Nil
+      private def self.terminate(process : Process, completed : Channel(Process::Status)) : Process::Status?
         process.signal(Signal::TERM)
-
+      rescue RuntimeError
+        completed.receive
+      else
         select
         when completed.receive
         when timeout(SIGNAL_GRACE_PERIOD)
-          process.signal(Signal::KILL)
+          kill(process)
           completed.receive
         end
+        nil
+      end
+
+      private def self.kill(process : Process) : Nil
+        process.signal(Signal::KILL)
       rescue RuntimeError
         # signalling fails once the process has already exited
       end
