@@ -1,5 +1,32 @@
 require "../spec_helper"
 
+private def serve_broken_tls_proxy(server : TCPServer) : Channel(Nil)
+  finished = Channel(Nil).new
+
+  spawn do
+    while socket = server.accept?
+      while (line = socket.gets) && !line.empty?
+      end
+      socket << "HTTP/1.1 200 Connection established\r\n\r\n"
+      socket.flush
+      socket.write("invalid tls handshake".to_slice)
+      socket.flush
+      socket.skip_to_end
+      socket.close
+      finished.send(nil)
+    end
+  end
+
+  finished
+end
+
+private def wait_for_proxy(finished : Channel(Nil))
+  select
+  when finished.receive
+  when timeout(2.seconds)
+  end
+end
+
 describe Autobot::HTTP do
   describe ".build_client" do
     it "constructs client with specified uri" do
@@ -99,17 +126,7 @@ describe Autobot::HTTP do
       server = TCPServer.new("127.0.0.1", 0)
       port = server.local_address.port
 
-      spawn do
-        while socket = server.accept?
-          while (line = socket.gets) && !line.empty?
-          end
-          socket << "HTTP/1.1 200 Connection established\r\n\r\n"
-          socket.flush
-          socket.write("invalid tls handshake".to_slice)
-          socket.flush
-          socket.close
-        end
-      end
+      finished = serve_broken_tls_proxy(server)
 
       open_fds = Dir.children("/dev/fd").size
       proxy_client = HTTP::Proxy::Client.new("127.0.0.1", port)
@@ -126,6 +143,7 @@ describe Autobot::HTTP do
           write_timeout: 2.seconds
         )
       end
+      wait_for_proxy(finished)
       Dir.children("/dev/fd").size.should eq(open_fds)
     ensure
       server.close if server
@@ -135,17 +153,7 @@ describe Autobot::HTTP do
       server = TCPServer.new("127.0.0.1", 0)
       port = server.local_address.port
 
-      spawn do
-        while socket = server.accept?
-          while (line = socket.gets) && !line.empty?
-          end
-          socket << "HTTP/1.1 200 Connection established\r\n\r\n"
-          socket.flush
-          socket.write("invalid tls handshake".to_slice)
-          socket.flush
-          socket.close
-        end
-      end
+      finished = serve_broken_tls_proxy(server)
 
       attempt = -> do
         expect_raises(OpenSSL::SSL::Error) do
@@ -156,8 +164,10 @@ describe Autobot::HTTP do
       end
 
       attempt.call
+      wait_for_proxy(finished)
       open_fds = Dir.children("/dev/fd").size
       attempt.call
+      wait_for_proxy(finished)
       Dir.children("/dev/fd").size.should eq(open_fds)
     ensure
       server.close if server
