@@ -10,8 +10,23 @@ permissions:
   packages: write
 
 jobs:
+  verify-version:
+    name: Verify version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shard.yml matches the tag
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          shard_version="$(sed -n 's/^version: *//p' shard.yml)"
+          if [ "$tag_version" != "$shard_version" ]; then
+            echo "::error::Tag v${tag_version} does not match shard.yml version ${shard_version}. Bump shard.yml before tagging."
+            exit 1
+          fi
+
   build-linux-x86_64:
     name: Linux x86_64
+    needs: verify-version
     runs-on: ubuntu-latest
     container:
       image: crystallang/crystal:latest-alpine
@@ -31,6 +46,7 @@ jobs:
 
   build-linux-aarch64:
     name: Linux aarch64
+    needs: verify-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +66,7 @@ jobs:
 
   build-macos:
     name: macOS ARM64
+    needs: verify-version
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
