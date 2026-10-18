@@ -546,6 +546,123 @@ describe Autobot::Agent::Loop do
       )
 
       loop_inst.test_process_message(msg).should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "stays quiet when a tool answered the turn and an OpenAI-compatible backend returns non-stop finish_reason" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      end_turn_response = %({"choices":[{"message":{"content":""},"finish_reason":"end_turn"}],"usage":{"prompt_tokens":10,"completion_tokens":1,"total_tokens":11}})
+      provider = MockProvider.new(responses: [tool_call_response("deliver", "call_1"), end_turn_response])
+      tools = Autobot::Tools::Registry.new
+      tools.register(Autobot::Tools::MessageTool.new)
+      tools.register(SelfDeliveringTool.new)
+
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: provider,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        memory_window: 0,
+        sandbox: Autobot::Tools::Sandbox::Type::None
+      )
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "hello"
+      )
+
+      loop_inst.test_process_message(msg).should be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "returns cut-off message when a post-tool turn is cut off mid-thinking" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      bus = Autobot::Bus::MessageBus.new(capacity: 10)
+      cut_off_response = %({"choices":[{"message":{"content":null,"reasoning_content":"Thinking about the tool result..."},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
+      provider = MockProvider.new(responses: [tool_call_response("deliver", "call_1"), cut_off_response])
+      tools = Autobot::Tools::Registry.new
+      tools.register(Autobot::Tools::MessageTool.new)
+      tools.register(SelfDeliveringTool.new)
+
+      loop_inst = TestableLoop.new(
+        bus: bus,
+        provider: provider,
+        workspace: tmp,
+        tools: tools,
+        sessions: sessions,
+        memory_window: 0,
+        sandbox: Autobot::Tools::Sandbox::Type::None
+      )
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: "telegram",
+        sender_id: "user1",
+        chat_id: "chat1",
+        content: "hello"
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.should_not be_nil
+      response.try(&.content).should eq(Autobot::Agent::ToolExecutor::LENGTH_CUT_OFF_MESSAGE)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "surfaces cut-off message when a cron turn hits the output token limit before delivering" do
+      tmp = TestHelper.tmp_dir
+      cron = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      sessions = Autobot::Session::Manager.new(tmp)
+      cut_off_response = %({"choices":[{"message":{"content":null,"reasoning_content":"Thinking..."},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":50,"total_tokens":60}})
+      provider = MockProvider.new(responses: [cut_off_response])
+      loop_inst = create_test_loop(workspace: tmp, cron_service: cron, provider: provider, sessions: sessions)
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "cron:report1",
+        chat_id: "telegram:user1",
+        content: "Send weekly summary"
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.should_not be_nil
+      response.try(&.channel).should eq("telegram")
+      response.try(&.chat_id).should eq("user1")
+      response.try(&.content).should eq(Autobot::Agent::ToolExecutor::LENGTH_CUT_OFF_MESSAGE)
+
+      history = sessions.get_or_create("telegram:user1").get_history
+      history.map(&.["role"]).should eq(["user", "assistant"])
+      history.last["content"].should eq(Autobot::Agent::ToolExecutor::LENGTH_CUT_OFF_MESSAGE)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "surfaces cut-off message when a subagent announcement turn is blocked by content filter" do
+      tmp = TestHelper.tmp_dir
+      sessions = Autobot::Session::Manager.new(tmp)
+      filtered_response = %({"choices":[{"message":{"content":null},"finish_reason":"content_filter"}],"usage":{"prompt_tokens":10,"completion_tokens":0,"total_tokens":10}})
+      provider = MockProvider.new(responses: [filtered_response])
+      loop_inst = create_test_loop(workspace: tmp, provider: provider, sessions: sessions)
+
+      msg = Autobot::Bus::InboundMessage.new(
+        channel: Autobot::Constants::CHANNEL_SYSTEM,
+        sender_id: "subagent:task1",
+        chat_id: "telegram:user1",
+        content: "Subagent raw output"
+      )
+
+      response = loop_inst.test_process_message(msg)
+      response.should_not be_nil
+      response.try(&.content).should eq(Autobot::Agent::ToolExecutor::CONTENT_FILTERED_MESSAGE)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
     end
 
     it "ends the turn once a listed tool has answered, without asking the model again" do

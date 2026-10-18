@@ -200,7 +200,7 @@ module Autobot::Agent
         return nil
       end
 
-      reply = result.content.presence || FALLBACK_RESPONSE
+      reply = result.content.presence || result.cut_off_message || FALLBACK_RESPONSE
       save_to_session(session, user_text, reply, result.tools_used)
       build_response(msg.channel, msg.chat_id, reply, msg.metadata)
     end
@@ -210,7 +210,7 @@ module Autobot::Agent
     end
 
     private def answered_by_tools?(result : ToolExecutor::Result) : Bool
-      result.content.presence.nil? && !result.tools_used.empty?
+      result.content.presence.nil? && !result.tools_used.empty? && !result.cut_off?
     end
 
     # Route system messages to the appropriate handler.
@@ -228,8 +228,8 @@ module Autobot::Agent
     # Includes session history so the LLM has conversation context.
     # Stops after the message tool fires.
     # Saves the exchange to the session so followup messages have context.
-    # Returns nil because cron turns deliver via the message tool explicitly.
-    private def process_cron_message(msg : Bus::InboundMessage) : Nil
+    # Returns nil unless the turn was cut off before delivering any message.
+    private def process_cron_message(msg : Bus::InboundMessage) : Bus::OutboundMessage?
       origin_channel, origin_chat_id = msg.origin
       session = origin_session(origin_channel, origin_chat_id)
       update_tool_contexts(origin_channel, origin_chat_id)
@@ -250,8 +250,15 @@ module Autobot::Agent
         stop_after: @stop_after | ["message"]
       )
 
+      job_id = msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)
+      if delivered_text(result).nil? && (cut_off = result.cut_off_message)
+        Log.warn { "Cron turn cut off: job=#{job_id}, finish_reason=#{result.finish_reason}" }
+        save_to_session(session, "[Scheduled task] #{msg.content}", cut_off, result.tools_used)
+        return build_response(origin_channel, origin_chat_id, cut_off)
+      end
+
       save_cron_to_session(session, msg.content, result)
-      Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, tools=#{result.tools_used}" }
+      Log.info { "Cron turn done: job=#{job_id}, tools=#{result.tools_used}" }
       nil
     end
 
@@ -281,7 +288,7 @@ module Autobot::Agent
       )
 
       result = @executor.execute(messages, @tools, session_key: session.key)
-      final_content = result.content.presence || "Background task completed."
+      final_content = result.content.presence || result.cut_off_message || "Background task completed."
 
       session.add_message(Constants::ROLE_USER, @context.with_current_time(msg.content, sent_at))
       session.add_message(Constants::ROLE_ASSISTANT, final_content)

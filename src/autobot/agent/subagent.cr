@@ -142,10 +142,19 @@ module Autobot
           messages = build_initial_messages(task)
           result = executor.execute(messages, tools)
 
-          final_result = result.content.presence || "Task completed but no final response was generated."
-
-          Log.info { "Subagent [#{task_id}] completed successfully" }
-          announce_result(task_id, label, task, final_result, origin, Status::Ok)
+          if cut_off = result.cut_off_message
+            final_result = if partial = result.content.presence
+                             "#{partial}\n\n(#{cut_off})"
+                           else
+                             cut_off
+                           end
+            Log.warn { "Subagent [#{task_id}] cut off (finish_reason=#{result.finish_reason})" }
+            announce_result(task_id, label, task, final_result, origin, Status::Error)
+          else
+            final_result = result.content.presence || "Task completed but no final response was generated."
+            Log.info { "Subagent [#{task_id}] completed successfully" }
+            announce_result(task_id, label, task, final_result, origin, Status::Ok)
+          end
         rescue ex
           error_msg = "Error: #{ex.message}"
           Log.error { "Subagent [#{task_id}] failed: #{ex.message}" }

@@ -1,5 +1,12 @@
 module Autobot
   module Providers
+    FINISH_STOP             = "stop"
+    FINISH_TOOL_CALLS       = "tool_calls"
+    FINISH_LENGTH           = "length"
+    FINISH_CONTENT_FILTERED = "content_filtered"
+    FINISH_GUARDRAIL        = "guardrail_intervened"
+    FINISH_ERROR            = "error"
+
     # Token usage from an LLM API response.
     #
     # Includes optional cache token fields reported by providers that
@@ -66,7 +73,7 @@ module Autobot
       def initialize(
         @content = nil,
         @tool_calls = [] of ToolCall,
-        @finish_reason = "stop",
+        @finish_reason = FINISH_STOP,
         @usage = TokenUsage.new,
         @reasoning_content = nil,
         @native_parts = nil,
@@ -78,7 +85,19 @@ module Autobot
       end
 
       def error? : Bool
-        finish_reason == "error"
+        finish_reason == FINISH_ERROR
+      end
+
+      def truncated? : Bool
+        finish_reason == FINISH_LENGTH
+      end
+
+      def content_filtered? : Bool
+        finish_reason == FINISH_CONTENT_FILTERED
+      end
+
+      def cut_off? : Bool
+        truncated? || content_filtered?
       end
     end
   end

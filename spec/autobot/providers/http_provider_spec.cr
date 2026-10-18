@@ -254,6 +254,17 @@ describe Autobot::Providers::HttpProvider do
       response.content.should eq("hello")
     end
 
+    it "normalizes OpenAI content_filter finish_reason to content_filtered and preserves custom stop reasons" do
+      filtered = %({"choices":[{"message":{"content":null},"finish_reason":"content_filter"}],"usage":{"prompt_tokens":1,"completion_tokens":0,"total_tokens":1}})
+      provider.test_parse_compatible_response(filtered).finish_reason.should eq("content_filtered")
+
+      end_turn = %({"choices":[{"message":{"content":"done"},"finish_reason":"end_turn"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}})
+      provider.test_parse_compatible_response(end_turn).finish_reason.should eq("end_turn")
+
+      empty_reason = %({"choices":[{"message":{"content":"done"},"finish_reason":""}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}})
+      provider.test_parse_compatible_response(empty_reason).finish_reason.should eq("")
+    end
+
     it "parses tool calls with extra_content" do
       body = %({"choices":[{"message":{"content":"","tool_calls":[{"id":"tc_1","type":"function","function":{"name":"search","arguments":"{\\"q\\":\\"test\\"}"},"extra_content":{"google":{"thought_signature":"sig_123"}}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
       response = provider.test_parse_compatible_response(body)
@@ -372,6 +383,17 @@ describe Autobot::Providers::HttpProvider do
       response.usage.prompt_tokens.should eq(50)
       response.usage.cache_creation_tokens.should eq(0)
       response.usage.cache_read_tokens.should eq(0)
+    end
+
+    it "maps Anthropic max_tokens and refusal stop_reasons to normalized finish reasons" do
+      truncated = %({"type":"message","content":[],"stop_reason":"max_tokens","usage":{"input_tokens":50,"output_tokens":25}})
+      provider.test_parse_anthropic_response(truncated).finish_reason.should eq("length")
+
+      window_exceeded = %({"type":"message","content":[],"stop_reason":"model_context_window_exceeded","usage":{"input_tokens":50,"output_tokens":25}})
+      provider.test_parse_anthropic_response(window_exceeded).finish_reason.should eq("length")
+
+      refused = %({"type":"message","content":[],"stop_reason":"refusal","usage":{"input_tokens":50,"output_tokens":0}})
+      provider.test_parse_anthropic_response(refused).finish_reason.should eq("content_filtered")
     end
 
     it "parses OpenAI cached and cache write tokens" do

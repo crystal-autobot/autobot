@@ -17,12 +17,12 @@ module Autobot::Providers
     CONTENT_TYPE    = "application/json"
 
     STOP_REASON_MAP = {
-      "end_turn"             => "stop",
-      "tool_use"             => "tool_calls",
-      "max_tokens"           => "length",
-      "stop_sequence"        => "stop",
-      "guardrail_intervened" => "guardrail_intervened",
-      "content_filtered"     => "content_filtered",
+      "end_turn"             => FINISH_STOP,
+      "tool_use"             => FINISH_TOOL_CALLS,
+      "max_tokens"           => FINISH_LENGTH,
+      "stop_sequence"        => FINISH_STOP,
+      "guardrail_intervened" => FINISH_GUARDRAIL,
+      "content_filtered"     => FINISH_CONTENT_FILTERED,
     }
 
     getter model : String
@@ -70,7 +70,7 @@ module Autobot::Providers
       parse_response(response_body)
     rescue ex
       Log.error { "Bedrock request failed: #{ex.message}" }
-      Response.new(content: "Error calling Bedrock: #{ex.message}", finish_reason: "error")
+      Response.new(content: "Error calling Bedrock: #{ex.message}", finish_reason: FINISH_ERROR)
     end
 
     private def build_request_body(
@@ -208,7 +208,7 @@ module Autobot::Providers
       if msg = json["message"]?.try(&.as_s?)
         error_type = json["__type"]?.try(&.as_s?) || "UnknownError"
         Log.error { "Bedrock error: #{error_type}: #{msg}" }
-        return Response.new(content: "Bedrock error: #{msg}", finish_reason: "error")
+        return Response.new(content: "Bedrock error: #{msg}", finish_reason: FINISH_ERROR)
       end
       nil
     end
@@ -250,7 +250,7 @@ module Autobot::Providers
     end
 
     private def map_stop_reason(reason : String?) : String
-      return "stop" unless reason
+      return FINISH_STOP unless reason
       STOP_REASON_MAP[reason]? || reason
     end
 
