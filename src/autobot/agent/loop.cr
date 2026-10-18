@@ -160,6 +160,23 @@ module Autobot::Agent
       response.try(&.content) || ""
     end
 
+    # Execute a scheduled cron job turn synchronously.
+    def run_cron_job(job : Cron::CronJob) : String?
+      target = if job.payload.deliver? && (to = job.payload.to.presence)
+                 "#{job.payload.channel.presence || Constants::CHANNEL_SYSTEM}:#{to}"
+               else
+                 ""
+               end
+
+      msg = Bus::InboundMessage.new(
+        channel: Constants::CHANNEL_SYSTEM,
+        sender_id: "#{Constants::CRON_SENDER_PREFIX}#{job.id}",
+        chat_id: target,
+        content: job.payload.message,
+      )
+      process_cron_message(msg)
+    end
+
     # Process a single inbound message
     private def process_message(msg : Bus::InboundMessage, session_key : String? = nil) : Bus::OutboundMessage?
       return process_system_message(msg) if msg.channel == Constants::CHANNEL_SYSTEM
@@ -220,6 +237,7 @@ module Autobot::Agent
 
       if msg.sender_id.starts_with?(Constants::CRON_SENDER_PREFIX)
         process_cron_message(msg)
+        nil
       else
         process_subagent_message(msg)
       end
@@ -229,15 +247,17 @@ module Autobot::Agent
     # Includes session history so the LLM has conversation context.
     # Stops after the message tool fires.
     # Saves the exchange to the session so followup messages have context.
-    # Returns nil because cron turns deliver via the message tool explicitly.
-    private def process_cron_message(msg : Bus::InboundMessage) : Nil
-      origin_channel, origin_chat_id = msg.origin
-      session = origin_session(origin_channel, origin_chat_id)
-      update_tool_contexts(origin_channel, origin_chat_id)
+    # Returns the delivered or final text (if any).
+    private def process_cron_message(msg : Bus::InboundMessage) : String?
+      session = unless msg.chat_id.empty?
+        origin_channel, origin_chat_id = msg.origin
+        update_tool_contexts(origin_channel, origin_chat_id)
+        origin_session(origin_channel, origin_chat_id)
+      end
       @message_tool.try(&.clear_last_sent)
 
       messages = @context.build_messages(
-        history: session.get_history,
+        history: session ? session.get_history : [] of Hash(String, String),
         current_message: build_cron_prompt(msg),
         channel: origin_channel,
         chat_id: origin_chat_id,
@@ -246,14 +266,14 @@ module Autobot::Agent
 
       result = @executor.execute(
         messages, @tools,
-        session_key: session.key,
+        session_key: session.try(&.key) || msg.sender_id,
         exclude_tools: BACKGROUND_EXCLUDED_TOOLS,
         stop_after: @stop_after | ["message"]
       )
 
-      save_cron_to_session(session, msg.content, result)
+      save_cron_to_session(session, msg.content, result) if session
       Log.info { "Cron turn done: job=#{msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)}, tools=#{result.tools_used}" }
-      nil
+      delivered_text(result) || result.content.presence
     end
 
     # Persist the cron exchange to session so followup messages have context.

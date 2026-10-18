@@ -8,6 +8,8 @@ Config precedence:
 2. `./config.yml`
 3. Schema defaults
 
+Relative paths in `config.yml` (`agents.defaults.workspace` and `cron.store_path`) resolve relative to the directory containing `config.yml`. For example, running `autobot gateway -c config/prod.yml` with the default `./workspace` setting uses `config/workspace`.
+
 ## Minimal Config
 
 ```yaml
@@ -242,7 +244,7 @@ Tools are auto-discovered at startup and registered as `mcp_{server}_{tool}`. MC
 ```yaml
 cron:
   enabled: true
-  store_path: "./cron.json"
+  store_path: "./cron.json"  # Resolved relative to the config.yml directory
   exec_timeout: 30  # Timeout in seconds for exec jobs in both sandbox and direct modes
 ```
 
@@ -289,7 +291,7 @@ agents:
     temperature: 0.7
     max_tool_iterations: 20
     memory_window: 50
-    workspace: "./workspace"
+    workspace: "./workspace"  # Relative to the config.yml directory
 
 # Chat channels
 channels:

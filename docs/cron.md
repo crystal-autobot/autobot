@@ -193,7 +193,7 @@ autobot cron add \
 ```yaml
 cron:
   enabled: true
-  store_path: "./cron.json"  # Optional, defaults to workspace
+  store_path: "./cron.json"  # Optional, resolved relative to the config.yml directory
 ```
 
 ### Agent Creates Jobs
@@ -312,6 +312,8 @@ autobot cron run <job_id>          # Run if enabled
 autobot cron run <job_id> --force  # Run even if disabled
 ```
 
+`autobot cron run` loads your configuration (`config.yml` or `-c <path>`), executes the job using the configured workspace, sandbox, and timeout settings, prints any command or agent output to stdout, and delivers messages to the job's target channel when `deliver` and `to` are configured. If the job fails, the command exits with status `1` and disables one-time (`--at`) jobs instead of deleting them so they can be inspected and retried.
+
 ---
 
 ## Per-Owner Isolation
@@ -382,8 +384,9 @@ Job identity (`id`, `created_at_ms`, `state`) is preserved — only the schedule
 ## File Structure
 
 ```
-workspace/
-└── cron.json    # Job definitions (auto-created)
+bot-dir/
+├── config.yml
+└── cron.json    # Job definitions (auto-created next to config.yml by default)
 ```
 
 **Permissions:**

@@ -31,12 +31,27 @@ module Autobot
       @timer_generation : Int64 = 0
       @store_mtime : Time? = nil
 
+      def self.from_config(
+        config : Config::Config,
+        on_job : JobCallback? = nil,
+        on_exec : ExecCallback? = nil,
+      ) : self
+        new(
+          store_path: config.cron_store_path,
+          on_job: on_job,
+          on_exec: on_exec,
+          workspace: config.workspace_path,
+          sandbox_config: config.tools.try(&.sandbox) || "auto",
+          exec_timeout: config.cron_exec_timeout,
+        )
+      end
+
       def initialize(
         @store_path : Path,
         @on_job : JobCallback? = nil,
         @on_exec : ExecCallback? = nil,
         @workspace : Path? = nil,
-        @sandbox_config : String = "none",
+        @sandbox_config : String = "auto",
         @exec_timeout : Time::Span = EXEC_TIMEOUT,
       )
         raise ArgumentError.new("exec_timeout must be at least #{MIN_EXEC_TIMEOUT}") if @exec_timeout < MIN_EXEC_TIMEOUT
@@ -397,10 +412,15 @@ module Autobot
       end
 
       private def run_agent_job(job : CronJob, start_ms : Int64) : Nil
-        if callback = @on_job
-          callback.call(job)
-        end
-        job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Ok, last_error: nil)
+        output = if callback = @on_job
+                   callback.call(job)
+                 end
+        job.state = job.state.copy(
+          last_run_at_ms: start_ms,
+          last_status: JobStatus::Ok,
+          last_error: nil,
+          last_output: output || job.state.last_output,
+        )
         Log.debug { "Cron: job '#{job.name}' completed" }
       rescue ex
         job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
@@ -437,7 +457,7 @@ module Autobot
       end
 
       private def sandbox_enabled? : Bool
-        @sandbox_config != "none"
+        @sandbox_config.downcase != "none"
       end
 
       private def exec_command_sandboxed(command : String, job : CronJob) : String
@@ -489,7 +509,7 @@ module Autobot
       private def schedule_next_run(job : CronJob) : Nil
         return unless job.schedule.kind.at?
 
-        if job.delete_after_run?
+        if job.delete_after_run? && job.state.last_status != JobStatus::Error
           store.jobs.reject! { |j| j.id == job.id }
         else
           job.enabled = false
