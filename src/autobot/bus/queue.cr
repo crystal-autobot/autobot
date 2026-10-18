@@ -93,6 +93,18 @@ module Autobot::Bus
       end
     end
 
+    # Drain any currently queued outbound events without blocking.
+    def drain_outbound(& : OutboundEvent -> Nil) : Nil
+      loop do
+        select
+        when event = @outbound.receive
+          yield event
+        else
+          break
+        end
+      end
+    end
+
     # Stop the bus gracefully
     def stop : Nil
       Log.info { "Stopping message bus..." }

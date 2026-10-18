@@ -11,11 +11,7 @@ module Autobot::Config
     PROJECT_CONFIG_PATH = Path["config.yml"]
 
     # Config directory — set when config is loaded, defaults to current dir
-    @@config_dir : Path = Path["."]
-
-    def self.config_dir : Path
-      @@config_dir
-    end
+    class_property config_dir : Path = Path["."]
 
     # Load configuration with proper precedence
     def self.load(config_path : String? = nil, *, validate : Bool = true) : Config
@@ -27,6 +23,7 @@ module Autobot::Config
         load_env_file(path.parent)
         load_from_file(path, validate: validate)
       else
+        @@config_dir = Path["."]
         Log.info { "No config file found, using defaults" }
         # Return minimal default config
         Config.from_yaml("{}")

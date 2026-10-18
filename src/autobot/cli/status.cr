@@ -48,7 +48,7 @@ module Autobot
           end
 
           # Cron
-          cron_path = Config::Loader.cron_store_path
+          cron_path = config.cron_store_path
           if File.exists?(cron_path)
             cron_service = Cron::Service.new(cron_path)
             jobs = cron_service.list_jobs(include_disabled: true)

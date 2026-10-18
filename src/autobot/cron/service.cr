@@ -31,6 +31,23 @@ module Autobot
       @timer_generation : Int64 = 0
       @store_mtime : Time? = nil
 
+      def self.from_config(
+        config : Config::Config,
+        *,
+        sandbox : Tools::Sandbox::Type,
+        on_job : JobCallback? = nil,
+        on_exec : ExecCallback? = nil,
+      ) : self
+        new(
+          store_path: config.cron_store_path,
+          on_job: on_job,
+          on_exec: on_exec,
+          workspace: config.workspace_path,
+          sandbox: sandbox,
+          exec_timeout: config.cron_exec_timeout,
+        )
+      end
+
       def initialize(
         @store_path : Path,
         @on_job : JobCallback? = nil,
@@ -398,10 +415,15 @@ module Autobot
       end
 
       private def run_agent_job(job : CronJob, start_ms : Int64) : Nil
-        if callback = @on_job
-          callback.call(job)
-        end
-        job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Ok, last_error: nil)
+        output = if callback = @on_job
+                   callback.call(job)
+                 end
+        job.state = job.state.copy(
+          last_run_at_ms: start_ms,
+          last_status: JobStatus::Ok,
+          last_error: nil,
+          last_output: output || job.state.last_output,
+        )
         Log.debug { "Cron: job '#{job.name}' completed" }
       rescue ex
         job.state = job.state.copy(last_run_at_ms: start_ms, last_status: JobStatus::Error, last_error: ex.message)
@@ -490,7 +512,7 @@ module Autobot
       private def schedule_next_run(job : CronJob) : Nil
         return unless job.schedule.kind.at?
 
-        if job.delete_after_run?
+        if job.delete_after_run? && job.state.last_status != JobStatus::Error
           store.jobs.reject! { |j| j.id == job.id }
         else
           job.enabled = false

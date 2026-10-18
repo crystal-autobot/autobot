@@ -7,6 +7,8 @@ module Autobot
     class Manager
       getter sessions_dir : Path
       @cache : Hash(String, Session) = {} of String => Session
+      @file_states : Hash(String, {Time, Int64}) = {} of String => {Time, Int64}
+      @loaded_counts : Hash(String, Int32) = {} of String => Int32
 
       def initialize(workspace : Path)
         @sessions_dir = workspace / "sessions"
@@ -14,19 +16,27 @@ module Autobot
       end
 
       # Get an existing session or create a new one.
+      # Reloads from disk if the session file was modified externally (e.g. by CLI).
       def get_or_create(key : String) : Session
-        if session = @cache[key]?
+        if (session = @cache[key]?) && !changed_on_disk?(key)
           return session
         end
 
-        session = load(key) || Session.new(key: key)
+        path = session_path(key)
+        session = load(key, path) || Session.new(key: key)
+        record_file_state(key, path, session.messages.size)
         @cache[key] = session
         session
       end
 
       # Save a session to disk as JSONL.
       def save(session : Session) : Nil
-        path = session_path(session.key)
+        key = session.key
+        path = session_path(key)
+
+        if changed_on_disk?(key)
+          merge_disk_changes(session, path)
+        end
 
         # Ensure sessions directory exists with restrictive permissions
         Dir.mkdir_p(@sessions_dir) unless Dir.exists?(@sessions_dir)
@@ -48,12 +58,15 @@ module Autobot
         # Set restrictive permissions on session file (user read/write only)
         File.chmod(path, 0o600)
 
-        @cache[session.key] = session
+        record_file_state(key, path, session.messages.size)
+        @cache[key] = session
       end
 
       # Delete a session.
       def delete(key : String) : Bool
         @cache.delete(key)
+        @file_states.delete(key)
+        @loaded_counts.delete(key)
 
         path = session_path(key)
         if File.exists?(path)
@@ -73,8 +86,40 @@ module Autobot
         name.gsub(/[^\w\-.]/, "_")
       end
 
-      private def load(key : String) : Session?
-        path = session_path(key)
+      private def file_state(path : String) : {Time, Int64}?
+        return nil unless File.exists?(path)
+        info = File.info(path)
+        {info.modification_time, info.size}
+      rescue
+        nil
+      end
+
+      private def changed_on_disk?(key : String) : Bool
+        file_state(session_path(key)) != @file_states[key]?
+      end
+
+      private def record_file_state(key : String, path : String, count : Int32) : Nil
+        if state = file_state(path)
+          @file_states[key] = state
+        else
+          @file_states.delete(key)
+        end
+        @loaded_counts[key] = count
+      end
+
+      private def merge_disk_changes(session : Session, path : String) : Nil
+        key = session.key
+        base_count = @loaded_counts[key]? || 0
+        return if session.messages.size < base_count
+        return unless disk_session = load(key, path)
+
+        added = session.messages[base_count..]
+        session.messages.clear
+        session.messages.concat(disk_session.messages)
+        session.messages.concat(added)
+      end
+
+      private def load(key : String, path : String) : Session?
         return nil unless File.exists?(path)
 
         begin
