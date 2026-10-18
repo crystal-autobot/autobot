@@ -38,6 +38,31 @@ describe Autobot::Tools::Sandbox do
     end
   end
 
+  describe ".configure and .available?" do
+    it "reports unavailable when configured backend does not match host tool" do
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      Autobot::Tools::Sandbox.configure("docker")
+
+      Autobot::Tools::Sandbox.type.should eq(Autobot::Tools::Sandbox::Type::Docker)
+      Autobot::Tools::Sandbox.available?.should be_false
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
+    it "raises SandboxNotFoundError in exec when configured backend is unavailable" do
+      tmp = TestHelper.tmp_dir
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      Autobot::Tools::Sandbox.configure("docker")
+
+      expect_raises(Autobot::Tools::SandboxNotFoundError) do
+        Autobot::Tools::Sandbox.exec("echo hi", tmp, 5)
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
   describe ".docker_image" do
     it "defaults to nil" do
       Autobot::Tools::Sandbox.docker_image.should be_nil

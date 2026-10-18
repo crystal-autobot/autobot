@@ -56,8 +56,7 @@ module Autobot
       private def self.setup_tools(config : Config::Config)
         tool_registry, mcp_clients, rate_limiter = SetupHelper.setup_tools(config)
 
-        sandbox_config = config.tools.try(&.sandbox) || "auto"
-        log_sandbox_info(sandbox_config)
+        log_sandbox_info
 
         {tool_registry, mcp_clients, rate_limiter}
       end
@@ -93,13 +92,12 @@ module Autobot
           end
         end
 
-        sandbox_config = config.tools.try(&.sandbox) || "auto"
         cron_service = Cron::Service.new(
           cron_store_path,
           on_job: on_job,
           on_exec: on_exec,
           workspace: config.workspace_path,
-          sandbox_config: sandbox_config,
+          sandbox_config: config.sandbox_config,
           exec_timeout: config.cron_exec_timeout,
         )
         cron_service.start
@@ -142,7 +140,6 @@ module Autobot
         cron_service : Cron::Service,
         rate_limiter : Tools::RateLimiter? = nil,
       )
-        sandbox_config = config.tools.try(&.sandbox) || "auto"
         deny_patterns, allow_patterns = SetupHelper.load_exec_patterns(config)
 
         agent_defaults = Config::AgentDefaults.new
@@ -162,7 +159,7 @@ module Autobot
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
           exec_deny_patterns: deny_patterns,
           exec_allow_patterns: allow_patterns,
-          sandbox_config: sandbox_config,
+          sandbox_config: config.sandbox_config,
           rate_limiter: rate_limiter,
           enabled_tools: config.tools.try(&.enabled) || [] of String,
           stop_after: config.tools.try(&.stop_after) || [] of String,
@@ -173,19 +170,17 @@ module Autobot
         )
       end
 
-      private def self.log_sandbox_info(sandbox_config : String) : Nil
-        detected_type = Tools::Sandbox.detect
-
-        case detected_type
+      def self.log_sandbox_info(io : IO = STDOUT, err_io : IO = STDERR) : Nil
+        case Tools::Sandbox.available? ? Tools::Sandbox.type : Tools::Sandbox::Type::None
         when Tools::Sandbox::Type::Bubblewrap
-          puts "✓ Sandbox: bubblewrap (kernel-enforced isolation)"
+          io.puts "✓ Sandbox: bubblewrap (kernel-enforced isolation)"
         when Tools::Sandbox::Type::Docker
-          puts "✓ Sandbox: docker (container isolation)"
+          io.puts "✓ Sandbox: docker (container isolation)"
         when Tools::Sandbox::Type::None
-          if sandbox_config.downcase == "none"
-            puts "⚠ Sandbox: disabled (direct execution, dev only)"
+          if Tools::Sandbox.disabled?
+            io.puts "⚠ Sandbox: disabled (direct execution, dev only)"
           else
-            STDERR.puts "⚠️  Sandbox: unavailable (install bubblewrap or docker)"
+            err_io.puts "⚠️  Sandbox: unavailable (install bubblewrap or docker)"
           end
         end
       end

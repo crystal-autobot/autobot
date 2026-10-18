@@ -30,7 +30,17 @@ module Autobot
       end
 
       # Test override for sandbox detection (set to nil to use real detection)
-      class_property detect_override : Type? = nil
+      def self.detect_override : Type?
+        @@detect_override
+      end
+
+      def self.detect_override=(@@detect_override : Type?) : Type?
+        @@config = "auto"
+        @@configured_type = nil
+        @@detect_override
+      end
+
+      @@detect_override : Type? = nil
 
       # Custom Docker image (set from config at startup)
       class_property docker_image : String? = nil
@@ -39,8 +49,38 @@ module Autobot
       # Only listed variables are forwarded — empty by default for security.
       class_property sandbox_env : Array(String) = [] of String
 
-      # Cached result of detect_type (avoids redundant subprocess calls)
+      # Cached result of detect_type and binary checks (avoids redundant subprocess calls)
       @@cached_type : Type? = nil
+      @@bwrap_available : Bool? = nil
+      @@docker_available : Bool? = nil
+      @@config : String = "auto"
+      @@configured_type : Type? = nil
+
+      # Active sandbox type (configured type, or auto-detected if not yet configured)
+      def self.type : Type
+        @@configured_type || detect
+      end
+
+      # True when sandboxing was explicitly disabled via `sandbox: "none"`
+      def self.disabled? : Bool
+        @@config == "none"
+      end
+
+      # Configure active sandbox mode from config string ("auto", "bubblewrap", "docker", "none")
+      def self.configure(config : String) : Type
+        resolved = resolve_type(config)
+        @@config = config.downcase
+        @@configured_type = resolved
+        resolved
+      end
+
+      # Non-raising variant of `.configure`; returns nil if `config` is invalid
+      def self.configure?(config : String) : Type?
+        if resolved = resolve_type?(config)
+          @@config = config.downcase
+          @@configured_type = resolved
+        end
+      end
 
       # Detect available sandbox tool (memoized)
       def self.detect : Type
@@ -51,32 +91,56 @@ module Autobot
       end
 
       private def self.detect_type : Type
-        if command_exists?("bwrap")
+        if bwrap_available?
           Type::Bubblewrap
-        elsif command_exists?("docker")
+        elsif docker_available?
           Type::Docker
         else
           Type::None
         end
       end
 
-      # Check if sandboxing is available
-      def self.available? : Bool
-        detect != Type::None
+      private def self.bwrap_available? : Bool
+        available = @@bwrap_available
+        return available unless available.nil?
+        @@bwrap_available = command_exists?("bwrap")
       end
 
-      # Resolve sandbox type from config string
-      def self.resolve_type(config : String) : Type
+      private def self.docker_available? : Bool
+        available = @@docker_available
+        return available unless available.nil?
+        @@docker_available = command_exists?("docker")
+      end
+
+      # Check if sandboxing is available for the active (or given) sandbox type
+      def self.available?(type : Type = self.type) : Bool
+        if override = @@detect_override
+          return override != Type::None && override == type
+        end
+
+        case type
+        in Type::Bubblewrap then bwrap_available?
+        in Type::Docker     then docker_available?
+        in Type::None       then false
+        end
+      end
+
+      # Resolve sandbox type from config string, or nil if invalid
+      def self.resolve_type?(config : String) : Type?
         case config.downcase
         when "bubblewrap" then Type::Bubblewrap
         when "docker"     then Type::Docker
         when "none"       then Type::None
         when "auto"       then detect
-        else
-          raise ArgumentError.new(
-            "Invalid sandbox config: #{config}. Use 'auto', 'bubblewrap', 'docker', or 'none'"
-          )
+        else                   nil
         end
+      end
+
+      # Resolve sandbox type from config string
+      def self.resolve_type(config : String) : Type
+        resolve_type?(config) || raise ArgumentError.new(
+          "Invalid sandbox config: #{config}. Use 'auto', 'bubblewrap', 'docker', or 'none'"
+        )
       end
 
       # Require sandbox or raise clear error
@@ -116,7 +180,9 @@ module Autobot
         timeout : Int32,
         max_output_size : Int32,
       ) : CommandRunner::Result
-        case detect
+        raise SandboxNotFoundError.new unless available?
+
+        case type
         when Type::Bubblewrap
           run_in_bubblewrap(cmd_args, workspace, timeout, max_output_size)
         when Type::Docker

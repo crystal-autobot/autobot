@@ -37,12 +37,12 @@ module Autobot
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
       # Determine sandbox configuration
-      sandboxed = sandbox_config.downcase != "none"
-      sandbox_type = Sandbox.resolve_type(sandbox_config)
+      Sandbox.configure(sandbox_config)
+      sandboxed = !Sandbox.disabled?
 
       # Log sandbox configuration
       if sandboxed
-        log_sandbox_configuration(sandbox_type)
+        log_sandbox_configuration
       else
         ::Log.for("Tools").warn { "⚠️  Sandboxing disabled - development mode only" }
       end
@@ -103,8 +103,8 @@ module Autobot
       roots.map { |root| Path[root].expand(base: base, home: true) }
     end
 
-    private def self.log_sandbox_configuration(sandbox_type : Sandbox::Type) : Nil
-      case sandbox_type
+    private def self.log_sandbox_configuration : Nil
+      case Sandbox.available? ? Sandbox.type : Sandbox::Type::None
       when Sandbox::Type::Bubblewrap
         ::Log.for("Tools").info { "✓ Sandbox: bubblewrap (Linux namespaces)" }
       when Sandbox::Type::Docker

@@ -92,13 +92,16 @@ module Autobot
       # Returns {tool_registry, mcp_clients, rate_limiter}. Plugins are loaded
       # separately via `load_plugins` to avoid blocking startup.
       def self.setup_tools(config : Config::Config)
-        sandbox_config = config.tools.try(&.sandbox) || "auto"
+        sandbox_config = config.sandbox_config
+        Tools::Sandbox.configure(sandbox_config)
 
         if img = config.tools.try(&.docker_image)
           Tools::Sandbox.docker_image = img
         end
         Tools::Sandbox.sandbox_env = config.tools.try(&.sandbox_env) || [] of String
-        Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
+        if Tools::Sandbox.type.docker? && Tools::Sandbox.available?
+          Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
+        end
 
         deny_patterns, allow_patterns = load_exec_patterns(config)
         rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))

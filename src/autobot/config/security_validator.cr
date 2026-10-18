@@ -96,10 +96,20 @@ module Autobot::Config
     private def self.check_sandbox_availability(config : Config) : Array(Issue)
       issues = [] of Issue
 
-      sandbox_config = config.tools.try(&.sandbox) || "auto"
+      sandbox_config = config.sandbox_config
+
+      sandbox_type = Tools::Sandbox.configure?(sandbox_config)
+      unless sandbox_type
+        issues << Issue.new(
+          severity: Severity::Error,
+          message: "Invalid sandbox config '#{sandbox_config}'. " \
+                   "Use 'auto', 'bubblewrap', 'docker', or 'none'."
+        )
+        return issues
+      end
 
       # Warn if sandbox is disabled
-      if sandbox_config.downcase == "none"
+      if Tools::Sandbox.disabled?
         issues << Issue.new(
           severity: Severity::Warning,
           message: "Sandbox disabled (sandbox: none). " \
@@ -110,7 +120,7 @@ module Autobot::Config
       end
 
       # Check if sandbox tools are available when enabled
-      unless Tools::Sandbox.available?
+      unless Tools::Sandbox.available?(sandbox_type)
         issues << Issue.new(
           severity: Severity::Error,
           message: "CRITICAL: Sandbox enabled but no sandbox tool found. " \

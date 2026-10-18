@@ -255,28 +255,38 @@ module Autobot
       end
 
       def self.check_sandbox_availability(config : Config::Config, errors : Int32) : Int32
-        sandbox_config = config.tools.try(&.sandbox) || "auto"
+        sandbox_config = config.sandbox_config
 
-        if sandbox_config.downcase == "none"
+        sandbox_type = Tools::Sandbox.configure?(sandbox_config)
+        unless sandbox_type
+          report(Status::Fail, "Invalid sandbox setting (#{sandbox_config})")
+          hint("Use 'auto', 'bubblewrap', 'docker', or 'none'")
+          return errors + 1
+        end
+
+        if Tools::Sandbox.disabled?
           report(Status::Warn, "Sandbox disabled (sandbox: none)")
           hint("Enable sandboxing for better security ('auto', 'bubblewrap', or 'docker')")
           return errors
         end
 
-        unless Tools::Sandbox.available?
+        unless Tools::Sandbox.available?(sandbox_type)
           report(Status::Fail, "Sandbox enabled but no sandbox tool found")
           hint("Install bubblewrap: sudo apt install bubblewrap")
           hint("Or Docker: sudo apt install docker.io")
           return errors + 1
         end
 
-        sandbox_type = Tools::Sandbox.detect
         report(Status::Pass, "Sandbox available (#{sandbox_type.to_s.downcase})")
 
-        check_docker_image(config, errors)
+        check_docker_image(config, errors, sandbox_type)
       end
 
-      def self.check_docker_image(config : Config::Config, errors : Int32) : Int32
+      def self.check_docker_image(
+        config : Config::Config,
+        errors : Int32,
+        sandbox_type : Tools::Sandbox::Type? = Tools::Sandbox.configure?(config.sandbox_config),
+      ) : Int32
         image = config.tools.try(&.docker_image)
 
         if image
@@ -289,12 +299,11 @@ module Autobot
           return errors
         end
 
+        return errors unless sandbox_type == Tools::Sandbox::Type::Docker && Tools::Sandbox.available?(Tools::Sandbox::Type::Docker)
+
         # Check for Dockerfile.sandbox convention
         config_dir = Config::Loader.config_dir
         dockerfile = config_dir / Tools::Sandbox::SANDBOX_DOCKERFILE
-        sandbox_type = Tools::Sandbox.detect
-
-        return errors unless sandbox_type == Tools::Sandbox::Type::Docker
 
         if File.exists?(dockerfile)
           if Tools::Sandbox.docker_image_exists?(Tools::Sandbox::SANDBOX_IMAGE_TAG)
