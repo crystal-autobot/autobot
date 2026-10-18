@@ -43,6 +43,20 @@ module Autobot
       # JSON-Schema keywords Gemini's functionDeclarations rejects
       UNSUPPORTED_SCHEMA_KEYS = ["additionalProperties", "$schema", "$ref", "$defs", "definitions"]
 
+      FINISH_REASON_MAP = {
+        "STOP"                    => "stop",
+        "MAX_TOKENS"              => "length",
+        "SAFETY"                  => "content_filtered",
+        "RECITATION"              => "content_filtered",
+        "LANGUAGE"                => "content_filtered",
+        "BLOCKLIST"               => "content_filtered",
+        "PROHIBITED_CONTENT"      => "content_filtered",
+        "SPII"                    => "content_filtered",
+        "IMAGE_SAFETY"            => "content_filtered",
+        "MALFORMED_FUNCTION_CALL" => "error",
+        "UNEXPECTED_TOOL_CALL"    => "error",
+      }
+
       @client_id : String?
       @client_secret : String?
       @refresh_token : String?
@@ -595,12 +609,13 @@ module Autobot
 
         if (candidates = res["candidates"]?) && (first = candidates[0]?)
           content = nil
+          reasoning_content = nil
           native_parts = [] of JSON::Any
           thought_parts = [] of JSON::Any
 
           if parts = first["content"]?.try(&.["parts"]?.try(&.as_a?))
-            text_parts = parts.compact_map(&.["text"]?.try(&.as_s?))
-            content = text_parts.join("\n") unless text_parts.empty?
+            content = join_part_texts(parts, thought: false)
+            reasoning_content = join_part_texts(parts, thought: true)
 
             # Save all parts for preservation (including thought/thought_signature)
             parts.each do |part|
@@ -641,16 +656,31 @@ module Autobot
 
           usage_meta = res["usageMetadata"]?
           usage = parse_native_usage(usage_meta)
+          finish_reason = map_finish_reason(first["finishReason"]?.try(&.as_s?))
 
           return Response.new(
             content: content,
             tool_calls: tool_calls,
+            finish_reason: finish_reason,
             usage: usage,
+            reasoning_content: reasoning_content,
             native_parts: native_parts
           )
         end
 
         Response.new(content: "Error: No candidates in response", finish_reason: "error")
+      end
+
+      private def join_part_texts(parts : Array(JSON::Any), thought : Bool) : String?
+        texts = parts.compact_map do |part|
+          part["text"]?.try(&.as_s?) if (part["thought"]?.try(&.as_bool?) == true) == thought
+        end.reject(&.empty?)
+        texts.join("") unless texts.empty?
+      end
+
+      private def map_finish_reason(reason : String?) : String
+        return "stop" unless reason
+        FINISH_REASON_MAP[reason]? || reason.downcase
       end
 
       private def parse_native_usage(node : JSON::Any?) : TokenUsage

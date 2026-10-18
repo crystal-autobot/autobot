@@ -79,6 +79,10 @@ Autobot supports native multimodal input with Gemini models. When images (photos
 
 No extra provider configuration is required. See [Media support](media.md#vision) for platform details and limits.
 
+## Reasoning content
+
+Gemini thinking models (such as Gemini 2.5 and Gemini 3) return internal chain-of-thought parts marked with `"thought": true` alongside the final answer. Autobot extracts these parts into `reasoning_content` and preserves them (along with `thoughtSignature` tokens) across multi-turn tool calls so internal reasoning traces are never sent as user-facing channel replies.
+
 ## Configuration reference
 
 | Field | Required | Default | Description |
