@@ -556,7 +556,14 @@ module Autobot::Channels
           }
 
           response = api_get("getUpdates", params)
-          next unless response
+
+          # getUpdates returned nil (DNS/timeout/network failure): sleep before
+          # retrying so a sustained outage cannot busy-loop this fiber and
+          # starve the scheduler (cron timers, logging, other channels).
+          unless response
+            sleep(2.seconds) if @running
+            next
+          end
 
           if updates = response.as_a?
             updates.each do |update|
