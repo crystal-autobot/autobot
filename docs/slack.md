@@ -134,7 +134,7 @@ DMs are disabled by default. When enabled with `allowlist` policy, only users in
 - **Thread support** — replies in threads for channel messages, with parent message context included for thread replies
 - **DM support** — configurable direct message handling
 - **Emoji reactions** — adds :eyes: to received messages
-- **Auto-reconnect** — reconnects automatically on disconnection
+- **Auto-reconnect** — reconnects automatically on disconnection; failed connection attempts retry with a growing delay (5s up to 60s)
 
 ## Configuration reference
 

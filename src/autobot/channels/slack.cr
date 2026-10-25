@@ -21,6 +21,7 @@ module Autobot::Channels
 
     SLACK_API_BASE         = "https://slack.com/api"
     RECONNECT_DELAY        = 5.seconds
+    RECONNECT_MAX_DELAY    = 60.seconds
     DEFAULT_REACTION_EMOJI = "eyes"
 
     @bot_user_id : String = ""
@@ -47,13 +48,17 @@ module Autobot::Channels
       resolve_bot_identity
 
       Log.info { "Starting Slack Socket Mode..." }
+      backoff = RetryBackoff.new(RECONNECT_DELAY, RECONNECT_MAX_DELAY)
 
       while @running
         begin
-          connect_socket_mode
+          ws = connect_socket_mode
+          backoff.reset
+          ws.run
         rescue ex
-          Log.error { "Slack Socket Mode error: #{ex.message}" }
-          sleep(RECONNECT_DELAY) if @running
+          delay = backoff.next_delay
+          Log.error { "Slack Socket Mode error: #{ex.message}; reconnecting in #{delay}" }
+          wait_before_retry(delay)
         end
       end
     end
@@ -109,34 +114,11 @@ module Autobot::Channels
       Log.warn { "Slack auth.test failed: #{ex.message}" }
     end
 
-    private def connect_socket_mode : Nil
-      response = slack_api_with_token("apps.connections.open", @app_token)
-      return unless response
-
-      data = JSON.parse(response)
-      unless data["ok"]?.try(&.as_bool)
-        Log.error { "Failed to open Slack connection: #{data["error"]?.try(&.as_s)}" }
-        return
-      end
-
-      ws_url = data["url"]?.try(&.as_s)
-      unless ws_url
-        Log.error { "No WebSocket URL in Slack response" }
-        return
-      end
-
-      uri = URI.parse(ws_url)
-      host = uri.host
-      return unless host
-
-      path = uri.path
-      if query = uri.query
-        path = "#{path}?#{query}"
-      end
-
+    private def connect_socket_mode : ::HTTP::WebSocket
+      url = open_socket_mode_url
       Log.info { "Connecting to Slack WebSocket..." }
 
-      ws = ::HTTP::WebSocket.new(host: host, path: path, tls: true)
+      ws = ::HTTP::WebSocket.new(url)
 
       ws.on_message do |raw|
         handle_socket_message(raw, ws)
@@ -146,7 +128,19 @@ module Autobot::Channels
         Log.info { "Slack WebSocket closed: #{code} #{reason}" }
       end
 
-      ws.run
+      ws
+    end
+
+    private def open_socket_mode_url : String
+      response = slack_api_with_token("apps.connections.open", @app_token) ||
+                 raise "apps.connections.open request failed"
+
+      data = JSON.parse(response)
+      unless data["ok"]?.try(&.as_bool)
+        raise "failed to open Slack connection: #{data["error"]?.try(&.as_s)}"
+      end
+
+      data["url"]?.try(&.as_s) || raise "no WebSocket URL in Slack response"
     end
 
     private def handle_socket_message(raw : String, ws : ::HTTP::WebSocket) : Nil

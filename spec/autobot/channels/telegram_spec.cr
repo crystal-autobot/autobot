@@ -125,8 +125,22 @@ class TelegramChannelTest < Autobot::Channels::TelegramChannel
     api_request(method, params)
   end
 
-  def test_api_get(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
+  def test_api_get(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any
     api_get(method, params)
+  end
+
+  RECORDED_RETRY_WAITS = 3
+
+  getter retry_waits = [] of Time::Span
+
+  def test_poll_updates : Nil
+    @running = true
+    poll_updates
+  end
+
+  protected def wait_before_retry(delay : Time::Span) : Nil
+    @retry_waits << delay
+    @running = false if @retry_waits.size >= RECORDED_RETRY_WAITS
   end
 
   def test_download_telegram_file_bytes(file_id : String) : Bytes?
@@ -172,22 +186,36 @@ private def build_channel(
   )
 end
 
-private def sent_methods(attachment : Autobot::Bus::MediaAttachment, statuses : Array(Int32)) : Array(String)
-  methods = [] of String
-  server = HTTP::Server.new do |context|
-    methods << context.request.path.split('/').last
-    context.response.status_code = statuses.shift
-    context.response.print(%({"ok":true,"result":{}}))
-  end
+private def fake_api_channel(&handler : HTTP::Server::Context ->) : {TelegramChannelTest, HTTP::Server}
+  server = HTTP::Server.new(&handler)
   port = server.bind_tcp("127.0.0.1", 0).port
   spawn { server.listen }
 
   channel = build_channel
   channel.target_uri = URI.parse("http://127.0.0.1:#{port}")
+  {channel, server}
+end
+
+private def sent_methods(attachment : Autobot::Bus::MediaAttachment, statuses : Array(Int32)) : Array(String)
+  methods = [] of String
+  channel, server = fake_api_channel do |context|
+    methods << context.request.path.split('/').last
+    context.response.status_code = statuses.shift
+    context.response.print(%({"ok":true,"result":{}}))
+  end
+
   channel.send_message(Autobot::Bus::OutboundMessage.new(channel: "telegram", chat_id: "123", content: "caption", media: [attachment]))
   methods
 ensure
   server.try &.close
+end
+
+private def polling_channel(responses : Array({Int32, String})) : {TelegramChannelTest, HTTP::Server}
+  fake_api_channel do |context|
+    status, body = responses.size > 1 ? responses.shift : responses.first
+    context.response.status_code = status
+    context.response.print(body)
+  end
 end
 
 private TOPIC_MESSAGE   = %({"message_id": 9, "message_thread_id": 57, "is_topic_message": true, "chat": {"id": -1001, "type": "supergroup"}, "from": {"id": 1, "first_name": "Ann"}, "text": "hi"})
@@ -1215,7 +1243,7 @@ describe Autobot::Channels::TelegramChannel do
       end
 
       channel = build_channel(proxy: "http://127.0.0.1:#{port}")
-      channel.test_api_get("getUpdates")
+      expect_raises(Exception) { channel.test_api_get("getUpdates") }
 
       channel.created_clients.size.should eq(1)
       channel.created_clients.first.explicitly_closed?.should be_true
@@ -1265,6 +1293,66 @@ describe Autobot::Channels::TelegramChannel do
       channel.created_clients.all?(&.explicitly_closed?).should be_true
     ensure
       server.close if server
+    end
+  end
+
+  describe "#poll_updates" do
+    it "waits with growing backoff while getUpdates keeps failing" do
+      conflict = %({"ok":false,"error_code":409,"description":"Conflict: terminated by other getUpdates request"})
+      channel, server = polling_channel([{409, conflict}])
+
+      channel.test_poll_updates
+
+      channel.retry_waits.should eq([2.seconds, 4.seconds, 8.seconds])
+    ensure
+      server.try &.close
+    end
+
+    it "honours retry_after from a rate limited reply" do
+      limited = %({"ok":false,"error_code":429,"description":"Too Many Requests: retry after 7","parameters":{"retry_after":7}})
+      channel, server = polling_channel([{429, limited}])
+
+      channel.test_poll_updates
+
+      channel.retry_waits.should eq([7.seconds, 7.seconds, 7.seconds])
+    ensure
+      server.try &.close
+    end
+
+    it "waits when the result is not a list of updates" do
+      channel, server = polling_channel([{200, %({"ok":true,"result":{}})}])
+
+      channel.test_poll_updates
+
+      channel.retry_waits.should eq([2.seconds, 4.seconds, 8.seconds])
+    ensure
+      server.try &.close
+    end
+
+    it "resets the backoff after a successful poll" do
+      failure = %({"ok":false,"error_code":502,"description":"Bad Gateway"})
+      success = %({"ok":true,"result":[{"update_id":41}]})
+      channel, server = polling_channel([{502, failure}, {502, failure}, {200, success}, {502, failure}])
+
+      channel.test_poll_updates
+
+      channel.retry_waits.should eq([2.seconds, 4.seconds, 2.seconds])
+    ensure
+      server.try &.close
+    end
+  end
+
+  describe "#api_get" do
+    it "raises with the Telegram error description" do
+      unauthorized = %({"ok":false,"error_code":401,"description":"Unauthorized"})
+      channel, server = polling_channel([{401, unauthorized}])
+
+      error = expect_raises(Autobot::Channels::TelegramChannel::ApiError, /HTTP 401: Unauthorized/) do
+        channel.test_api_get("getUpdates")
+      end
+      error.retry_after.should be_nil
+    ensure
+      server.try &.close
     end
   end
 

@@ -31,6 +31,15 @@ class SlackChannelTest < Autobot::Channels::SlackChannel
   def test_slack_api_with_token(method : String, token : String, body : String? = nil) : String?
     slack_api_with_token(method, token, body)
   end
+
+  RECORDED_RETRY_WAITS = 3
+
+  getter retry_waits = [] of Time::Span
+
+  protected def wait_before_retry(delay : Time::Span) : Nil
+    @retry_waits << delay
+    @running = false if @retry_waits.size >= RECORDED_RETRY_WAITS
+  end
 end
 
 private def build_slack_channel(
@@ -232,6 +241,25 @@ describe Autobot::Config::ConfigValidator do
 
     warnings = issues.select { |i| i.severity == Autobot::Config::ValidatorCommon::Severity::Warning }
     warnings.any?(&.message.includes?("allow_from is empty")).should be_true
+  end
+end
+
+describe "SlackChannel reconnect loop" do
+  it "waits with growing backoff when opening the Socket Mode connection fails" do
+    server = HTTP::Server.new do |context|
+      context.response.status_code = 200
+      context.response.print(%({"ok":false,"error":"invalid_auth"}))
+    end
+    port = server.bind_tcp("127.0.0.1", 0).port
+    spawn { server.listen }
+
+    channel = build_slack_channel
+    channel.test_api_base = "http://127.0.0.1:#{port}"
+    channel.start
+
+    channel.retry_waits.should eq([5.seconds, 10.seconds, 20.seconds])
+  ensure
+    server.try &.close
   end
 end
 
