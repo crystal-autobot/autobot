@@ -32,11 +32,13 @@ class SlackChannelTest < Autobot::Channels::SlackChannel
     slack_api_with_token(method, token, body)
   end
 
-  getter reconnect_waits = [] of Time::Span
+  RECORDED_RETRY_WAITS = 3
 
-  private def wait_before_reconnect(delay : Time::Span) : Nil
-    @reconnect_waits << delay
-    @running = false if @reconnect_waits.size >= 3
+  getter retry_waits = [] of Time::Span
+
+  protected def wait_before_retry(delay : Time::Span) : Nil
+    @retry_waits << delay
+    @running = false if @retry_waits.size >= RECORDED_RETRY_WAITS
   end
 end
 
@@ -255,7 +257,7 @@ describe "SlackChannel reconnect loop" do
     channel.test_api_base = "http://127.0.0.1:#{port}"
     channel.start
 
-    channel.reconnect_waits.should eq([5.seconds, 10.seconds, 20.seconds])
+    channel.retry_waits.should eq([5.seconds, 10.seconds, 20.seconds])
   ensure
     server.try &.close
   end

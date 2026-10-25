@@ -52,18 +52,15 @@ module Autobot::Channels
 
       while @running
         begin
-          connect_socket_mode
+          ws = connect_socket_mode
           backoff.reset
+          ws.run
         rescue ex
           delay = backoff.next_delay
           Log.error { "Slack Socket Mode error: #{ex.message}; reconnecting in #{delay}" }
-          wait_before_reconnect(delay)
+          wait_before_retry(delay)
         end
       end
-    end
-
-    private def wait_before_reconnect(delay : Time::Span) : Nil
-      sleep(delay) if @running
     end
 
     def stop : Nil
@@ -117,18 +114,11 @@ module Autobot::Channels
       Log.warn { "Slack auth.test failed: #{ex.message}" }
     end
 
-    private def connect_socket_mode : Nil
-      uri = URI.parse(open_socket_mode_url)
-      host = uri.host || raise "Slack WebSocket URL has no host"
-
-      path = uri.path
-      if query = uri.query
-        path = "#{path}?#{query}"
-      end
-
+    private def connect_socket_mode : ::HTTP::WebSocket
+      url = open_socket_mode_url
       Log.info { "Connecting to Slack WebSocket..." }
 
-      ws = ::HTTP::WebSocket.new(host: host, path: path, tls: true)
+      ws = ::HTTP::WebSocket.new(url)
 
       ws.on_message do |raw|
         handle_socket_message(raw, ws)
@@ -138,7 +128,7 @@ module Autobot::Channels
         Log.info { "Slack WebSocket closed: #{code} #{reason}" }
       end
 
-      ws.run
+      ws
     end
 
     private def open_socket_mode_url : String

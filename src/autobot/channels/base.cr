@@ -27,6 +27,10 @@ module Autobot::Channels
     def turn_ended(chat_id : String) : Nil
     end
 
+    protected def wait_before_retry(delay : Time::Span) : Nil
+      sleep(delay) if @running
+    end
+
     # Check if a sender is allowed to use this bot.
     # Returns false if no allow list (deny by default).
     # Use ["*"] in allow_from to allow all senders.

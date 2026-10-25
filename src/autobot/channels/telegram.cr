@@ -565,7 +565,7 @@ module Autobot::Channels
           dispatch_updates(fetch_updates)
           backoff.reset
         rescue ex
-          delay = poll_retry_delay(ex, backoff)
+          delay = ex.as?(ApiError).try(&.retry_after) || backoff.next_delay
           Log.error { "Polling error: #{ex.message}; retrying in #{delay}" }
           wait_before_retry(delay)
         end
@@ -579,7 +579,7 @@ module Autobot::Channels
         "allowed_updates" => %(["message"]),
       }
 
-      api_get("getUpdates", params).as_a? || raise ApiError.new("Telegram API getUpdates returned no update list")
+      api_get("getUpdates", params).as_a? || raise "Telegram API getUpdates returned no update list"
     end
 
     private def dispatch_updates(updates : Array(JSON::Any)) : Nil
@@ -589,15 +589,6 @@ module Autobot::Channels
           spawn { process_message(msg) }
         end
       end
-    end
-
-    private def poll_retry_delay(error : Exception, backoff : RetryBackoff) : Time::Span
-      retry_after = error.is_a?(ApiError) ? error.retry_after : nil
-      retry_after || backoff.next_delay
-    end
-
-    private def wait_before_retry(delay : Time::Span) : Nil
-      sleep(delay) if @running
     end
 
     private def process_message(msg : JSON::Any) : Nil
@@ -1306,32 +1297,31 @@ module Autobot::Channels
     end
 
     private def parse_error_description(body : String) : String
-      JSON.parse(body)["description"]?.try(&.as_s) || "unknown error"
+      error_description(JSON.parse(body))
     rescue
       "unparseable response"
+    end
+
+    private def error_description(data : JSON::Any?) : String
+      data.try(&.["description"]?).try(&.as_s) || "unknown error"
+    end
+
+    private def retry_after(data : JSON::Any?) : Time::Span?
+      data.try(&.dig?("parameters", "retry_after")).try(&.as_i?).try(&.seconds)
     end
 
     private def api_get(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any
       with_api_client(read_timeout: (POLL_TIMEOUT + 10).seconds) do |client|
         query = URI::Params.encode(params)
         response = client.get("/bot#{@token}/#{method}?#{query}")
-        data = JSON.parse(response.body) if response.status_code == 200
-
-        if data && data["ok"]?.try(&.as_bool)
-          return data["result"]
-        end
+        data = JSON.parse(response.body) rescue nil
+        return data["result"] if response.status_code == 200 && data && data["ok"]?.try(&.as_bool)
 
         raise ApiError.new(
-          "Telegram API #{method} HTTP #{response.status_code}: #{parse_error_description(response.body)}",
-          retry_after: parse_retry_after(response.body),
+          "Telegram API #{method} HTTP #{response.status_code}: #{error_description(data)}",
+          retry_after: retry_after(data),
         )
       end
-    end
-
-    private def parse_retry_after(body : String) : Time::Span?
-      JSON.parse(body)["parameters"]?.try(&.["retry_after"]?).try(&.as_i?).try(&.seconds)
-    rescue
-      nil
     end
 
     private def read_limited_io(io : IO, max_size : Int32) : String

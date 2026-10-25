@@ -1,7 +1,5 @@
 module Autobot
   class RetryBackoff
-    getter delay : Time::Span
-
     def initialize(@initial : Time::Span, @max : Time::Span)
       @delay = @initial
     end
