@@ -97,7 +97,7 @@ channels:
 
 ## Features
 
-- **Long polling** — no webhook or public IP needed
+- **Long polling** — no webhook or public IP needed; failed polls retry with a growing delay (2s up to 60s) and honour Telegram's `retry_after` on rate limits
 - **Reply context and quotes** — when replying to a message or selecting a quote excerpt, the replied-to text is prepended as context so the bot understands the reference
 - **Voice notes** — a note recorded in the chat is transcribed via Whisper into the message text (Groq or OpenAI key, or the bot's own `transcription.api_key`); with transcription off the bot replies that it could not hear the note
 - **Audio files and forwarded voice notes** — saved to the inbox as attachments; the transcript stays on the attachment, never in the message text
