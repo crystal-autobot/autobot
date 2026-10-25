@@ -21,6 +21,7 @@ module Autobot::Channels
 
     SLACK_API_BASE         = "https://slack.com/api"
     RECONNECT_DELAY        = 5.seconds
+    RECONNECT_MAX_DELAY    = 60.seconds
     DEFAULT_REACTION_EMOJI = "eyes"
 
     @bot_user_id : String = ""
@@ -47,15 +48,22 @@ module Autobot::Channels
       resolve_bot_identity
 
       Log.info { "Starting Slack Socket Mode..." }
+      backoff = RetryBackoff.new(RECONNECT_DELAY, RECONNECT_MAX_DELAY)
 
       while @running
         begin
           connect_socket_mode
+          backoff.reset
         rescue ex
-          Log.error { "Slack Socket Mode error: #{ex.message}" }
-          sleep(RECONNECT_DELAY) if @running
+          delay = backoff.next_delay
+          Log.error { "Slack Socket Mode error: #{ex.message}; reconnecting in #{delay}" }
+          wait_before_reconnect(delay)
         end
       end
+    end
+
+    private def wait_before_reconnect(delay : Time::Span) : Nil
+      sleep(delay) if @running
     end
 
     def stop : Nil
@@ -110,24 +118,8 @@ module Autobot::Channels
     end
 
     private def connect_socket_mode : Nil
-      response = slack_api_with_token("apps.connections.open", @app_token)
-      return unless response
-
-      data = JSON.parse(response)
-      unless data["ok"]?.try(&.as_bool)
-        Log.error { "Failed to open Slack connection: #{data["error"]?.try(&.as_s)}" }
-        return
-      end
-
-      ws_url = data["url"]?.try(&.as_s)
-      unless ws_url
-        Log.error { "No WebSocket URL in Slack response" }
-        return
-      end
-
-      uri = URI.parse(ws_url)
-      host = uri.host
-      return unless host
+      uri = URI.parse(open_socket_mode_url)
+      host = uri.host || raise "Slack WebSocket URL has no host"
 
       path = uri.path
       if query = uri.query
@@ -147,6 +139,18 @@ module Autobot::Channels
       end
 
       ws.run
+    end
+
+    private def open_socket_mode_url : String
+      response = slack_api_with_token("apps.connections.open", @app_token) ||
+                 raise "apps.connections.open request failed"
+
+      data = JSON.parse(response)
+      unless data["ok"]?.try(&.as_bool)
+        raise "failed to open Slack connection: #{data["error"]?.try(&.as_s)}"
+      end
+
+      data["url"]?.try(&.as_s) || raise "no WebSocket URL in Slack response"
     end
 
     private def handle_socket_message(raw : String, ws : ::HTTP::WebSocket) : Nil
