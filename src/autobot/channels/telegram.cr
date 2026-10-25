@@ -339,6 +339,17 @@ module Autobot::Channels
     GETME_MAX_ATTEMPTS = 5
     GETME_RETRY_DELAY  = 2.seconds
 
+    POLL_RETRY_DELAY     = 2.seconds
+    POLL_RETRY_MAX_DELAY = 60.seconds
+
+    class ApiError < Exception
+      getter retry_after : Time::Span?
+
+      def initialize(message : String, @retry_after : Time::Span? = nil)
+        super(message)
+      end
+    end
+
     def start : Nil
       if @token.empty?
         Log.error { "Telegram bot token not configured" }
@@ -547,37 +558,46 @@ module Autobot::Channels
     end
 
     private def poll_updates : Nil
+      backoff = RetryBackoff.new(POLL_RETRY_DELAY, POLL_RETRY_MAX_DELAY)
+
       while @running
         begin
-          params = {
-            "offset"          => (@offset + 1).to_s,
-            "timeout"         => POLL_TIMEOUT.to_s,
-            "allowed_updates" => %(["message"]),
-          }
-
-          response = api_get("getUpdates", params)
-
-          # getUpdates returned nil (DNS/timeout/network failure): sleep before
-          # retrying so a sustained outage cannot busy-loop this fiber and
-          # starve the scheduler (cron timers, logging, other channels).
-          unless response
-            sleep(2.seconds) if @running
-            next
-          end
-
-          if updates = response.as_a?
-            updates.each do |update|
-              @offset = update["update_id"].as_i64
-              if msg = update["message"]?
-                spawn { process_message(msg) }
-              end
-            end
-          end
+          dispatch_updates(fetch_updates)
+          backoff.reset
         rescue ex
-          Log.error { "Polling error: #{ex.message}" }
-          sleep(2.seconds) if @running
+          delay = poll_retry_delay(ex, backoff)
+          Log.error { "Polling error: #{ex.message}; retrying in #{delay}" }
+          wait_before_retry(delay)
         end
       end
+    end
+
+    private def fetch_updates : Array(JSON::Any)
+      params = {
+        "offset"          => (@offset + 1).to_s,
+        "timeout"         => POLL_TIMEOUT.to_s,
+        "allowed_updates" => %(["message"]),
+      }
+
+      api_get("getUpdates", params).as_a? || raise ApiError.new("Telegram API getUpdates returned no update list")
+    end
+
+    private def dispatch_updates(updates : Array(JSON::Any)) : Nil
+      updates.each do |update|
+        @offset = update["update_id"].as_i64
+        if msg = update["message"]?
+          spawn { process_message(msg) }
+        end
+      end
+    end
+
+    private def poll_retry_delay(error : Exception, backoff : RetryBackoff) : Time::Span
+      retry_after = error.is_a?(ApiError) ? error.retry_after : nil
+      retry_after || backoff.next_delay
+    end
+
+    private def wait_before_retry(delay : Time::Span) : Nil
+      sleep(delay) if @running
     end
 
     private def process_message(msg : JSON::Any) : Nil
@@ -1291,22 +1311,26 @@ module Autobot::Channels
       "unparseable response"
     end
 
-    private def api_get(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any?
+    private def api_get(method : String, params : Hash(String, String) = {} of String => String) : JSON::Any
       with_api_client(read_timeout: (POLL_TIMEOUT + 10).seconds) do |client|
         query = URI::Params.encode(params)
         response = client.get("/bot#{@token}/#{method}?#{query}")
+        data = JSON.parse(response.body) if response.status_code == 200
 
-        if response.status_code == 200
-          data = JSON.parse(response.body)
-          if data["ok"]?.try(&.as_bool)
-            return data["result"]?
-          end
+        if data && data["ok"]?.try(&.as_bool)
+          return data["result"]
         end
 
-        nil
+        raise ApiError.new(
+          "Telegram API #{method} HTTP #{response.status_code}: #{parse_error_description(response.body)}",
+          retry_after: parse_retry_after(response.body),
+        )
       end
-    rescue ex
-      Log.error { "Telegram API GET #{method} error: #{ex.message}" }
+    end
+
+    private def parse_retry_after(body : String) : Time::Span?
+      JSON.parse(body)["parameters"]?.try(&.["retry_after"]?).try(&.as_i?).try(&.seconds)
+    rescue
       nil
     end
 
