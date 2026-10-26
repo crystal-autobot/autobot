@@ -179,4 +179,28 @@ describe Autobot::Session::Manager do
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
+
+  it "preserves messages written by an external process when saving or reloading" do
+    tmp = TestHelper.tmp_dir
+    gateway_manager = Autobot::Session::Manager.new(workspace: tmp)
+    cli_manager = Autobot::Session::Manager.new(workspace: tmp)
+
+    gw_session = gateway_manager.get_or_create("telegram:123")
+    gw_session.add_message("user", "first")
+    gateway_manager.save(gw_session)
+
+    cli_session = cli_manager.get_or_create("telegram:123")
+    cli_session.add_message("assistant", "[Scheduled task] report")
+    cli_manager.save(cli_session)
+
+    gw_next = gateway_manager.get_or_create("telegram:123")
+    gw_next.messages.map(&.content).should eq(["first", "[Scheduled task] report"])
+    gw_next.add_message("user", "followup")
+    gateway_manager.save(gw_next)
+
+    reloaded = Autobot::Session::Manager.new(workspace: tmp).get_or_create("telegram:123")
+    reloaded.messages.map(&.content).should eq(["first", "[Scheduled task] report", "followup"])
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
 end

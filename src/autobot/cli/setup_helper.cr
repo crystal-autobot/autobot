@@ -88,17 +88,66 @@ module Autobot
         end
       end
 
-      # Sets up tool registry with built-in tools and MCP servers.
-      # Returns {tool_registry, mcp_clients, rate_limiter}. Plugins are loaded
-      # separately via `load_plugins` to avoid blocking startup.
-      def self.setup_tools(config : Config::Config)
+      # Configures sandbox settings from config and returns the sandbox mode string.
+      def self.configure_sandbox(config : Config::Config) : String
         sandbox_config = config.tools.try(&.sandbox) || "auto"
 
         if img = config.tools.try(&.docker_image)
           Tools::Sandbox.docker_image = img
         end
         Tools::Sandbox.sandbox_env = config.tools.try(&.sandbox_env) || [] of String
-        Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
+        if Tools::Sandbox.resolve_type(sandbox_config).docker?
+          Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
+        end
+
+        sandbox_config
+      end
+
+      def self.create_agent_loop(
+        config : Config::Config,
+        bus : Bus::MessageBus,
+        provider : Providers::Provider,
+        tool_registry : Tools::Registry,
+        session_manager : Session::Manager,
+        cron_service : Cron::Service? = nil,
+        rate_limiter : Tools::RateLimiter? = nil,
+      ) : Autobot::Agent::Loop
+        sandbox_config = config.tools.try(&.sandbox) || "auto"
+        deny_patterns, allow_patterns = load_exec_patterns(config)
+
+        agent_defaults = Config::AgentDefaults.new
+        defaults = config.agents.try(&.defaults)
+
+        Autobot::Agent::Loop.new(
+          bus: bus,
+          provider: provider,
+          workspace: config.workspace_path,
+          tools: tool_registry,
+          sessions: session_manager,
+          model: config.default_model,
+          max_iterations: defaults.try(&.max_tool_iterations) || 20,
+          memory_window: defaults.try(&.memory_window) || 50,
+          cron_service: cron_service,
+          brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
+          exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
+          exec_deny_patterns: deny_patterns,
+          exec_allow_patterns: allow_patterns,
+          sandbox_config: sandbox_config,
+          rate_limiter: rate_limiter,
+          enabled_tools: config.tools.try(&.enabled) || [] of String,
+          stop_after: config.tools.try(&.stop_after) || [] of String,
+          filesystem_roots: config.filesystem_roots,
+          web_allowed_domains: config.tools.try(&.web.try(&.allowed_domains)) || [] of String,
+          max_tokens: defaults.try(&.max_tokens) || agent_defaults.max_tokens,
+          temperature: defaults.try(&.temperature) || agent_defaults.temperature,
+        )
+      end
+
+      # Sets up tool registry with built-in tools and MCP servers.
+      # Returns {tool_registry, mcp_clients, rate_limiter}. Plugins are loaded
+      # separately via `load_plugins` to avoid blocking startup.
+      def self.setup_tools(config : Config::Config, background_mcp : Bool = true)
+        sandbox_config = configure_sandbox(config)
 
         deny_patterns, allow_patterns = load_exec_patterns(config)
         rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
@@ -122,8 +171,8 @@ module Autobot
 
         register_image_tool(config, tool_registry)
 
-        # MCP servers (started in background, tools register as they connect)
-        mcp_clients = Mcp.setup(config, tool_registry)
+        # MCP servers (started in background by default, or synchronously for one-shot runs)
+        mcp_clients = Mcp.setup(config, tool_registry, background: background_mcp)
 
         {tool_registry, mcp_clients, rate_limiter}
       end

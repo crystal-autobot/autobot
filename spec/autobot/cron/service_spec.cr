@@ -520,6 +520,28 @@ describe Autobot::Cron::Service do
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
+
+    it "keeps and disables one-time delete_after_run jobs when execution fails" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", sandbox_config: "none")
+
+      job = service.add_job(
+        name: "failing_one_shot",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::At, at_ms: Time.utc.to_unix_ms + 60000),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "exit 1",
+        delete_after_run: true
+      )
+
+      service.run_job(job.id, force: true).should be_true
+
+      kept = service.get_job(job.id)
+      kept.should_not be_nil
+      kept.try(&.enabled?).should be_false
+      kept.try(&.state.last_status).should eq(Autobot::Cron::JobStatus::Error)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
   end
 
   describe "cron expression scheduling" do
@@ -886,7 +908,7 @@ describe Autobot::Cron::Service do
         nil
       end
 
-      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_exec: on_exec)
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_exec: on_exec, sandbox_config: "none")
 
       job = service.add_job(
         name: "exec_echo",
@@ -912,7 +934,7 @@ describe Autobot::Cron::Service do
         nil
       end
 
-      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_exec: on_exec)
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_exec: on_exec, sandbox_config: "none")
 
       job = service.add_job(
         name: "exec_silent",
@@ -930,7 +952,7 @@ describe Autobot::Cron::Service do
 
     it "stores last_output in job state" do
       tmp = TestHelper.tmp_dir
-      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", sandbox_config: "none")
 
       job = service.add_job(
         name: "exec_state",
@@ -949,7 +971,7 @@ describe Autobot::Cron::Service do
 
     it "passes PREV_OUTPUT env var to command" do
       tmp = TestHelper.tmp_dir
-      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", sandbox_config: "none")
 
       job = service.add_job(
         name: "exec_prev",
@@ -974,7 +996,7 @@ describe Autobot::Cron::Service do
 
     it "records error status when command fails" do
       tmp = TestHelper.tmp_dir
-      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", sandbox_config: "none")
 
       job = service.add_job(
         name: "exec_fail",
@@ -1137,7 +1159,7 @@ describe Autobot::Cron::Service do
         nil
       end
 
-      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_job: on_job)
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_job: on_job, sandbox_config: "none")
 
       job = service.add_job(
         name: "exec_no_agent",
@@ -1149,6 +1171,33 @@ describe Autobot::Cron::Service do
       service.run_job(job.id, force: true)
 
       on_job_called.should be_false
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "defaults sandbox_config to auto and normalizes case-insensitively" do
+      tmp = TestHelper.tmp_dir
+      default_service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      job = default_service.add_job(
+        name: "default_sandbox_exec",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo test"
+      )
+      default_service.run_job(job.id, force: true)
+      default_service.list_jobs.first.state.last_status.should eq(Autobot::Cron::JobStatus::Error)
+      default_service.list_jobs.first.state.last_error.to_s.should contain("no workspace configured")
+
+      upper_none = Autobot::Cron::Service.new(store_path: tmp / "none_cron.json", sandbox_config: "NONE")
+      direct_job = upper_none.add_job(
+        name: "upper_none_exec",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo ok"
+      )
+      upper_none.run_job(direct_job.id, force: true)
+      upper_none.list_jobs.first.state.last_status.should eq(Autobot::Cron::JobStatus::Ok)
+      upper_none.list_jobs.first.state.last_output.should eq("ok")
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
