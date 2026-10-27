@@ -39,7 +39,7 @@ describe Autobot::CLI::Gateway do
       Autobot::CLI::Gateway.log_sandbox_info(io, err_io)
 
       io.to_s.should be_empty
-      err_io.to_s.should contain("Sandbox: unavailable (install bubblewrap or docker)")
+      err_io.to_s.should contain("Sandbox: unavailable (docker is configured but not installed)")
     ensure
       Autobot::Tools::Sandbox.detect_override = nil
     end

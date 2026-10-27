@@ -23,6 +23,8 @@ module Autobot
       MAX_WRITE_OUTPUT      =    10_000
       MAX_LIST_OUTPUT       =   100_000
 
+      DISABLED_CONFIG = "none"
+
       enum Type
         Bubblewrap
         Docker
@@ -62,8 +64,8 @@ module Autobot
       end
 
       # True when sandboxing was explicitly disabled via `sandbox: "none"`
-      def self.disabled? : Bool
-        @@config == "none"
+      def self.disabled?(config : String = @@config) : Bool
+        config.downcase == DISABLED_CONFIG
       end
 
       # Configure active sandbox mode from config string ("auto", "bubblewrap", "docker", "none")
@@ -74,12 +76,10 @@ module Autobot
         resolved
       end
 
-      # Non-raising variant of `.configure`; returns nil if `config` is invalid
-      def self.configure?(config : String) : Type?
-        if resolved = resolve_type?(config)
-          @@config = config.downcase
-          @@configured_type = resolved
-        end
+      def self.unavailable_reason(type : Type = self.type) : String
+        return "install bubblewrap or docker" if type.none?
+
+        "#{type.to_s.downcase} is configured but not installed"
       end
 
       # Detect available sandbox tool (memoized)
@@ -128,11 +128,11 @@ module Autobot
       # Resolve sandbox type from config string, or nil if invalid
       def self.resolve_type?(config : String) : Type?
         case config.downcase
-        when "bubblewrap" then Type::Bubblewrap
-        when "docker"     then Type::Docker
-        when "none"       then Type::None
-        when "auto"       then detect
-        else                   nil
+        when "bubblewrap"    then Type::Bubblewrap
+        when "docker"        then Type::Docker
+        when DISABLED_CONFIG then Type::None
+        when "auto"          then detect
+        else                      nil
         end
       end
 

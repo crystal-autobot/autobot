@@ -180,7 +180,7 @@ module Autobot
           if Tools::Sandbox.disabled?
             io.puts "⚠ Sandbox: disabled (direct execution, dev only)"
           else
-            err_io.puts "⚠️  Sandbox: unavailable (install bubblewrap or docker)"
+            err_io.puts "⚠️  Sandbox: unavailable (#{Tools::Sandbox.unavailable_reason})"
           end
         end
       end

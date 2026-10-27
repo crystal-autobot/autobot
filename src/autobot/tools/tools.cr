@@ -36,9 +36,7 @@ module Autobot
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
-      # Determine sandbox configuration
-      Sandbox.configure(sandbox_config)
-      sandboxed = !Sandbox.disabled?
+      sandboxed = !Sandbox.disabled?(sandbox_config)
 
       # Log sandbox configuration
       if sandboxed
@@ -81,7 +79,7 @@ module Autobot
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
-      sandboxed = sandbox_config.downcase != "none"
+      sandboxed = !Sandbox.disabled?(sandbox_config)
       executor = SandboxExecutor.new(workspace, sandboxed, resolve_roots(filesystem_roots, workspace))
 
       register_filesystem_tools(registry, executor)

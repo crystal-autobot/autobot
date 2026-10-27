@@ -194,7 +194,10 @@ describe Autobot::CLI::Doctor do
         errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
 
         errors.should eq(1)
-        io.to_s.should contain("✗ Sandbox enabled but no sandbox tool found")
+        io.to_s.should contain("✗ Sandbox unavailable: bubblewrap is configured but not installed")
+        io.to_s.should contain("Install bubblewrap: sudo apt install bubblewrap")
+        io.to_s.should contain("Or set sandbox: auto")
+        io.to_s.should_not contain("docker.io")
       end
     ensure
       Autobot::Tools::Sandbox.detect_override = nil

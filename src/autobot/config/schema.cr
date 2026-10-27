@@ -529,7 +529,7 @@ module Autobot::Config
     end
 
     def sandbox_config : String
-      tools.try(&.sandbox) || "auto"
+      (tools.try(&.sandbox) || "auto").downcase
     end
 
     def validate! : Nil

@@ -63,6 +63,34 @@ describe Autobot::Tools::Sandbox do
     end
   end
 
+  describe ".disabled?" do
+    it "ignores case of the config value" do
+      Autobot::Tools::Sandbox.disabled?("None").should be_true
+      Autobot::Tools::Sandbox.disabled?("auto").should be_false
+    end
+
+    it "reflects the configured mode" do
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      Autobot::Tools::Sandbox.configure("NONE")
+
+      Autobot::Tools::Sandbox.disabled?.should be_true
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+  end
+
+  describe ".unavailable_reason" do
+    it "names the configured backend" do
+      Autobot::Tools::Sandbox.unavailable_reason(Autobot::Tools::Sandbox::Type::Docker)
+        .should eq("docker is configured but not installed")
+    end
+
+    it "suggests installing a tool when nothing was detected" do
+      Autobot::Tools::Sandbox.unavailable_reason(Autobot::Tools::Sandbox::Type::None)
+        .should eq("install bubblewrap or docker")
+    end
+  end
+
   describe ".docker_image" do
     it "defaults to nil" do
       Autobot::Tools::Sandbox.docker_image.should be_nil

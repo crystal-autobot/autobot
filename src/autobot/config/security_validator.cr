@@ -98,7 +98,7 @@ module Autobot::Config
 
       sandbox_config = config.sandbox_config
 
-      sandbox_type = Tools::Sandbox.configure?(sandbox_config)
+      sandbox_type = Tools::Sandbox.resolve_type?(sandbox_config)
       unless sandbox_type
         issues << Issue.new(
           severity: Severity::Error,
@@ -109,7 +109,7 @@ module Autobot::Config
       end
 
       # Warn if sandbox is disabled
-      if Tools::Sandbox.disabled?
+      if Tools::Sandbox.disabled?(sandbox_config)
         issues << Issue.new(
           severity: Severity::Warning,
           message: "Sandbox disabled (sandbox: none). " \
@@ -123,8 +123,7 @@ module Autobot::Config
       unless Tools::Sandbox.available?(sandbox_type)
         issues << Issue.new(
           severity: Severity::Error,
-          message: "CRITICAL: Sandbox enabled but no sandbox tool found. " \
-                   "Install bubblewrap (sudo apt install bubblewrap) or Docker. " \
+          message: "CRITICAL: Sandbox unavailable: #{Tools::Sandbox.unavailable_reason(sandbox_type)}. " \
                    "See #{WEBSITE_URL}/sandboxing/"
         )
       end

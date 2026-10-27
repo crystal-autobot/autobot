@@ -257,23 +257,22 @@ module Autobot
       def self.check_sandbox_availability(config : Config::Config, errors : Int32) : Int32
         sandbox_config = config.sandbox_config
 
-        sandbox_type = Tools::Sandbox.configure?(sandbox_config)
+        sandbox_type = Tools::Sandbox.resolve_type?(sandbox_config)
         unless sandbox_type
           report(Status::Fail, "Invalid sandbox setting (#{sandbox_config})")
           hint("Use 'auto', 'bubblewrap', 'docker', or 'none'")
           return errors + 1
         end
 
-        if Tools::Sandbox.disabled?
+        if Tools::Sandbox.disabled?(sandbox_config)
           report(Status::Warn, "Sandbox disabled (sandbox: none)")
           hint("Enable sandboxing for better security ('auto', 'bubblewrap', or 'docker')")
           return errors
         end
 
         unless Tools::Sandbox.available?(sandbox_type)
-          report(Status::Fail, "Sandbox enabled but no sandbox tool found")
-          hint("Install bubblewrap: sudo apt install bubblewrap")
-          hint("Or Docker: sudo apt install docker.io")
+          report(Status::Fail, "Sandbox unavailable: #{Tools::Sandbox.unavailable_reason(sandbox_type)}")
+          sandbox_install_hints(sandbox_type)
           return errors + 1
         end
 
@@ -282,10 +281,23 @@ module Autobot
         check_docker_image(config, errors, sandbox_type)
       end
 
+      private def self.sandbox_install_hints(sandbox_type : Tools::Sandbox::Type) : Nil
+        case sandbox_type
+        in Tools::Sandbox::Type::Bubblewrap
+          hint("Install bubblewrap: sudo apt install bubblewrap")
+        in Tools::Sandbox::Type::Docker
+          hint("Install Docker: sudo apt install docker.io")
+        in Tools::Sandbox::Type::None
+          hint("Install bubblewrap: sudo apt install bubblewrap")
+          hint("Or Docker: sudo apt install docker.io")
+        end
+        hint("Or set sandbox: auto to use whichever tool is installed") unless sandbox_type.none?
+      end
+
       def self.check_docker_image(
         config : Config::Config,
         errors : Int32,
-        sandbox_type : Tools::Sandbox::Type? = Tools::Sandbox.configure?(config.sandbox_config),
+        sandbox_type : Tools::Sandbox::Type? = Tools::Sandbox.resolve_type?(config.sandbox_config),
       ) : Int32
         image = config.tools.try(&.docker_image)
 
