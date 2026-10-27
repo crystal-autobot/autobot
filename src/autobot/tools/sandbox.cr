@@ -23,7 +23,9 @@ module Autobot
       MAX_WRITE_OUTPUT      =    10_000
       MAX_LIST_OUTPUT       =   100_000
 
-      DISABLED_CONFIG = "none"
+      DISABLED_CONFIG        = "none"
+      BWRAP_INSTALL_COMMAND  = "sudo apt install bubblewrap"
+      DOCKER_INSTALL_COMMAND = "sudo apt install docker.io"
 
       enum Type
         Bubblewrap
@@ -76,10 +78,22 @@ module Autobot
         resolved
       end
 
+      def self.active_type : Type
+        available? ? type : Type::None
+      end
+
       def self.unavailable_reason(type : Type = self.type) : String
         return "install bubblewrap or docker" if type.none?
 
         "#{type.to_s.downcase} is configured but not installed"
+      end
+
+      def self.install_hints(type : Type = self.type) : Array(String)
+        hints = [] of String
+        hints << "Install bubblewrap: #{Sandbox::BWRAP_INSTALL_COMMAND}" unless type.docker?
+        hints << "Install Docker: #{Sandbox::DOCKER_INSTALL_COMMAND}" unless type.bubblewrap?
+        hints << "Or set sandbox: auto to use whichever tool is installed" unless type.none?
+        hints
       end
 
       # Detect available sandbox tool (memoized)
@@ -442,13 +456,13 @@ module Autobot
         Install one of:
 
         • bubblewrap (recommended for Linux):
-            Ubuntu/Debian: sudo apt install bubblewrap
+            Ubuntu/Debian: #{Sandbox::BWRAP_INSTALL_COMMAND}
             Fedora:        sudo dnf install bubblewrap
             Arch:          sudo pacman -S bubblewrap
 
         • Docker (required for macOS, universal):
             macOS:         https://docs.docker.com/desktop/install/mac-install/
-            Linux:         sudo apt install docker.io
+            Linux:         #{Sandbox::DOCKER_INSTALL_COMMAND}
             Others:        https://docs.docker.com/engine/install/
 
         Learn more: #{WEBSITE_URL}/sandboxing/

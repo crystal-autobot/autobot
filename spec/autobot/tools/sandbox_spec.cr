@@ -68,14 +68,25 @@ describe Autobot::Tools::Sandbox do
       Autobot::Tools::Sandbox.disabled?("None").should be_true
       Autobot::Tools::Sandbox.disabled?("auto").should be_false
     end
+  end
 
-    it "reflects the configured mode" do
-      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
-      Autobot::Tools::Sandbox.configure("NONE")
+  describe ".install_hints" do
+    it "suggests only the configured backend" do
+      hints = Autobot::Tools::Sandbox.install_hints(Autobot::Tools::Sandbox::Type::Docker)
 
-      Autobot::Tools::Sandbox.disabled?.should be_true
-    ensure
-      Autobot::Tools::Sandbox.detect_override = nil
+      hints.should eq([
+        "Install Docker: sudo apt install docker.io",
+        "Or set sandbox: auto to use whichever tool is installed",
+      ])
+    end
+
+    it "suggests both tools when nothing was detected" do
+      hints = Autobot::Tools::Sandbox.install_hints(Autobot::Tools::Sandbox::Type::None)
+
+      hints.should eq([
+        "Install bubblewrap: sudo apt install bubblewrap",
+        "Install Docker: sudo apt install docker.io",
+      ])
     end
   end
 

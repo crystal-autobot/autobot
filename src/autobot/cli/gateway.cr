@@ -171,7 +171,7 @@ module Autobot
       end
 
       def self.log_sandbox_info(io : IO = STDOUT, err_io : IO = STDERR) : Nil
-        case Tools::Sandbox.available? ? Tools::Sandbox.type : Tools::Sandbox::Type::None
+        case Tools::Sandbox.active_type
         when Tools::Sandbox::Type::Bubblewrap
           io.puts "✓ Sandbox: bubblewrap (kernel-enforced isolation)"
         when Tools::Sandbox::Type::Docker

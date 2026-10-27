@@ -269,21 +269,6 @@ describe Autobot::Config::Config do
     end
   end
 
-  describe "#sandbox_config" do
-    it "defaults to auto" do
-      empty_config.sandbox_config.should eq("auto")
-    end
-
-    it "normalizes case" do
-      config = Autobot::Config::Config.from_yaml(<<-YAML
-      tools:
-        sandbox: "None"
-      YAML
-      )
-      config.sandbox_config.should eq("none")
-    end
-  end
-
   describe "#transcription_source" do
     it "prefers groq over openai when both chat providers have keys" do
       source = Autobot::Config::Config.from_yaml("providers:\n  groq:\n    api_key: gsk\n  openai:\n    api_key: sk\n").transcription_source

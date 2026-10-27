@@ -124,6 +124,7 @@ module Autobot::Config
         issues << Issue.new(
           severity: Severity::Error,
           message: "CRITICAL: Sandbox unavailable: #{Tools::Sandbox.unavailable_reason(sandbox_type)}. " \
+                   "#{Tools::Sandbox.install_hints(sandbox_type).join(". ")}. " \
                    "See #{WEBSITE_URL}/sandboxing/"
         )
       end

@@ -102,13 +102,13 @@ module Autobot
     end
 
     private def self.log_sandbox_configuration : Nil
-      case Sandbox.available? ? Sandbox.type : Sandbox::Type::None
+      case Sandbox.active_type
       when Sandbox::Type::Bubblewrap
         ::Log.for("Tools").info { "✓ Sandbox: bubblewrap (Linux namespaces)" }
       when Sandbox::Type::Docker
         ::Log.for("Tools").info { "✓ Sandbox: Docker (container isolation)" }
       when Sandbox::Type::None
-        ::Log.for("Tools").warn { "⚠️  No sandbox tool found - install bubblewrap or Docker" }
+        ::Log.for("Tools").warn { "⚠️  Sandbox: unavailable (#{Sandbox.unavailable_reason})" }
       end
     end
 

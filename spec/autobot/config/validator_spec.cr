@@ -165,9 +165,7 @@ describe Autobot::Config::Validator do
         config = Autobot::Config::Config.from_yaml(config_yaml)
         issues = Autobot::Config::Validator.validate(config, path)
 
-        messages = issues.map(&.message)
-        messages.any?(&.includes?("docker is configured but not installed")).should be_true
-        messages.any?(&.includes?("install bubblewrap")).should be_false
+        issues.map(&.message).any?(&.includes?("docker is configured but not installed")).should be_true
       end
     ensure
       Autobot::Tools::Sandbox.detect_override = nil

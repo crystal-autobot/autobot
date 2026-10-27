@@ -272,26 +272,13 @@ module Autobot
 
         unless Tools::Sandbox.available?(sandbox_type)
           report(Status::Fail, "Sandbox unavailable: #{Tools::Sandbox.unavailable_reason(sandbox_type)}")
-          sandbox_install_hints(sandbox_type)
+          Tools::Sandbox.install_hints(sandbox_type).each { |text| hint(text) }
           return errors + 1
         end
 
         report(Status::Pass, "Sandbox available (#{sandbox_type.to_s.downcase})")
 
         check_docker_image(config, errors, sandbox_type)
-      end
-
-      private def self.sandbox_install_hints(sandbox_type : Tools::Sandbox::Type) : Nil
-        case sandbox_type
-        in Tools::Sandbox::Type::Bubblewrap
-          hint("Install bubblewrap: sudo apt install bubblewrap")
-        in Tools::Sandbox::Type::Docker
-          hint("Install Docker: sudo apt install docker.io")
-        in Tools::Sandbox::Type::None
-          hint("Install bubblewrap: sudo apt install bubblewrap")
-          hint("Or Docker: sudo apt install docker.io")
-        end
-        hint("Or set sandbox: auto to use whichever tool is installed") unless sandbox_type.none?
       end
 
       def self.check_docker_image(
