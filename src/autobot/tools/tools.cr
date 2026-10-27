@@ -36,13 +36,11 @@ module Autobot
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
-      # Determine sandbox configuration
-      sandboxed = sandbox_config.downcase != "none"
-      sandbox_type = Sandbox.resolve_type(sandbox_config)
+      sandboxed = !Sandbox.disabled?(sandbox_config)
 
       # Log sandbox configuration
       if sandboxed
-        log_sandbox_configuration(sandbox_type)
+        log_sandbox_configuration
       else
         ::Log.for("Tools").warn { "⚠️  Sandboxing disabled - development mode only" }
       end
@@ -81,7 +79,7 @@ module Autobot
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
-      sandboxed = sandbox_config.downcase != "none"
+      sandboxed = !Sandbox.disabled?(sandbox_config)
       executor = SandboxExecutor.new(workspace, sandboxed, resolve_roots(filesystem_roots, workspace))
 
       register_filesystem_tools(registry, executor)
@@ -103,14 +101,14 @@ module Autobot
       roots.map { |root| Path[root].expand(base: base, home: true) }
     end
 
-    private def self.log_sandbox_configuration(sandbox_type : Sandbox::Type) : Nil
-      case sandbox_type
+    private def self.log_sandbox_configuration : Nil
+      case Sandbox.active_type
       when Sandbox::Type::Bubblewrap
         ::Log.for("Tools").info { "✓ Sandbox: bubblewrap (Linux namespaces)" }
       when Sandbox::Type::Docker
         ::Log.for("Tools").info { "✓ Sandbox: Docker (container isolation)" }
       when Sandbox::Type::None
-        ::Log.for("Tools").warn { "⚠️  No sandbox tool found - install bubblewrap or Docker" }
+        ::Log.for("Tools").warn { "⚠️  Sandbox: unavailable (#{Sandbox.unavailable_reason})" }
       end
     end
 

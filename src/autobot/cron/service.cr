@@ -437,7 +437,7 @@ module Autobot
       end
 
       private def sandbox_enabled? : Bool
-        @sandbox_config != "none"
+        !Tools::Sandbox.disabled?(@sandbox_config)
       end
 
       private def exec_command_sandboxed(command : String, job : CronJob) : String

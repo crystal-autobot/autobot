@@ -154,6 +154,23 @@ describe Autobot::Config::Validator do
       Autobot::Tools::Sandbox.detect_override = nil
     end
 
+    it "names the configured backend when it is not installed" do
+      config_yaml = <<-YAML
+      tools:
+        sandbox: "docker"
+      YAML
+
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      ValidatorSpecHelpers.with_temp_config(config_yaml) do |path|
+        config = Autobot::Config::Config.from_yaml(config_yaml)
+        issues = Autobot::Config::Validator.validate(config, path)
+
+        issues.map(&.message).any?(&.includes?("docker is configured but not installed")).should be_true
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
     it "detects gateway bound to all interfaces" do
       config_yaml = <<-YAML
       providers:

@@ -528,6 +528,10 @@ module Autobot::Config
       (cron || CronConfig.new).exec_timeout.seconds
     end
 
+    def sandbox_config : String
+      tools.try(&.sandbox) || "auto"
+    end
+
     def validate! : Nil
       has_provider = false
       if p = providers

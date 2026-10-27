@@ -181,6 +181,44 @@ describe Autobot::CLI::Doctor do
     ensure
       Autobot::Tools::Sandbox.detect_override = nil
     end
+
+    it "fails when configured sandbox backend is not available on the host" do
+      config = make_config(<<-YAML
+      tools:
+        sandbox: "bubblewrap"
+      YAML
+      )
+
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Docker
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
+
+        errors.should eq(1)
+        io.to_s.should contain("✗ Sandbox unavailable: bubblewrap is configured but not installed")
+        io.to_s.should contain("Install bubblewrap: sudo apt install bubblewrap")
+        io.to_s.should contain("Or set sandbox: auto")
+        io.to_s.should_not contain("docker.io")
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
+    it "fails without raising when sandbox setting is invalid" do
+      config = make_config(<<-YAML
+      tools:
+        sandbox: "bwrap"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
+
+        errors.should eq(1)
+        io.to_s.should contain("✗ Invalid sandbox setting (bwrap)")
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
   end
 
   describe ".check_docker_image" do
@@ -233,6 +271,24 @@ describe Autobot::CLI::Doctor do
         output = io.to_s
         output.should contain("No Dockerfile.sandbox found")
         output.should contain("alpine:latest")
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
+    it "skips Dockerfile.sandbox check when sandbox is docker on a bubblewrap-only host" do
+      config = make_config(<<-YAML
+      tools:
+        sandbox: "docker"
+      YAML
+      )
+
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_docker_image(config, 0)
+
+        errors.should eq(0)
+        io.to_s.should be_empty
       end
     ensure
       Autobot::Tools::Sandbox.detect_override = nil

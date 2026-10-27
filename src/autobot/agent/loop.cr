@@ -75,7 +75,7 @@ module Autobot::Agent
       temperature : Float64 = Config::AgentDefaults.new.temperature,
     )
       @model = model || @provider.default_model
-      sandboxed = sandbox_config.downcase != "none"
+      sandboxed = !Tools::Sandbox.disabled?(sandbox_config)
       @context = Context::Builder.new(@workspace, sandboxed)
 
       @executor = ToolExecutor.new(

@@ -38,6 +38,70 @@ describe Autobot::Tools::Sandbox do
     end
   end
 
+  describe ".configure and .available?" do
+    it "reports unavailable when configured backend does not match host tool" do
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      Autobot::Tools::Sandbox.configure("docker")
+
+      Autobot::Tools::Sandbox.type.should eq(Autobot::Tools::Sandbox::Type::Docker)
+      Autobot::Tools::Sandbox.available?.should be_false
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
+    it "raises SandboxNotFoundError in exec when configured backend is unavailable" do
+      tmp = TestHelper.tmp_dir
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      Autobot::Tools::Sandbox.configure("docker")
+
+      expect_raises(Autobot::Tools::SandboxNotFoundError) do
+        Autobot::Tools::Sandbox.exec("echo hi", tmp, 5)
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+      FileUtils.rm_rf(tmp) if tmp
+    end
+  end
+
+  describe ".disabled?" do
+    it "ignores case of the config value" do
+      Autobot::Tools::Sandbox.disabled?("None").should be_true
+      Autobot::Tools::Sandbox.disabled?("auto").should be_false
+    end
+  end
+
+  describe ".install_hints" do
+    it "suggests only the configured backend" do
+      hints = Autobot::Tools::Sandbox.install_hints(Autobot::Tools::Sandbox::Type::Docker)
+
+      hints.should eq([
+        "Install Docker: sudo apt install docker.io",
+        "Or set sandbox: auto to use whichever tool is installed",
+      ])
+    end
+
+    it "suggests both tools when nothing was detected" do
+      hints = Autobot::Tools::Sandbox.install_hints(Autobot::Tools::Sandbox::Type::None)
+
+      hints.should eq([
+        "Install bubblewrap: sudo apt install bubblewrap",
+        "Install Docker: sudo apt install docker.io",
+      ])
+    end
+  end
+
+  describe ".unavailable_reason" do
+    it "names the configured backend" do
+      Autobot::Tools::Sandbox.unavailable_reason(Autobot::Tools::Sandbox::Type::Docker)
+        .should eq("docker is configured but not installed")
+    end
+
+    it "suggests installing a tool when nothing was detected" do
+      Autobot::Tools::Sandbox.unavailable_reason(Autobot::Tools::Sandbox::Type::None)
+        .should eq("install bubblewrap or docker")
+    end
+  end
+
   describe ".docker_image" do
     it "defaults to nil" do
       Autobot::Tools::Sandbox.docker_image.should be_nil
