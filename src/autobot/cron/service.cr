@@ -175,6 +175,7 @@ module Autobot
                 deliver: job.payload.deliver?,
                 channel: job.payload.channel,
                 to: job.payload.to,
+                command: job.payload.command,
               )
             end
             job.updated_at_ms = now_ms
@@ -427,7 +428,7 @@ module Autobot
 
       private def exec_command(job : CronJob) : String
         command = job.payload.command
-        return "" if command.nil? || command.empty?
+        raise "exec job has no command" if command.nil? || command.empty?
 
         if sandbox_enabled?
           exec_command_sandboxed(command, job)

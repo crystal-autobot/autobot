@@ -342,6 +342,26 @@ describe Autobot::Cron::Service do
       FileUtils.rm_rf(tmp) if tmp
     end
 
+    it "keeps the exec command when updating the message" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "exec_update",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "echo hello"
+      )
+
+      updated = service.update_job(job.id, message: "changed")
+
+      updated.try(&.payload.command).should eq("echo hello")
+      reloaded = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+      reloaded.list_jobs.first.payload.command.should eq("echo hello")
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
     it "updates both schedule and message" do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
@@ -988,6 +1008,28 @@ describe Autobot::Cron::Service do
       jobs = service.list_jobs
       jobs.first.state.last_status.should eq(Autobot::Cron::JobStatus::Error)
       jobs.first.state.last_error.should_not be_nil
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "records error status when exec job has no command" do
+      tmp = TestHelper.tmp_dir
+      called = false
+      on_exec = ->(_job : Autobot::Cron::CronJob, _output : String) { called = true; nil }
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", on_exec: on_exec)
+
+      job = service.add_job(
+        name: "exec_missing",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::Every, every_ms: 60000_i64),
+        kind: Autobot::Cron::PayloadKind::Exec
+      )
+
+      service.run_job(job.id, force: true)
+
+      state = service.list_jobs.first.state
+      state.last_status.should eq(Autobot::Cron::JobStatus::Error)
+      state.last_error.should eq("exec job has no command")
+      called.should be_false
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
