@@ -211,7 +211,7 @@ module Autobot::Agent
     end
 
     private def answered_by_tools?(result : ToolExecutor::Result) : Bool
-      result.content.presence.nil? && !result.tools_used.empty?
+      result.finish_reason == "stop" && result.content.presence.nil? && !result.tools_used.empty?
     end
 
     # Route system messages to the appropriate handler.

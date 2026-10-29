@@ -23,7 +23,8 @@ module Autobot::Agent
       content : String?,
       tools_used : Array(String),
       total_tokens : Int32,
-      stop_output : String? = nil
+      stop_output : String? = nil,
+      finish_reason : String = "stop"
 
     def initialize(
       @provider : Providers::Provider,
@@ -51,6 +52,7 @@ module Autobot::Agent
     ) : Result
       final_content : String? = nil
       stop_output : String? = nil
+      finish_reason = "stop"
       tools_used = [] of String
       total_tokens = 0
       tool_definitions = tools.definitions(exclude: exclude_tools)
@@ -58,6 +60,7 @@ module Autobot::Agent
       @max_iterations.times do
         response = call_llm(messages, tool_definitions, session_key)
         total_tokens += response.usage.total_tokens
+        finish_reason = response.finish_reason
 
         if response.finish_reason == "guardrail_intervened"
           Log.warn { "Guardrail intervened - returning blocked message" }
@@ -67,14 +70,24 @@ module Autobot::Agent
 
         if response.has_tool_calls?
           messages, stop_output = process_tool_calls(messages, response, tools, tools_used, session_key, stop_after)
-          break if stop_output
+          if stop_output
+            finish_reason = "stop"
+            break
+          end
+          finish_reason = "tool_calls"
         else
           final_content = response.content
           break
         end
       end
 
-      Result.new(content: final_content, tools_used: tools_used.uniq, total_tokens: total_tokens, stop_output: stop_output)
+      Result.new(
+        content: final_content,
+        tools_used: tools_used.uniq,
+        total_tokens: total_tokens,
+        stop_output: stop_output,
+        finish_reason: finish_reason,
+      )
     end
 
     private def call_llm(
