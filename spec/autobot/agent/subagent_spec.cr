@@ -87,7 +87,7 @@ describe Autobot::Agent::SubagentManager do
       provider: provider,
       workspace: tmp,
       bus: Autobot::Bus::MessageBus.new(capacity: 10),
-      sandbox_config: "none",
+      sandbox: Autobot::Tools::Sandbox::Type::None,
     )
 
     manager.spawn("Summarize logs")
@@ -108,7 +108,7 @@ describe Autobot::Agent::SubagentManager do
       provider: provider,
       workspace: tmp,
       bus: bus,
-      sandbox_config: "none",
+      sandbox: Autobot::Tools::Sandbox::Type::None,
     )
 
     manager.running_count.should eq(0)
@@ -135,7 +135,7 @@ describe Autobot::Agent::SubagentManager do
       provider: provider,
       workspace: tmp,
       bus: bus,
-      sandbox_config: "none",
+      sandbox: Autobot::Tools::Sandbox::Type::None,
     )
 
     manager.running_count.should eq(0)
@@ -157,7 +157,7 @@ describe Autobot::Agent::SubagentManager do
       provider: provider,
       workspace: tmp,
       bus: bus,
-      sandbox_config: "none",
+      sandbox: Autobot::Tools::Sandbox::Type::None,
     )
 
     concurrent_tasks = 25

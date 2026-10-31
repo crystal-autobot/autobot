@@ -147,7 +147,7 @@ Configure sandboxing in `config.yml`:
 
 ```yaml
 tools:
-  sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
+  sandbox: auto  # auto | bubblewrap | docker | external | none (default: auto)
   docker_image: "python:3.14-alpine"  # optional, overrides Dockerfile.sandbox
   sandbox_env:   # env vars to forward into Docker sandbox (default: none)
     - HA_URL
@@ -156,13 +156,38 @@ tools:
 
 **Options:**
 
-- `sandbox` — Sandbox backend
-  - `auto` - Auto-detect best available (recommended)
+- `sandbox` — Sandbox mode
+  - `auto` - Use bubblewrap when installed, otherwise Docker (recommended)
   - `bubblewrap` - Force bubblewrap (Linux only)
   - `docker` - Force Docker (all platforms)
-  - `none` - Disable sandboxing (UNSAFE - tests only)
+  - `external` - You already run autobot inside your own container or VM; commands run directly there
+  - `none` - Explicit opt-in to host exec; commands run on the host as the autobot user
 - `docker_image` — Docker image to use for sandbox containers. Overrides `Dockerfile.sandbox` when set. Only applies when sandbox is `docker` or `auto` resolves to Docker.
 - `sandbox_env` — List of environment variable names to forward into Docker containers. Only listed variables are forwarded — empty by default for security. Useful when sandbox scripts need access to specific env vars (e.g. `HA_URL`, `MQTT_HOST`).
+
+### Sandbox modes
+
+The mode is resolved once at boot and shared by `exec`, skill scripts, file tools and cron exec jobs, so no two parts of the bot can disagree about whether a command is sandboxed.
+
+**`auto` never falls back to host exec.** When neither bubblewrap nor Docker is installed, boot stops with an error that names `none` and `external` as the explicit choices. There is no silent downgrade: a bot that was sandboxed yesterday cannot start running commands on the host today because a package went missing.
+
+**`external`** is for deployments where autobot itself already runs inside a container or VM you control. Commands run directly in that environment, on the strength of your declaration. Autobot cannot verify it: the bot warns on every boot, and `autobot doctor` reports `Sandbox: external (not verified)`.
+
+**`none`** is the explicit host-exec opt-in. `exec` and skill `bash_*` scripts keep working and run on the host as the user autobot runs as, with that user's files and credentials in reach of any command the model chooses. The bot prints this on every boot:
+
+```
+host exec enabled (sandbox: none): commands and skill scripts run on this host as <user>
+```
+
+and `autobot doctor` shows `Host exec: enabled by sandbox: none`. The mode must be set to `none` explicitly; nothing else grants host exec. Use it for local experiments, never for a bot that reads other people's messages.
+
+### Host-mode path confinement
+
+In `external` and `none` mode there is no kernel sandbox, so the executor confines the file tools itself. `read_file`, `write_file`, `edit_file` and `list_dir` resolve every path to its real path (symlinks followed) and refuse anything outside the workspace, the configured `tools.filesystem.roots`, or the workspace `skills/` directory for reads. A symlink inside the workspace that points at `~/.ssh` is refused, as is `/etc/passwd`. This is application-level checking and a weaker guarantee than the kernel sandbox: it covers the file tools, not what a command run by `exec` can do.
+
+### .env files
+
+Files named `.env`, `.env.*` or `*.env` are refused by `read_file`, `write_file` and `edit_file`, hidden from `list_dir`, and `exec` refuses a command that mentions one. This applies in every mode, including inside the sandbox, so a `.env` placed in the workspace by mistake still does not reach the model. Keep secrets outside the workspace anyway; see [Security](security.md).
 
 ### Filesystem roots
 
@@ -174,7 +199,7 @@ tools:
     roots: [notes, inbox]
 ```
 
-The check runs in the executor before any sandboxed or direct operation, so it applies in every sandbox mode including `none`. Relative paths resolve against the workspace, `..` is normalized before the check, and a path outside every root returns a tool error naming the allowed directories. The `exec` tool is not narrowed by roots; the sandbox keeps it inside the workspace.
+The check runs in the executor before any sandboxed or direct operation, so it applies in every sandbox mode including `external` and `none`. Relative paths resolve against the workspace, `..` is normalized before the check, and a path outside every root returns a tool error naming the allowed directories. The `exec` tool is not narrowed by roots; the sandbox keeps it inside the workspace.
 
 ### Custom sandbox image (Dockerfile.sandbox)
 
@@ -225,7 +250,7 @@ All filesystem and exec operations go through `SandboxExecutor`, which routes th
 
 **Shell escaping** (single-quote escaping, base64 encoding for file content) prevents command injection within sandboxed commands.
 
-**Note:** Plugin tools that call external CLIs (e.g. `gh`, `curl`) use `Process.run` with argument arrays (no shell interpretation) and run outside the sandbox since they need host resources (auth configs, SSL certs).
+**Note:** Plugin tools that call external CLIs (e.g. `gh`, `curl`) use `Process.run` with argument arrays (no shell interpretation) and run outside the sandbox since they need host resources (auth configs, SSL certs). MCP servers run on the host too.
 
 ### What Sandboxing Does NOT Prevent
 
@@ -270,17 +295,16 @@ autobot agent --sandbox docker
 
 ## Development
 
-### Running Without Sandbox (Tests and Development)
+### Running With Host Exec (Local Experiments)
 
-Tests or configurations with `sandbox: none` disable sandboxing. If a workspace is configured but sandboxing is disabled, operations run directly on the host filesystem:
+`sandbox: none` is an explicit opt-in to host exec, not a way to turn checks off. Commands and skill scripts run on the host as you, the bot warns on every boot, `autobot doctor` reports it, and the file tools stay confined to the workspace by real path. In code, the executor takes the resolved mode:
 
 ```crystal
-# Initialize SandboxExecutor with sandboxed: false
-executor = SandboxExecutor.new(workspace, sandboxed: false)
+executor = SandboxExecutor.new(workspace, Sandbox::Type::None)
 tool = ReadFileTool.new(executor)
 
-# Tool uses direct file operations on the host filesystem
-tool.execute({"path" => JSON::Any.new("test.txt")})  # Direct File.read
+tool.execute({"path" => JSON::Any.new("test.txt")})     # direct File.read inside the workspace
+tool.execute({"path" => JSON::Any.new("/etc/passwd")})  # refused: outside the workspace
 ```
 
 ### Testing Sandbox Behavior
@@ -304,7 +328,7 @@ A: Yes, via Docker with WSL2 backend.
 A: Try reading `/etc/passwd` - should fail with "Absolute paths not allowed"
 
 **Q: Can I disable sandboxing?**
-A: Only for tests. Production requires sandboxing for safety.
+A: Only on purpose. Set `sandbox: none` and the bot runs commands on the host as you and says so on every boot. If autobot already runs inside your own container or VM, set `sandbox: external` instead. `auto` never falls back to either.
 
 ---
 

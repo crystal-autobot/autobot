@@ -92,8 +92,7 @@ module Autobot
       # Returns {tool_registry, mcp_clients, rate_limiter}. Plugins are loaded
       # separately via `load_plugins` to avoid blocking startup.
       def self.setup_tools(config : Config::Config)
-        sandbox_config = config.sandbox_config
-        Tools::Sandbox.configure(sandbox_config)
+        sandbox = Tools::Sandbox.configure(config.sandbox_config)
 
         if img = config.tools.try(&.docker_image)
           Tools::Sandbox.docker_image = img
@@ -111,7 +110,7 @@ module Autobot
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
           exec_deny_patterns: deny_patterns,
           exec_allow_patterns: allow_patterns,
-          sandbox_config: sandbox_config,
+          sandbox: sandbox,
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           skills_dirs: [
             (config.workspace_path / "skills").to_s,

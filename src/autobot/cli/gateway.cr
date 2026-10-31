@@ -97,7 +97,7 @@ module Autobot
           on_job: on_job,
           on_exec: on_exec,
           workspace: config.workspace_path,
-          sandbox_config: config.sandbox_config,
+          sandbox: Tools::Sandbox.type,
           exec_timeout: config.cron_exec_timeout,
         )
         cron_service.start
@@ -159,7 +159,7 @@ module Autobot
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
           exec_deny_patterns: deny_patterns,
           exec_allow_patterns: allow_patterns,
-          sandbox_config: config.sandbox_config,
+          sandbox: Tools::Sandbox.type,
           rate_limiter: rate_limiter,
           enabled_tools: config.tools.try(&.enabled) || [] of String,
           stop_after: config.tools.try(&.stop_after) || [] of String,
@@ -171,17 +171,13 @@ module Autobot
       end
 
       def self.log_sandbox_info(io : IO = STDOUT, err_io : IO = STDERR) : Nil
-        case Tools::Sandbox.active_type
-        when Tools::Sandbox::Type::Bubblewrap
-          io.puts "✓ Sandbox: bubblewrap (kernel-enforced isolation)"
-        when Tools::Sandbox::Type::Docker
-          io.puts "✓ Sandbox: docker (container isolation)"
-        when Tools::Sandbox::Type::None
-          if Tools::Sandbox.disabled?
-            io.puts "⚠ Sandbox: disabled (direct execution, dev only)"
-          else
-            err_io.puts "⚠️  Sandbox: unavailable (#{Tools::Sandbox.unavailable_reason})"
-          end
+        type = Tools::Sandbox.type
+        if type.host?
+          err_io.puts type.banner
+        elsif Tools::Sandbox.available?(type)
+          io.puts type.banner
+        else
+          err_io.puts "⚠️  Sandbox: unavailable (#{Tools::Sandbox.unavailable_reason(type)})"
         end
       end
     end

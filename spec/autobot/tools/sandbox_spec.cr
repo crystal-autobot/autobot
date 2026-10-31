@@ -31,10 +31,25 @@ describe Autobot::Tools::Sandbox do
       Autobot::Tools::Sandbox.detect_override = nil
     end
 
+    it "returns External for 'external'" do
+      Autobot::Tools::Sandbox.resolve_type("external").should eq(Autobot::Tools::Sandbox::Type::External)
+      Autobot::Tools::Sandbox.available?(Autobot::Tools::Sandbox::Type::External).should be_true
+    end
+
     it "raises for invalid config" do
-      expect_raises(ArgumentError, /Invalid sandbox config/) do
+      expect_raises(ArgumentError, /Invalid sandbox config.*'external', 'none'/) do
         Autobot::Tools::Sandbox.resolve_type("invalid")
       end
+    end
+
+    it "never resolves auto to host execution" do
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::None
+      expect_raises(Autobot::Tools::SandboxNotFoundError) do
+        Autobot::Tools::Sandbox.resolve_type("auto")
+      end
+      Autobot::Tools::Sandbox.resolve_type?("auto").should eq(Autobot::Tools::Sandbox::Type::None)
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
     end
   end
 
@@ -70,6 +85,16 @@ describe Autobot::Tools::Sandbox do
     end
   end
 
+  describe "Type" do
+    it "treats external and none as host execution, none alone as host exec" do
+      Autobot::Tools::Sandbox::Type::External.host?.should be_true
+      Autobot::Tools::Sandbox::Type::None.host?.should be_true
+      Autobot::Tools::Sandbox::Type::Bubblewrap.host?.should be_false
+      Autobot::Tools::Sandbox::Type::External.host_exec?.should be_false
+      Autobot::Tools::Sandbox::Type::None.host_exec?.should be_true
+    end
+  end
+
   describe ".install_hints" do
     it "suggests only the configured backend" do
       hints = Autobot::Tools::Sandbox.install_hints(Autobot::Tools::Sandbox::Type::Docker)
@@ -98,7 +123,7 @@ describe Autobot::Tools::Sandbox do
 
     it "suggests installing a tool when nothing was detected" do
       Autobot::Tools::Sandbox.unavailable_reason(Autobot::Tools::Sandbox::Type::None)
-        .should eq("install bubblewrap or docker")
+        .should eq("install bubblewrap or docker, or set sandbox: external or none explicitly")
     end
   end
 

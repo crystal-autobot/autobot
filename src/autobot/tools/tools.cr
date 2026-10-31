@@ -17,7 +17,7 @@ module Autobot
     # Options:
     #   - `workspace` restricts filesystem tools to a directory
     #   - `exec_timeout` sets shell command timeout (seconds)
-    #   - `sandbox_config` sets sandbox mode (auto/bubblewrap/docker/none)
+    #   - `sandbox` is the resolved sandbox type (see `Sandbox.configure`)
     #   - `brave_api_key` enables web search
     #   - `skills_dirs` adds extra directories for bash tool discovery
     def self.create_registry(
@@ -25,7 +25,7 @@ module Autobot
       exec_timeout : Int32 = ExecTool::DEFAULT_TIMEOUT,
       exec_deny_patterns : Array(Regex) = ExecTool::DEFAULT_DENY_PATTERNS,
       exec_allow_patterns : Array(Regex) = [] of Regex,
-      sandbox_config : String = "auto",
+      sandbox : Sandbox::Type = Sandbox::Type::None,
       brave_api_key : String? = nil,
       web_fetch_max_chars : Int32 = WebFetchTool::DEFAULT_MAX_CHARS,
       skills_dirs : Array(String) = [] of String,
@@ -36,22 +36,12 @@ module Autobot
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
 
-      sandboxed = !Sandbox.disabled?(sandbox_config)
+      log_sandbox_configuration(sandbox)
 
-      # Log sandbox configuration
-      if sandboxed
-        log_sandbox_configuration
-      else
-        ::Log.for("Tools").warn { "⚠️  Sandboxing disabled - development mode only" }
-      end
+      executor = SandboxExecutor.new(workspace, sandbox, resolve_roots(filesystem_roots, workspace))
 
-      # Create centralized sandbox executor
-      executor = SandboxExecutor.new(workspace, sandboxed, resolve_roots(filesystem_roots, workspace))
-
-      # Register tools
       register_filesystem_tools(registry, executor)
-      register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
-        exec_allow_patterns, sandbox_config, workspace)
+      register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns, exec_allow_patterns, workspace)
       register_web_tools(registry, executor, brave_api_key, web_fetch_max_chars, web_allowed_domains)
       register_bash_tools(registry, executor, skills_dirs)
 
@@ -70,7 +60,7 @@ module Autobot
       exec_timeout : Int32 = ExecTool::DEFAULT_TIMEOUT,
       exec_deny_patterns : Array(Regex) = ExecTool::DEFAULT_DENY_PATTERNS,
       exec_allow_patterns : Array(Regex) = [] of Regex,
-      sandbox_config : String = "auto",
+      sandbox : Sandbox::Type = Sandbox::Type::None,
       brave_api_key : String? = nil,
       rate_limiter : RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
@@ -78,13 +68,10 @@ module Autobot
       web_allowed_domains : Array(String) = [] of String,
     ) : Registry
       registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
-
-      sandboxed = !Sandbox.disabled?(sandbox_config)
-      executor = SandboxExecutor.new(workspace, sandboxed, resolve_roots(filesystem_roots, workspace))
+      executor = SandboxExecutor.new(workspace, sandbox, resolve_roots(filesystem_roots, workspace))
 
       register_filesystem_tools(registry, executor)
-      register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns,
-        exec_allow_patterns, sandbox_config, workspace)
+      register_exec_tool(registry, executor, exec_timeout, exec_deny_patterns, exec_allow_patterns, workspace)
 
       registry.register(WebSearchTool.new(api_key: brave_api_key))
       registry.register(WebFetchTool.new(allowed_domains: web_allowed_domains))
@@ -96,20 +83,9 @@ module Autobot
       registry
     end
 
-    def self.resolve_roots(roots : Array(String), workspace : Path?) : Array(Path)
-      base = workspace || Path[Dir.current]
-      roots.map { |root| Path[root].expand(base: base, home: true) }
-    end
-
-    private def self.log_sandbox_configuration : Nil
-      case Sandbox.active_type
-      when Sandbox::Type::Bubblewrap
-        ::Log.for("Tools").info { "✓ Sandbox: bubblewrap (Linux namespaces)" }
-      when Sandbox::Type::Docker
-        ::Log.for("Tools").info { "✓ Sandbox: Docker (container isolation)" }
-      when Sandbox::Type::None
-        ::Log.for("Tools").warn { "⚠️  Sandbox: unavailable (#{Sandbox.unavailable_reason})" }
-      end
+    private def self.log_sandbox_configuration(sandbox : Sandbox::Type) : Nil
+      log = ::Log.for("Tools")
+      sandbox.host? ? log.warn { sandbox.banner } : log.info { sandbox.banner }
     end
 
     private def self.register_filesystem_tools(
@@ -128,7 +104,6 @@ module Autobot
       timeout : Int32,
       deny_patterns : Array(Regex),
       allow_patterns : Array(Regex),
-      sandbox_config : String,
       workspace : Path?,
     )
       registry.register(ExecTool.new(
@@ -137,7 +112,6 @@ module Autobot
         working_dir: workspace.try(&.to_s),
         deny_patterns: deny_patterns,
         allow_patterns: allow_patterns,
-        sandbox_config: sandbox_config,
       ))
     end
 

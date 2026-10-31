@@ -6,42 +6,42 @@ end
 
 describe Autobot::Tools::ExecTool do
   it "executes a simple command" do
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     result = tool.execute({"command" => JSON::Any.new("echo hello")})
     result.success?.should be_true
     result.content.strip.should eq("hello")
   end
 
   it "blocks dangerous rm -rf command" do
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     result = tool.execute({"command" => JSON::Any.new("rm -rf /")})
     result.access_denied?.should be_true
     result.content.should contain("Command blocked")
   end
 
   it "blocks fork bomb" do
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     result = tool.execute({"command" => JSON::Any.new(":(){ :|:& };:")})
     result.access_denied?.should be_true
     result.content.should contain("Command blocked")
   end
 
   it "blocks shutdown command" do
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     result = tool.execute({"command" => JSON::Any.new("shutdown now")})
     result.access_denied?.should be_true
     result.content.should contain("Command blocked")
   end
 
   it "blocks dd command" do
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     result = tool.execute({"command" => JSON::Any.new("dd if=/dev/zero of=/dev/sda")})
     result.access_denied?.should be_true
     result.content.should contain("Command blocked")
   end
 
   it "captures stderr" do
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     result = tool.execute({"command" => JSON::Any.new("echo err >&2")})
     result.success?.should be_true
     result.content.should contain("STDERR")
@@ -49,7 +49,7 @@ describe Autobot::Tools::ExecTool do
   end
 
   it "reports exit code for failed commands" do
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     result = tool.execute({"command" => JSON::Any.new("false")})
     result.success?.should be_true
     result.content.should contain("Exit code:")
@@ -57,7 +57,7 @@ describe Autobot::Tools::ExecTool do
 
   it "uses specified working directory" do
     tmp = TestHelper.tmp_dir
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     result = tool.execute({
       "command"     => JSON::Any.new("pwd"),
       "working_dir" => JSON::Any.new(tmp.to_s),
@@ -70,7 +70,7 @@ describe Autobot::Tools::ExecTool do
   end
 
   it "has correct tool metadata" do
-    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+    tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
     tool.name.should eq("exec")
     tool.description.should_not be_empty
     tool.parameters.required.should eq(["command"])
@@ -78,28 +78,28 @@ describe Autobot::Tools::ExecTool do
 
   describe "deny patterns (defense-in-depth)" do
     it "blocks ln -s (symlink creation)" do
-      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
       result = tool.execute({"command" => JSON::Any.new("ln -s / rootlink")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks ln (hardlink creation)" do
-      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
       result = tool.execute({"command" => JSON::Any.new("ln /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks cp -l (hardlink via cp)" do
-      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
       result = tool.execute({"command" => JSON::Any.new("cp -l /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
     end
 
     it "blocks cp --link" do
-      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
       result = tool.execute({"command" => JSON::Any.new("cp --link /etc/passwd localfile")})
       result.access_denied?.should be_true
       result.content.should contain("Command blocked")
@@ -107,15 +107,34 @@ describe Autobot::Tools::ExecTool do
   end
 
   describe "sandbox integration" do
-    it "allows none sandbox" do
-      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
-      tool.sandbox_type.should eq(Autobot::Tools::Sandbox::Type::None)
+    it "follows the executor sandbox decision" do
+      Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::None).host_exec?.should be_true
+      Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::External).sandboxed?.should be_false
+      Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::Docker).sandboxed?.should be_true
     end
 
-    it "detects available sandbox type with auto config" do
-      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "auto")
-      # Should detect bubblewrap, docker, or none based on system
-      tool.sandbox_type.should_not be_nil
+    it "returns an error and runs nothing when the sandbox backend is missing" do
+      tmp = TestHelper.tmp_dir
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+      Autobot::Tools::Sandbox.configure("docker")
+      executor = Autobot::Tools::SandboxExecutor.new(tmp, Autobot::Tools::Sandbox::Type::Docker)
+      tool = Autobot::Tools::ExecTool.new(executor: executor, working_dir: tmp.to_s)
+
+      result = tool.execute({"command" => JSON::Any.new("touch #{tmp}/ran")})
+
+      result.error?.should be_true
+      result.content.should contain("No sandbox tool found")
+      File.exists?(tmp / "ran").should be_false
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "blocks commands that reference .env files" do
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
+      result = tool.execute({"command" => JSON::Any.new("cat .env.local")})
+      result.access_denied?.should be_true
+      result.content.should contain("references an .env file")
     end
   end
 
@@ -124,7 +143,6 @@ describe Autobot::Tools::ExecTool do
       # Note: rm -rf is in DEFAULT_DENY_PATTERNS
       tool = Autobot::Tools::ExecTool.new(
         executor: create_test_executor,
-        sandbox_config: "none",
         allow_patterns: [/^rm -rf \/tmp\/safe.*$/i]
       )
 
@@ -142,7 +160,6 @@ describe Autobot::Tools::ExecTool do
     it "blocks commands matching custom deny_patterns" do
       tool = Autobot::Tools::ExecTool.new(
         executor: create_test_executor,
-        sandbox_config: "none",
         deny_patterns: [/custom_dangerous/i]
       )
 
@@ -155,7 +172,6 @@ describe Autobot::Tools::ExecTool do
       # Configure only allow_patterns, no deny_patterns - defaults should still apply
       tool = Autobot::Tools::ExecTool.new(
         executor: create_test_executor,
-        sandbox_config: "none",
         allow_patterns: [/^echo safe$/i]
         # deny_patterns not specified - should use defaults
       )
@@ -179,7 +195,7 @@ describe Autobot::Tools::ExecTool do
 
   describe "daemon execution handling" do
     it "does not hang on background daemon processes" do
-      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, sandbox_config: "none")
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor)
       start = Time.instant
       result = tool.execute({"command" => JSON::Any.new("echo started; sleep 3 &")})
       elapsed = Time.instant - start

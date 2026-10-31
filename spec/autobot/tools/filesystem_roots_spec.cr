@@ -10,7 +10,7 @@ private def with_roots(&)
   File.write(workspace / "skills" / "memo" / "references" / "script.md", "commands")
   File.write(workspace / "memory" / "MEMORY.md", "secret")
   roots = Autobot::Tools.resolve_roots(["notes", "inbox"], workspace)
-  yield Autobot::Tools::SandboxExecutor.new(workspace, false, roots), workspace
+  yield Autobot::Tools::SandboxExecutor.new(workspace, Autobot::Tools::Sandbox::Type::None, roots), workspace
 ensure
   FileUtils.rm_rf(workspace) if workspace
 end
@@ -66,7 +66,7 @@ describe Autobot::Tools::SandboxExecutor do
       workspace = TestHelper.tmp_dir("noroots")
       begin
         File.write(workspace / "x.txt", "x")
-        Autobot::Tools::SandboxExecutor.new(workspace, false).read_file((workspace / "x.txt").to_s).success?.should be_true
+        Autobot::Tools::SandboxExecutor.new(workspace, Autobot::Tools::Sandbox::Type::None).read_file((workspace / "x.txt").to_s).success?.should be_true
       ensure
         FileUtils.rm_rf(workspace)
       end

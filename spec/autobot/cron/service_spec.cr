@@ -1038,7 +1038,7 @@ describe Autobot::Cron::Service do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(
         store_path: tmp / "cron.json",
-        sandbox_config: "docker",
+        sandbox: Autobot::Tools::Sandbox::Type::Docker,
         workspace: nil,
       )
 
@@ -1070,7 +1070,7 @@ describe Autobot::Cron::Service do
       service = Autobot::Cron::Service.new(
         store_path: tmp / "cron.json",
         on_exec: on_exec,
-        sandbox_config: "none",
+        sandbox: Autobot::Tools::Sandbox::Type::None,
       )
 
       job = service.add_job(
@@ -1100,7 +1100,7 @@ describe Autobot::Cron::Service do
       tmp = TestHelper.tmp_dir
       service = Autobot::Cron::Service.new(
         store_path: tmp / "cron.json",
-        sandbox_config: "none",
+        sandbox: Autobot::Tools::Sandbox::Type::None,
         exec_timeout: 1.second,
       )
 
@@ -1122,7 +1122,7 @@ describe Autobot::Cron::Service do
 
     it "limits stored exec command output size to prevent E2BIG errors" do
       tmp = TestHelper.tmp_dir
-      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", sandbox_config: "none")
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
 
       job = service.add_job(
         name: "exec_large",
@@ -1147,7 +1147,7 @@ describe Autobot::Cron::Service do
 
     it "keeps truncated output valid utf-8 when the cut splits a character" do
       tmp = TestHelper.tmp_dir
-      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json", sandbox_config: "none")
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
 
       # '€' is 3 bytes; the 32768-byte cut lands mid-character, so a naive
       # byte_slice would leave invalid UTF-8 that breaks JSON persistence.

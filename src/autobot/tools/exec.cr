@@ -1,7 +1,6 @@
 require "log"
-require "../constants"
-require "./command_runner"
-require "./sandbox"
+require "../config/env"
+require "./sandbox_executor"
 
 module Autobot
   module Tools
@@ -75,7 +74,6 @@ module Autobot
       getter working_dir : String?
       getter deny_patterns : Array(Regex)
       getter allow_patterns : Array(Regex)
-      getter sandbox_type : Sandbox::Type
 
       def initialize(
         @executor : SandboxExecutor,
@@ -83,10 +81,7 @@ module Autobot
         @working_dir : String? = nil,
         @deny_patterns = DEFAULT_DENY_PATTERNS,
         @allow_patterns = [] of Regex,
-        sandbox_config : String = "auto",
       )
-        @sandbox_type = resolve_sandbox_type(sandbox_config)
-        ensure_sandbox_available!
       end
 
       def name : String
@@ -109,58 +104,28 @@ module Autobot
 
       def execute(params : Hash(String, JSON::Any)) : ToolResult
         command = params["command"].as_s
-        user_cwd = params["working_dir"]?.try(&.as_s)
-
-        Log.debug { "ExecTool: sandbox=#{@sandbox_type}, working_dir=#{@working_dir.inspect}" }
-
-        cwd = user_cwd || @working_dir || Dir.current
-
-        # Validate working directory is within workspace when sandboxed
-        if sandboxed? && user_cwd
-          if error = validate_working_dir(user_cwd)
-            return ToolResult.access_denied(error)
-          end
-        end
-
         if error = guard_command(command)
           return ToolResult.access_denied(error)
         end
 
-        Log.info { "Executing: #{command} (cwd: #{cwd}, sandbox: #{@sandbox_type})" }
+        cwd = params["working_dir"]?.try(&.as_s) || @working_dir
+        Log.info { "Executing: #{command} (cwd: #{cwd.inspect}, sandbox: #{@executor.mode})" }
 
-        output = run_command(command, cwd)
-        ToolResult.success(output)
+        result = @executor.exec(command, timeout: @timeout, cwd: cwd)
+        return result if result.success? || result.access_denied?
+
+        ToolResult.error("Error: #{result.content}")
       rescue ex
         ToolResult.error("Error executing command: #{ex.message}")
-      end
-
-      private def run_command(command : String, cwd : String) : String
-        workspace = @working_dir
-
-        if sandboxed? && workspace
-          relative_cwd = calculate_relative_path(cwd, workspace)
-
-          sandboxed_command = if relative_cwd == "." || relative_cwd.empty?
-                                command
-                              else
-                                "cd #{Sandbox.shell_escape(relative_cwd)} && #{command}"
-                              end
-
-          result = @executor.exec(sandboxed_command, timeout: @timeout)
-          result.success? ? result.content : "Error: #{result.content}"
-        else
-          run_command_direct(command, cwd)
-        end
-      end
-
-      private def run_command_direct(command : String, cwd : String) : String
-        result = CommandRunner.run("sh", ["-c", command], @timeout, chdir: cwd)
-        result.report.presence || Constants::NO_OUTPUT_MESSAGE
       end
 
       private def guard_command(command : String) : String?
         cmd = command.strip
         has_allowlist = !@allow_patterns.empty?
+
+        if Config::Env.command_references_file?(cmd)
+          return "Error: Command blocked by safety guard (references an .env file)"
+        end
 
         # 1. Check allowlist first (explicitly allowed overrides denylist)
         if has_allowlist && @allow_patterns.any?(&.matches?(cmd))
@@ -177,52 +142,6 @@ module Autobot
         # 3. If an allowlist exists but didn't match, block it
         if has_allowlist
           return "Error: Command blocked by safety guard (not in allowlist)"
-        end
-
-        nil
-      end
-
-      private def resolve_sandbox_type(sandbox_config : String) : Sandbox::Type
-        Sandbox.resolve_type(sandbox_config)
-      end
-
-      private def ensure_sandbox_available! : Nil
-        # When sandbox is required (not none), verify it's actually available
-        if sandboxed? && @sandbox_type == Sandbox::Type::None
-          Sandbox.require_sandbox!
-        end
-      end
-
-      def sandboxed? : Bool
-        @sandbox_type != Sandbox::Type::None
-      end
-
-      private def calculate_relative_path(cwd : String, workspace : String) : String
-        if cwd.starts_with?(workspace)
-          cwd[workspace.size..-1].lstrip('/')
-        else
-          "."
-        end
-      end
-
-      private def validate_working_dir(user_cwd : String) : String?
-        working_dir = @working_dir
-        return nil unless working_dir
-
-        workspace_real = begin
-          File.realpath(working_dir)
-        rescue
-          return "Error: Cannot resolve workspace path"
-        end
-
-        cwd_real = begin
-          File.realpath(user_cwd)
-        rescue
-          return "Error: Cannot resolve working directory path"
-        end
-
-        unless cwd_real.starts_with?(workspace_real + "/") || cwd_real == workspace_real
-          return "SECURITY_ERROR: Working directory '#{user_cwd}' is outside workspace. Access denied."
         end
 
         nil

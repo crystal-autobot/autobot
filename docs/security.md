@@ -41,8 +41,10 @@ sudo pacman -S bubblewrap    # Arch
 
 ```yaml
 tools:
-  sandbox: auto  # auto | bubblewrap | docker | none (default)
+  sandbox: auto  # auto | bubblewrap | docker | external | none (default: auto)
 ```
+
+`auto` resolves the backend once at boot and never falls back to running commands on the host: with no backend installed, boot stops. `external` declares that autobot already runs inside your own container or VM; commands run directly and the bot warns that this is not verified. `none` is the explicit host-exec opt-in: `exec` and skill scripts run on the host as you, the bot prints `host exec enabled (sandbox: none): commands and skill scripts run on this host as <user>` on every boot, and `autobot doctor` shows `Host exec: enabled by sandbox: none`. In `external` and `none` mode the file tools are confined to the workspace by real path, so a symlink pointing outside is refused. See [Sandboxing](sandboxing.md#sandbox-modes).
 
 ### What It Protects Against
 
@@ -60,8 +62,9 @@ tools:
 - ✅ Install bubblewrap for development (lightweight, fast)
 - ✅ Use Docker for production deployments
 - ✅ Keep workspace scoped to a dedicated directory, not your home folder
-- ⚠️ Never use `sandbox: none` in production (development-only)
-- ⚠️ Never place `.env` files inside workspace (blocked automatically)
+- ⚠️ Never use `sandbox: none` for a bot that reads other people's messages; it runs commands on the host as you
+- ⚠️ Use `sandbox: external` only when autobot itself runs inside a container or VM you control
+- ⚠️ Never place `.env` files inside workspace (refused by the file tools, but keep secrets out anyway)
 
 ---
 
@@ -85,14 +88,15 @@ Built-in protection against Server-Side Request Forgery:
 
 ## 4. Keep Secrets Out of Files
 
-### .env File Protection (v0.2.0+)
+### .env File Protection
 
-Autobot enforces strict `.env` file protection:
+The executor refuses `.env` files in every sandbox mode, so the model cannot reach one even when it sits inside the workspace:
 
 **Automatic blocks (LLM cannot access):**
 
-- `.env` files blocked in ReadFileTool (read, list directory)
-- `.env` files blocked in ExecTool (commands like `cat .env`)
+- `.env` files refused by `read_file`, `write_file` and `edit_file`
+- `.env` entries hidden from `list_dir`
+- `exec` refuses commands that mention one (such as `cat .env`)
 - Pattern matching: `.env`, `.env.local`, `.env.production`, `secrets.env`, etc.
 
 **Configuration validation (`autobot doctor`):**
@@ -152,7 +156,8 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 
 **❌ Errors (blocks deployment):**
 
-- Sandbox enabled but not available
+- `tools.sandbox: auto` with no sandbox backend installed (the message names `none` and `external` as the explicit choices)
+- Invalid `tools.sandbox` value, or `bubblewrap`/`docker` forced but not installed
 - Plaintext secrets detected in `config.yml`
 - `.env` file permissions not 0600
 - `.env` file inside workspace directory
@@ -161,6 +166,8 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 
 **⚠️ Warnings (review recommended):**
 
+- `tools.sandbox: none` (host exec enabled: commands and skill scripts run on this host)
+- `tools.sandbox: external` (not verified)
 - Filesystem root configured outside the workspace
 - `tools.enabled` entry that matches no known tool
 - Voice transcription pinned to a provider that has no api key
@@ -316,3 +323,11 @@ A bot with transcription off never hears a voice note. The note is saved to the 
 
 - **Mitigation:** Only run bridge on localhost
 - **TODO:** HMAC/JWT authentication in future release
+
+**`sandbox: external` is not verified.** Autobot trusts your declaration that it runs inside a container or VM.
+
+- **Mitigation:** keep the file tools' real-path confinement in mind as the only in-process guard
+
+**Host-mode path confinement is application-level.** In `external` and `none` mode the file tools are confined by real path, but `exec` can do whatever the autobot user can.
+
+- **Mitigation:** use a kernel sandbox wherever one can be installed
