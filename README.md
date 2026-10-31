@@ -4,13 +4,13 @@
 
 <p align="center"><b>Ultra-efficient personal AI assistant powered by Crystal</b></p>
 
-<p align="center">2MB binary · ~5MB RAM · <20ms startup · Zero runtime dependencies</p>
+<p align="center">3MB binary · ~5MB RAM · <20ms startup · Zero runtime dependencies</p>
 
 ## Why Autobot?
 
 Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt in [Crystal](https://crystal-lang.org) with security and efficiency first.
 
-2.0MB binary, ~5MB RAM, boots in under 20ms, zero runtime dependencies. Run dozens of bots on a single machine — each with its own personality, workspace, and config.
+3.0MB binary, ~5MB RAM, boots in under 20ms, zero runtime dependencies. Run dozens of bots on a single machine — each with its own personality, workspace, and config.
 
 ## ✨ Features
 
@@ -246,7 +246,7 @@ autobot agent -m "show open issues in crystal-autobot/autobot"
 
 ```bash
 make build          # Debug binary
-make release        # Optimized binary (~2MB)
+make release        # Optimized binary (~3MB)
 make test           # Run test suite
 make lint           # Run ameba linter
 make format         # Format code

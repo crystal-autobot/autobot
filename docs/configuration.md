@@ -117,7 +117,7 @@ tools:
     - bash_notify
   filesystem:
     roots: [notes, inbox]  # Optional; file tools may only touch these workspace subdirectories
-  sandbox: auto  # auto | bubblewrap | docker | none (default: auto)
+  sandbox: auto  # auto | bubblewrap | docker | external | none (default: auto)
   docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
   sandbox_env:   # env vars to forward into Docker sandbox (default: none)
     - HA_URL
@@ -151,6 +151,19 @@ tools:
 ```
 
 When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker). The kernel enforces workspace restrictions — pipes, redirects, and other shell features are safe to use because the process cannot access files outside the workspace regardless.
+
+### Sandbox modes
+
+`tools.sandbox` picks how `exec` and skill scripts run:
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | Uses bubblewrap when installed, otherwise Docker. The choice is made once at boot. With neither installed, boot stops with an error that names `none` and `external` as the explicit alternatives; `auto` never falls back to running commands on the host. |
+| `bubblewrap`, `docker` | Force one backend. Boot stops when it is not installed. |
+| `external` | You already run autobot inside your own container or VM. Commands run directly in that environment. The bot warns on every boot that this is not verified, and so does `autobot doctor`. |
+| `none` | Explicit opt-in to host exec. `exec` and skill `bash_*` scripts keep working but run on the host as the autobot user. The bot prints `host exec enabled (sandbox: none): commands and skill scripts run on this host as <user>` on every boot and `autobot doctor` shows `Host exec: enabled by sandbox: none`. |
+
+In `external` and `none` mode the file tools are confined to the workspace (and `tools.filesystem.roots`) by real path, so a symlink pointing outside the workspace is refused. See [Sandboxing](sandboxing.md).
 
 ### Tool Allowlist
 
@@ -233,7 +246,7 @@ mcp:
         GITHUB_TOKEN: "${GITHUB_TOKEN}"
 ```
 
-Tools are auto-discovered at startup and registered as `mcp_{server}_{tool}`. MCP servers run unsandboxed (they need network access) but with isolated env vars.
+Tools are auto-discovered at startup and registered as `mcp_{server}_{tool}`. MCP servers run on the host, outside the sandbox (they need network access), with isolated env vars.
 
 **-> [MCP Documentation](mcp.md)**
 
@@ -336,7 +349,7 @@ channels:
 
 # Tool settings
 tools:
-  sandbox: auto  # auto | bubblewrap | docker | none
+  sandbox: auto  # auto | bubblewrap | docker | external | none
   docker_image: "python:3.14-alpine"  # optional, default: alpine:latest
   sandbox_env:  # env vars to forward into Docker sandbox (default: none)
     - HA_URL
