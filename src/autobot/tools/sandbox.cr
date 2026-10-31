@@ -30,7 +30,87 @@ module Autobot
       enum Type
         Bubblewrap
         Docker
+        External
         None
+
+        def host? : Bool
+          external? || none?
+        end
+
+        def host_exec? : Bool
+          none?
+        end
+
+        def banner : String
+          case self
+          in Bubblewrap then "✓ Sandbox: bubblewrap (kernel-enforced isolation)"
+          in Docker     then "✓ Sandbox: docker (container isolation)"
+          in External   then "⚠️  #{EXTERNAL_WARNING}"
+          in None       then "⚠️  #{Sandbox.host_exec_warning}"
+          end
+        end
+      end
+
+      record Assessment, level : Level, type : Type?, summary : String, message : String, hints : Array(String) do
+        enum Level
+          Ok
+          Warn
+          Error
+        end
+      end
+
+      VALID_CONFIGS = ["auto", "bubblewrap", "docker", "external", "none"]
+
+      EXTERNAL_WARNING      = "Sandbox: external (not verified): commands run directly because you declared autobot already runs inside your own container or VM"
+      EXTERNAL_HINT         = "autobot trusts that it already runs inside your own container or VM; commands run directly"
+      ISOLATE_HINT          = "set sandbox: auto, bubblewrap or docker to isolate them"
+      EXTERNAL_OR_NONE_HINT = "set sandbox: external inside your own container or VM, or sandbox: none to run on this host on purpose"
+      NO_BACKEND_MESSAGE    = "No sandbox backend found for sandbox: auto (install bubblewrap or docker). " \
+                              "autobot never falls back to running commands on the host; " \
+                              "set sandbox: external if autobot already runs inside your own container or VM, " \
+                              "or sandbox: none to run commands on this host on purpose. See #{WEBSITE_URL}/sandboxing/"
+
+      def self.host_exec_warning : String
+        "host exec enabled (sandbox: none): commands and skill scripts run on this host as #{ENV["USER"]? || "unknown"}"
+      end
+
+      # One judgement of a `tools.sandbox` setting, rendered by the validator and doctor.
+      def self.assess(config : String) : Assessment
+        type = resolve_type?(config)
+        return invalid_assessment(config) unless type
+        return host_exec_assessment(type) if disabled?(config)
+        return Assessment.new(Assessment::Level::Warn, type, "Sandbox: external (not verified)", EXTERNAL_WARNING, [EXTERNAL_HINT]) if type.external?
+        return unavailable_assessment(type) unless available?(type)
+
+        summary = "Sandbox available (#{type.to_s.downcase})"
+        Assessment.new(Assessment::Level::Ok, type, summary, summary, [] of String)
+      end
+
+      private def self.invalid_assessment(config : String) : Assessment
+        summary = "Invalid sandbox setting (#{config})"
+        choices = "Use one of: #{VALID_CONFIGS.join(", ")}"
+        Assessment.new(Assessment::Level::Error, nil, summary, "#{summary}. #{choices}.", [choices])
+      end
+
+      private def self.host_exec_assessment(type : Type) : Assessment
+        Assessment.new(
+          Assessment::Level::Warn, type,
+          "Host exec: enabled by sandbox: none",
+          "#{host_exec_warning}. #{ISOLATE_HINT.capitalize}.",
+          ["commands and skill scripts run on this host; #{ISOLATE_HINT}"],
+        )
+      end
+
+      private def self.unavailable_assessment(type : Type) : Assessment
+        if type.none?
+          hints = install_hints(type) << EXTERNAL_OR_NONE_HINT
+          return Assessment.new(Assessment::Level::Error, type, "No sandbox backend found for sandbox: auto", NO_BACKEND_MESSAGE, hints)
+        end
+
+        summary = "Sandbox unavailable: #{unavailable_reason(type)}"
+        hints = install_hints(type)
+        message = "#{summary}. #{hints.join(". ")}. See #{WEBSITE_URL}/sandboxing/"
+        Assessment.new(Assessment::Level::Error, type, summary, message, hints)
       end
 
       # Test override for sandbox detection (set to nil to use real detection)
@@ -39,7 +119,6 @@ module Autobot
       end
 
       def self.detect_override=(@@detect_override : Type?) : Type?
-        @@config = "auto"
         @@configured_type = nil
         @@detect_override
       end
@@ -57,7 +136,6 @@ module Autobot
       @@cached_type : Type? = nil
       @@bwrap_available : Bool? = nil
       @@docker_available : Bool? = nil
-      @@config : String = "auto"
       @@configured_type : Type? = nil
 
       # Active sandbox type (configured type, or auto-detected if not yet configured)
@@ -66,24 +144,19 @@ module Autobot
       end
 
       # True when sandboxing was explicitly disabled via `sandbox: "none"`
-      def self.disabled?(config : String = @@config) : Bool
+      def self.disabled?(config : String) : Bool
         config.downcase == DISABLED_CONFIG
       end
 
       # Configure active sandbox mode from config string ("auto", "bubblewrap", "docker", "none")
       def self.configure(config : String) : Type
         resolved = resolve_type(config)
-        @@config = config.downcase
         @@configured_type = resolved
         resolved
       end
 
-      def self.active_type : Type
-        available? ? type : Type::None
-      end
-
       def self.unavailable_reason(type : Type = self.type) : String
-        return "install bubblewrap or docker" if type.none?
+        return "install bubblewrap or docker, or set sandbox: external or none explicitly" if type.none?
 
         "#{type.to_s.downcase} is configured but not installed"
       end
@@ -135,6 +208,7 @@ module Autobot
         case type
         in Type::Bubblewrap then bwrap_available?
         in Type::Docker     then docker_available?
+        in Type::External   then true
         in Type::None       then false
         end
       end
@@ -144,24 +218,21 @@ module Autobot
         case config.downcase
         when "bubblewrap"    then Type::Bubblewrap
         when "docker"        then Type::Docker
+        when "external"      then Type::External
         when DISABLED_CONFIG then Type::None
         when "auto"          then detect
         else                      nil
         end
       end
 
-      # Resolve sandbox type from config string
+      # Resolve sandbox type from config string. `auto` never resolves to
+      # host execution: with no backend installed it raises instead.
       def self.resolve_type(config : String) : Type
-        resolve_type?(config) || raise ArgumentError.new(
-          "Invalid sandbox config: #{config}. Use 'auto', 'bubblewrap', 'docker', or 'none'"
+        resolved = resolve_type?(config) || raise ArgumentError.new(
+          "Invalid sandbox config: #{config}. Use #{VALID_CONFIGS.map { |name| "'#{name}'" }.join(", ")}"
         )
-      end
-
-      # Require sandbox or raise clear error
-      def self.require_sandbox! : Nil
-        unless available?
-          raise SandboxNotFoundError.new
-        end
+        raise SandboxNotFoundError.new if resolved.none? && !disabled?(config)
+        resolved
       end
 
       # Execute a shell command in sandbox (for arbitrary commands with pipes/redirects).
