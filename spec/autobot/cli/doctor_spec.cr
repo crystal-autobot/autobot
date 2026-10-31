@@ -215,6 +215,58 @@ describe Autobot::CLI::Doctor do
 
         errors.should eq(1)
         io.to_s.should contain("✗ Invalid sandbox setting (bwrap)")
+        io.to_s.should contain("auto, bubblewrap, docker, external, none")
+      end
+    ensure
+      Autobot::Tools::Sandbox.detect_override = nil
+    end
+
+    it "warns about host exec under sandbox: none" do
+      config = make_config(<<-YAML
+      tools:
+        sandbox: "none"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
+
+        errors.should eq(0)
+        io.to_s.should contain("! Host exec: enabled by sandbox: none")
+        io.to_s.should contain("commands and skill scripts run on this host")
+      end
+    end
+
+    it "warns that sandbox: external is not verified" do
+      config = make_config(<<-YAML
+      tools:
+        sandbox: "external"
+      YAML
+      )
+
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
+
+        errors.should eq(0)
+        io.to_s.should contain("! Sandbox: external (not verified)")
+      end
+    end
+
+    it "fails when auto finds no sandbox backend" do
+      config = make_config(<<-YAML
+      tools:
+        sandbox: "auto"
+      YAML
+      )
+
+      Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::None
+      with_doctor_io do |io|
+        errors = Autobot::CLI::Doctor.check_security_settings(config, 0)
+
+        errors.should eq(1)
+        io.to_s.should contain("✗ No sandbox backend found for sandbox: auto")
+        io.to_s.should contain("Install bubblewrap")
+        io.to_s.should contain("set sandbox: external inside your own container or VM, or sandbox: none")
       end
     ensure
       Autobot::Tools::Sandbox.detect_override = nil

@@ -25,17 +25,9 @@ module Autobot::Config
     def self.validate(config : Config, config_path : Path) : Array(Issue)
       issues = [] of Issue
 
-      issues.concat(check_mutually_exclusive_settings(config))
       issues.concat(check_plaintext_secrets(config_path))
       issues.concat(check_env_file_security(config_path))
-      issues.concat(check_sandbox_availability(config))
-
-      issues
-    end
-
-    # Check for mutually exclusive security settings
-    private def self.check_mutually_exclusive_settings(config : Config) : Array(Issue)
-      issues = [] of Issue
+      issues.concat(check_sandbox_mode(config))
 
       issues
     end
@@ -92,44 +84,21 @@ module Autobot::Config
       issues
     end
 
-    # Check sandbox availability
-    private def self.check_sandbox_availability(config : Config) : Array(Issue)
-      issues = [] of Issue
-
-      sandbox_config = config.sandbox_config
-
-      sandbox_type = Tools::Sandbox.resolve_type?(sandbox_config)
-      unless sandbox_type
-        issues << Issue.new(
-          severity: Severity::Error,
-          message: "Invalid sandbox config '#{sandbox_config}'. " \
-                   "Use 'auto', 'bubblewrap', 'docker', or 'none'."
-        )
-        return issues
+    private def self.check_sandbox_mode(config : Config) : Array(Issue)
+      assessment = Tools::Sandbox.assess(config.sandbox_config)
+      case assessment.level
+      in .ok?    then [] of Issue
+      in .warn?  then [warning(assessment.message)]
+      in .error? then [error(assessment.message)]
       end
+    end
 
-      # Warn if sandbox is disabled
-      if Tools::Sandbox.disabled?(sandbox_config)
-        issues << Issue.new(
-          severity: Severity::Warning,
-          message: "Sandbox disabled (sandbox: none). " \
-                   "Enable sandboxing for better security ('auto', 'bubblewrap', or 'docker'). " \
-                   "This prevents the LLM from accessing files outside the workspace."
-        )
-        return issues
-      end
+    private def self.error(message : String) : Issue
+      Issue.new(severity: Severity::Error, message: message)
+    end
 
-      # Check if sandbox tools are available when enabled
-      unless Tools::Sandbox.available?(sandbox_type)
-        issues << Issue.new(
-          severity: Severity::Error,
-          message: "CRITICAL: Sandbox unavailable: #{Tools::Sandbox.unavailable_reason(sandbox_type)}. " \
-                   "#{Tools::Sandbox.install_hints(sandbox_type).join(". ")}. " \
-                   "See #{WEBSITE_URL}/sandboxing/"
-        )
-      end
-
-      issues
+    private def self.warning(message : String) : Issue
+      Issue.new(severity: Severity::Warning, message: message)
     end
   end
 end

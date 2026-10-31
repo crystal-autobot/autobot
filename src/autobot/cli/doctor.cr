@@ -239,10 +239,7 @@ module Autobot
         return warnings if roots.empty?
 
         workspace = config.workspace_path
-        outside = roots.reject do |root|
-          resolved = Path[root].expand(base: workspace, home: true)
-          resolved == workspace || resolved.to_s.starts_with?("#{workspace}/")
-        end
+        outside = roots.reject { |root| Tools.inside?(Path[root].expand(base: workspace, home: true), workspace) }
 
         if outside.empty?
           report(Status::Pass, "Filesystem tools limited to: #{roots.join(", ")}")
@@ -255,31 +252,22 @@ module Autobot
       end
 
       def self.check_sandbox_availability(config : Config::Config, errors : Int32) : Int32
-        sandbox_config = config.sandbox_config
+        assessment = Tools::Sandbox.assess(config.sandbox_config)
+        report(SANDBOX_STATUS[assessment.level], assessment.summary)
+        assessment.hints.each { |text| hint(text) }
 
-        sandbox_type = Tools::Sandbox.resolve_type?(sandbox_config)
-        unless sandbox_type
-          report(Status::Fail, "Invalid sandbox setting (#{sandbox_config})")
-          hint("Use 'auto', 'bubblewrap', 'docker', or 'none'")
-          return errors + 1
+        case assessment.level
+        in .error? then errors + 1
+        in .warn?  then errors
+        in .ok?    then check_docker_image(config, errors, assessment.type)
         end
-
-        if Tools::Sandbox.disabled?(sandbox_config)
-          report(Status::Warn, "Sandbox disabled (sandbox: none)")
-          hint("Enable sandboxing for better security ('auto', 'bubblewrap', or 'docker')")
-          return errors
-        end
-
-        unless Tools::Sandbox.available?(sandbox_type)
-          report(Status::Fail, "Sandbox unavailable: #{Tools::Sandbox.unavailable_reason(sandbox_type)}")
-          Tools::Sandbox.install_hints(sandbox_type).each { |text| hint(text) }
-          return errors + 1
-        end
-
-        report(Status::Pass, "Sandbox available (#{sandbox_type.to_s.downcase})")
-
-        check_docker_image(config, errors, sandbox_type)
       end
+
+      SANDBOX_STATUS = {
+        Tools::Sandbox::Assessment::Level::Ok    => Status::Pass,
+        Tools::Sandbox::Assessment::Level::Warn  => Status::Warn,
+        Tools::Sandbox::Assessment::Level::Error => Status::Fail,
+      }
 
       def self.check_docker_image(
         config : Config::Config,
