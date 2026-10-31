@@ -49,23 +49,22 @@ describe "Security Tests" do
       Autobot::Tools::Sandbox.detect_override = nil
     end
 
-    it "allows sandbox: none without validation" do
-      tool = Autobot::Tools::ExecTool.new(
-        executor: create_test_executor,
-        working_dir: "/tmp",
-        sandbox_config: "none"
-      )
-      tool.sandboxed?.should be_false
+    it "reports host exec only under an explicit sandbox: none" do
+      host = Autobot::Tools::SandboxExecutor.new(Path["/tmp"], Autobot::Tools::Sandbox::Type::None)
+      host.host_exec?.should be_true
+
+      external = Autobot::Tools::SandboxExecutor.new(Path["/tmp"], Autobot::Tools::Sandbox::Type::External)
+      external.host_exec?.should be_false
+      external.sandboxed?.should be_false
     end
 
-    it "blocks working_dir bypass attempts when sandboxed" do
+    it "blocks working_dir bypass attempts" do
       workspace = Path["/tmp/test_workspace_#{Time.utc.to_unix}"].to_s
       Dir.mkdir_p(workspace)
 
       tool = Autobot::Tools::ExecTool.new(
-        executor: create_test_executor,
+        executor: Autobot::Tools::SandboxExecutor.new(Path[workspace], Autobot::Tools::Sandbox::Type::Bubblewrap),
         working_dir: workspace,
-        sandbox_config: "auto"
       )
 
       # Try to override working_dir to escape workspace
@@ -75,7 +74,7 @@ describe "Security Tests" do
       } of String => JSON::Any)
 
       result.access_denied?.should be_true
-      result.content.should contain("outside workspace")
+      result.content.should contain("outside the workspace")
 
       Dir.delete(workspace) if Dir.exists?(workspace)
     end
@@ -260,7 +259,7 @@ describe "Security Tests" do
 
   describe "Command timeout enforcement" do
     it "kills long-running commands" do
-      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, timeout: 2, sandbox_config: "none")
+      tool = Autobot::Tools::ExecTool.new(executor: create_test_executor, timeout: 2)
 
       # Command that would run forever
       result = tool.execute({"command" => JSON::Any.new("sleep 100")} of String => JSON::Any)

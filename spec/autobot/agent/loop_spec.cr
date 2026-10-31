@@ -77,7 +77,7 @@ private def create_test_loop(
     sessions: sessions || Autobot::Session::Manager.new(workspace),
     cron_service: cron_service,
     memory_window: 0,
-    sandbox_config: "none",
+    sandbox: Autobot::Tools::Sandbox::Type::None,
     stop_after: stop_after
   )
 end
@@ -243,7 +243,7 @@ describe Autobot::Agent::Loop do
         sessions: sessions,
         cron_service: cron,
         memory_window: 0,
-        sandbox_config: "none"
+        sandbox: Autobot::Tools::Sandbox::Type::None
       )
 
       # Simulate the message tool having sent content
@@ -314,7 +314,7 @@ describe Autobot::Agent::Loop do
         tools: tools,
         sessions: sessions,
         memory_window: 0,
-        sandbox_config: "none"
+        sandbox: Autobot::Tools::Sandbox::Type::None
       )
       msg = Autobot::Bus::InboundMessage.new(
         channel: "telegram",
@@ -461,7 +461,7 @@ describe Autobot::Agent::Loop do
         tools: tools,
         sessions: sessions,
         memory_window: 0,
-        sandbox_config: "none"
+        sandbox: Autobot::Tools::Sandbox::Type::None
       )
 
       msg = Autobot::Bus::InboundMessage.new(
@@ -496,7 +496,7 @@ describe Autobot::Agent::Loop do
         tools: tools,
         sessions: sessions,
         memory_window: 0,
-        sandbox_config: "none"
+        sandbox: Autobot::Tools::Sandbox::Type::None
       )
 
       msg = Autobot::Bus::InboundMessage.new(
@@ -535,7 +535,7 @@ describe Autobot::Agent::Loop do
         tools: tools,
         sessions: sessions,
         memory_window: 0,
-        sandbox_config: "none"
+        sandbox: Autobot::Tools::Sandbox::Type::None
       )
 
       msg = Autobot::Bus::InboundMessage.new(

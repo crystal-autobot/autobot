@@ -25,7 +25,7 @@ module Autobot
       @on_job : JobCallback?
       @on_exec : ExecCallback?
       @workspace : Path?
-      @sandbox_config : String
+      @sandbox : Tools::Sandbox::Type
       @store : CronStore?
       @running : Bool = false
       @timer_generation : Int64 = 0
@@ -36,7 +36,7 @@ module Autobot
         @on_job : JobCallback? = nil,
         @on_exec : ExecCallback? = nil,
         @workspace : Path? = nil,
-        @sandbox_config : String = "none",
+        @sandbox : Tools::Sandbox::Type = Tools::Sandbox::Type::None,
         @exec_timeout : Time::Span = EXEC_TIMEOUT,
       )
         raise ArgumentError.new("exec_timeout must be at least #{MIN_EXEC_TIMEOUT}") if @exec_timeout < MIN_EXEC_TIMEOUT
@@ -438,7 +438,7 @@ module Autobot
       end
 
       private def sandbox_enabled? : Bool
-        !Tools::Sandbox.disabled?(@sandbox_config)
+        !@sandbox.host?
       end
 
       private def exec_command_sandboxed(command : String, job : CronJob) : String

@@ -26,13 +26,12 @@ describe Autobot::Tools::SandboxExecutor do
     end
   end
 
-  it "bypasses sandbox for filesystem operations when sandboxed is false" do
+  it "bypasses sandbox for filesystem operations in host mode" do
     tmp = TestHelper.tmp_dir
     file = tmp / "test.txt"
     File.write(file, "hello sandbox none")
 
-    # Initialize with sandboxed: false
-    executor = Autobot::Tools::SandboxExecutor.new(tmp, sandboxed: false)
+    executor = Autobot::Tools::SandboxExecutor.new(tmp, Autobot::Tools::Sandbox::Type::None)
     executor.sandboxed?.should be_false
 
     # read_file should read directly
@@ -95,5 +94,79 @@ describe Autobot::Tools::SandboxExecutor do
     result.content.should contain("Command timed out after 1 seconds")
     result.content.should contain("working")
     result.content.should_not contain("Exit code")
+  end
+end
+
+describe Autobot::Tools::SandboxExecutor do
+  describe "host mode path confinement" do
+    it "confines reads and writes to the workspace even without roots" do
+      workspace = TestHelper.tmp_dir("confine")
+      outside = TestHelper.tmp_dir("outside")
+      File.write(outside / "secret.txt", "secret")
+      File.write(workspace / "ok.txt", "ok")
+      File.write(workspace / ".env", "KEY=1")
+      File.write(workspace / ".env.local", "KEY=2")
+      Dir.mkdir_p(workspace / "skills")
+      File.write(workspace / "skills" / "SKILL.md", "skill")
+      File.symlink((outside / "secret.txt").to_s, (workspace / "link").to_s)
+      File.symlink((outside / "dangling").to_s, (workspace / "dangling").to_s)
+      executor = Autobot::Tools::SandboxExecutor.new(workspace, Autobot::Tools::Sandbox::Type::None)
+
+      executor.read_file("ok.txt").content.should eq("ok")
+      executor.read_file("skills/SKILL.md").content.should eq("skill")
+      executor.write_file("new/dir/file.txt", "x").success?.should be_true
+      File.read(workspace / "new" / "dir" / "file.txt").should eq("x")
+
+      executor.read_file("link").access_denied?.should be_true
+      executor.read_file("link").content.should contain("outside the workspace")
+      executor.read_file((outside / "secret.txt").to_s).access_denied?.should be_true
+      executor.read_file("~/.ssh/x").access_denied?.should be_true
+      executor.write_file("../escape.txt", "x").access_denied?.should be_true
+      executor.write_file("dangling", "x").access_denied?.should be_true
+      File.exists?(outside / "dangling").should be_false
+
+      executor.read_file(".env").access_denied?.should be_true
+      executor.read_file(".env").content.should contain(".env files")
+      executor.read_file_base64(".env.local").access_denied?.should be_true
+      executor.write_file(".env", "KEY=3").access_denied?.should be_true
+      File.read(workspace / ".env").should eq("KEY=1")
+
+      listing = executor.list_dir(".").content
+      listing.should contain("ok.txt")
+      listing.should_not contain(".env")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+      FileUtils.rm_rf(outside) if outside
+    end
+
+    it "leaves everything open when no workspace is configured" do
+      executor = Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::None)
+      executor.read_file("/etc/hosts").success?.should be_true
+      executor.read_file("/etc/.env").access_denied?.should be_true
+    end
+  end
+
+  describe "#exec working directory" do
+    it "runs host commands in the requested directory" do
+      workspace = TestHelper.tmp_dir("cwd")
+      Dir.mkdir_p(workspace / "sub")
+      executor = Autobot::Tools::SandboxExecutor.new(workspace, Autobot::Tools::Sandbox::Type::None)
+
+      executor.exec("pwd", cwd: (workspace / "sub").to_s).content.strip.should end_with("/sub")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
+
+    it "refuses a sandboxed working directory outside the workspace" do
+      workspace = TestHelper.tmp_dir("cwd")
+      executor = Autobot::Tools::SandboxExecutor.new(workspace, Autobot::Tools::Sandbox::Type::Bubblewrap)
+
+      result = executor.exec("pwd", cwd: "/etc")
+
+      result.access_denied?.should be_true
+      result.content.should contain("outside the workspace")
+    ensure
+      FileUtils.rm_rf(workspace) if workspace
+    end
   end
 end

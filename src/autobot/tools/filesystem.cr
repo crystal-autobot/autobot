@@ -3,10 +3,6 @@ require "./sandbox_executor"
 
 module Autobot
   module Tools
-    def self.resolve_path(path : String) : Path
-      Path[path].expand(home: true)
-    end
-
     # Tool to read file contents.
     # Uses SandboxExecutor to ensure all operations are sandboxed.
     class ReadFileTool < Tool

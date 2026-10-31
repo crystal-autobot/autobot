@@ -65,7 +65,7 @@ module Autobot::Agent
       exec_timeout : Int32 = 60,
       exec_deny_patterns : Array(Regex) = Tools::ExecTool::DEFAULT_DENY_PATTERNS,
       exec_allow_patterns : Array(Regex) = [] of Regex,
-      sandbox_config : String = "auto",
+      sandbox : Tools::Sandbox::Type = Tools::Sandbox::Type::None,
       rate_limiter : Tools::RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
       @stop_after : Array(String) = [] of String,
@@ -75,8 +75,7 @@ module Autobot::Agent
       temperature : Float64 = Config::AgentDefaults.new.temperature,
     )
       @model = model || @provider.default_model
-      sandboxed = !Tools::Sandbox.disabled?(sandbox_config)
-      @context = Context::Builder.new(@workspace, sandboxed)
+      @context = Context::Builder.new(@workspace, !sandbox.host?)
 
       @executor = ToolExecutor.new(
         provider: @provider,
@@ -98,7 +97,7 @@ module Autobot::Agent
 
       register_optional_tools(
         brave_api_key, exec_timeout, exec_deny_patterns, exec_allow_patterns,
-        sandbox_config, rate_limiter, enabled_tools, filesystem_roots, web_allowed_domains,
+        sandbox, rate_limiter, enabled_tools, filesystem_roots, web_allowed_domains,
         max_tokens: max_tokens, temperature: temperature
       )
       cache_tool_references
@@ -317,7 +316,7 @@ module Autobot::Agent
       exec_timeout : Int32,
       exec_deny_patterns : Array(Regex),
       exec_allow_patterns : Array(Regex),
-      sandbox_config : String,
+      sandbox : Tools::Sandbox::Type,
       rate_limiter : Tools::RateLimiter?,
       enabled_tools : Array(String),
       filesystem_roots : Array(String),
@@ -334,7 +333,7 @@ module Autobot::Agent
         exec_timeout: exec_timeout,
         exec_deny_patterns: exec_deny_patterns,
         exec_allow_patterns: exec_allow_patterns,
-        sandbox_config: sandbox_config,
+        sandbox: sandbox,
         rate_limiter: rate_limiter,
         enabled_tools: enabled_tools,
         filesystem_roots: filesystem_roots,
