@@ -115,6 +115,10 @@ tools:
     - "mcp_homeassistant_*"  # a trailing * matches by prefix; MCP tools are named mcp_<server>_<tool>
   stop_after:    # Optional; a successful call of a listed tool ends the turn
     - bash_notify
+  capabilities:  # Optional; narrows what the bot's tools may do (see below)
+    - workspace_read
+    - workspace_write
+    - messaging
   filesystem:
     roots: [notes, inbox]  # Optional; file tools may only touch these workspace subdirectories
   sandbox: auto  # auto | bubblewrap | docker | external | none (default: auto)
@@ -160,10 +164,27 @@ When sandboxed, all shell commands run inside the sandbox (bubblewrap or Docker)
 |---|---|
 | `auto` (default) | Uses bubblewrap when installed, otherwise Docker. The choice is made once at boot. With neither installed, boot stops with an error that names `none` and `external` as the explicit alternatives; `auto` never falls back to running commands on the host. |
 | `bubblewrap`, `docker` | Force one backend. Boot stops when it is not installed. |
-| `external` | You already run autobot inside your own container or VM. Commands run directly in that environment. The bot warns on every boot that this is not verified, and so does `autobot doctor`. |
+| `external` | You already run autobot inside your own container or VM. Commands run directly in that environment. The bot warns on every boot that this is not verified, and `autobot doctor` reports whether it found a container marker. |
 | `none` | Explicit opt-in to host exec. `exec` and skill `bash_*` scripts keep working but run on the host as the autobot user. The bot prints `host exec enabled (sandbox: none): commands and skill scripts run on this host as <user>` on every boot and `autobot doctor` shows `Host exec: enabled by sandbox: none`. |
 
 In `external` and `none` mode the file tools are confined to the workspace (and `tools.filesystem.roots`) by real path, so a symlink pointing outside the workspace is refused. See [Sandboxing](sandboxing.md).
+
+### Capabilities
+
+Every tool declares what it may do, in one or more capability classes. The gateway grants all of them except host exec by default; `sandbox: none` swaps sandboxed exec for host exec. `tools.capabilities` lists the classes a bot keeps and can only narrow that grant:
+
+| Value | Tools that need it |
+|---|---|
+| `workspace_read` | `read_file`, `list_dir`, `sqlite` |
+| `workspace_write` | `write_file`, `edit_file`, `sqlite`, `text_to_speech` |
+| `sandboxed_exec` | `exec` and skill `bash_*` scripts under a sandbox |
+| `web_read` | `web_search`, `web_fetch`, `get_weather` |
+| `messaging` | `message` |
+| `scheduling` | `cron` |
+| `delegation` | `spawn` (subagents) |
+| `external_api` | `github`, `image_generation`, `text_to_speech`, every `mcp_*` tool |
+
+A tool whose needs are not covered is not registered, with a log line at boot, and is refused again if it is ever called. `host_exec` is an error in this list: only `tools.sandbox: none` grants it. Cron turns and subagents get the bot's grant minus `delegation`. Unlike `tools.enabled`, which names tools, `tools.capabilities` names what tools may do, so it also covers plugin and MCP tools you did not list by name.
 
 ### Tool Allowlist
 
@@ -246,7 +267,7 @@ mcp:
         GITHUB_TOKEN: "${GITHUB_TOKEN}"
 ```
 
-Tools are auto-discovered at startup and registered as `mcp_{server}_{tool}`. MCP servers run on the host, outside the sandbox (they need network access), with isolated env vars.
+Tools are auto-discovered at startup and registered as `mcp_{server}_{tool}` with the `external_api` capability. MCP servers run on the host, outside the sandbox (they need network access), with isolated env vars.
 
 **-> [MCP Documentation](mcp.md)**
 
@@ -368,6 +389,7 @@ tools:
     # size: 1024x1024
   enabled: [read_file, write_file, edit_file, list_dir, message]  # optional allowlist
   stop_after: [bash_notify]       # optional, tools whose successful call ends the turn
+  capabilities: [workspace_read, workspace_write, messaging]  # optional, narrows what tools may do
   filesystem:
     roots: [notes, inbox]      # optional, workspace subdirectories the file tools may touch
 

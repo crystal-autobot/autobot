@@ -12,6 +12,18 @@ Each plugin can implement:
 
 During setup, register tools through `context.tool_registry`.
 
+## Tool capabilities
+
+Every tool class must implement `capabilities`, which declares what the tool may do. The registry checks it against the bot's policy when the tool registers and again when it runs: a tool that needs more than the bot grants is not registered, with a log line at boot. See [Configuration](configuration.md#capabilities) for the list of classes and what the gateway grants.
+
+```crystal
+def capabilities : Autobot::Tools::Capability
+  Autobot::Tools::Capability::ExternalApi
+end
+```
+
+Combine classes with `|`, for example `Capability::WorkspaceRead | Capability::WorkspaceWrite` for a tool that reads and writes workspace files through `context.sandbox_executor`. A tool that only touches autobot's own state declares `Capability::None`. A tool that runs commands chosen by the model on the host declares `Capability::HostExec`, which the gateway grants only under `tools.sandbox: none`.
+
 ## Minimal Plugin
 
 ```crystal
@@ -43,6 +55,10 @@ module MyPlugin
 
     def description : String
       "Echo input text"
+    end
+
+    def capabilities : Autobot::Tools::Capability
+      Autobot::Tools::Capability::None
     end
 
     def parameters : Autobot::Tools::ToolSchema
@@ -97,9 +113,20 @@ plugins:
 
 Omitting the `plugins` section keeps all builtins enabled. Use `autobot doctor` to verify plugin status and dependencies.
 
+Each builtin tool declares its capabilities:
+
+| Plugin | Tool | Capabilities |
+|---|---|---|
+| github | `github` | `external_api` |
+| sqlite | `sqlite` | `workspace_read`, `workspace_write` |
+| weather | `get_weather` | `web_read` |
+| text_to_speech | `text_to_speech` | `external_api`, `workspace_write` |
+| system_info | `get_system_info` | none |
+| chat_log | `get_recent_chat_log` | none |
+
 ### GitHub
 
-Provides a `github` tool for interacting with GitHub via the `gh` CLI (issues, PRs, runs, releases). Requires `gh` to be installed.
+Provides a `github` tool for interacting with GitHub via the `gh` CLI (issues, PRs, runs, releases). Requires `gh` to be installed. `gh` runs on the host, outside the sandbox, with your GitHub account.
 
 ### Weather
 
@@ -138,5 +165,6 @@ Provides a `get_recent_chat_log` tool for consulting the rolling log of a group 
 ## Notes
 
 - Plugin names should be unique.
+- Every tool class must declare `capabilities`; a tool without it does not compile.
 - `Loader.register(...)` queues plugins before startup.
 - `autobot status` shows loaded plugin metadata.

@@ -171,7 +171,7 @@ The mode is resolved once at boot and shared by `exec`, skill scripts, file tool
 
 **`auto` never falls back to host exec.** When neither bubblewrap nor Docker is installed, boot stops with an error that names `none` and `external` as the explicit choices. There is no silent downgrade: a bot that was sandboxed yesterday cannot start running commands on the host today because a package went missing.
 
-**`external`** is for deployments where autobot itself already runs inside a container or VM you control. Commands run directly in that environment, on the strength of your declaration. Autobot cannot verify it: the bot warns on every boot, and `autobot doctor` reports `Sandbox: external (not verified)`.
+**`external`** is for deployments where autobot itself already runs inside a container or VM you control. Commands run directly in that environment and `exec` keeps its `sandboxed_exec` capability, on the strength of your declaration. Autobot cannot verify it: the bot warns on every boot, and `autobot doctor` reports the Commands line as `external (not verified; ...)` with whether it found a container marker (`/.dockerenv` or `/run/.containerenv`).
 
 **`none`** is the explicit host-exec opt-in. `exec` and skill `bash_*` scripts keep working and run on the host as the user autobot runs as, with that user's files and credentials in reach of any command the model chooses. The bot prints this on every boot:
 
@@ -250,7 +250,7 @@ All filesystem and exec operations go through `SandboxExecutor`, which routes th
 
 **Shell escaping** (single-quote escaping, base64 encoding for file content) prevents command injection within sandboxed commands.
 
-**Note:** Plugin tools that call external CLIs (e.g. `gh`, `curl`) use `Process.run` with argument arrays (no shell interpretation) and run outside the sandbox since they need host resources (auth configs, SSL certs). MCP servers run on the host too.
+**Note:** Plugin tools that call external CLIs (e.g. `gh`, `curl`) use `Process.run` with argument arrays (no shell interpretation) and run outside the sandbox since they need host resources (auth configs, SSL certs). They declare that in their capabilities (`external_api`, `web_read`). MCP servers run on the host too.
 
 ### What Sandboxing Does NOT Prevent
 

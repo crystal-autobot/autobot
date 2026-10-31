@@ -62,7 +62,7 @@ All characters outside `[a-z0-9_]` are replaced with underscores. For example:
 
 ## Security
 
-MCP servers run as regular child processes (not sandboxed) because they typically need network access for external APIs. However, several safeguards are in place:
+MCP servers run as regular child processes on the host (not sandboxed) because they typically need network access for external APIs. They act with whatever credentials their `env` gives them. Their tools register with the `external_api` capability, so a bot whose `tools.capabilities` omits `external_api` gets no MCP tools at all. Several safeguards are in place:
 
 - **Env isolation**: Only explicitly configured env vars are passed to the process, plus `PATH`, `HOME`, and `LANG` from the host
 - **No workspace sharing**: MCP processes do not receive access to autobot's workspace directory

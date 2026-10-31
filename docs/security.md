@@ -66,6 +66,24 @@ tools:
 - ⚠️ Use `sandbox: external` only when autobot itself runs inside a container or VM you control
 - ⚠️ Never place `.env` files inside workspace (refused by the file tools, but keep secrets out anyway)
 
+### Capabilities
+
+Every tool declares what it may do in one or more capability classes, and the registry refuses a tool outside the bot's policy both when it registers and when it runs. `tools.capabilities` narrows the grant; nothing in config can widen it.
+
+| Capability | Tools | Granted |
+|---|---|---|
+| `workspace_read` | `read_file`, `list_dir`, `sqlite` | by default |
+| `workspace_write` | `write_file`, `edit_file`, `sqlite`, `text_to_speech` | by default |
+| `sandboxed_exec` | `exec`, skill `bash_*` scripts | by default, under bubblewrap, Docker or `external` |
+| `host_exec` | `exec`, skill `bash_*` scripts | only by `tools.sandbox: none`; an error in `tools.capabilities` |
+| `web_read` | `web_search`, `web_fetch`, `get_weather` | by default |
+| `messaging` | `message` | by default |
+| `scheduling` | `cron` | by default |
+| `delegation` | `spawn` | by default; removed for cron turns and subagents |
+| `external_api` | `github`, `image_generation`, `text_to_speech`, every `mcp_*` tool | by default |
+
+Tools that only touch autobot's own state (`get_system_info`, `get_recent_chat_log`) declare no capability. Third-party plugin tools must declare theirs; see [Plugins](plugins.md#tool-capabilities).
+
 ---
 
 ## 3. SSRF Protection (ALWAYS ENABLED)
@@ -158,6 +176,7 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 
 - `tools.sandbox: auto` with no sandbox backend installed (the message names `none` and `external` as the explicit choices)
 - Invalid `tools.sandbox` value, or `bubblewrap`/`docker` forced but not installed
+- `host_exec` or an unknown value in `tools.capabilities`
 - Plaintext secrets detected in `config.yml`
 - `.env` file permissions not 0600
 - `.env` file inside workspace directory
@@ -176,6 +195,21 @@ autobot doctor --strict # Fail on any warning (CI/CD)
 - Missing `.env` file
 - Workspace restrictions disabled
 - Channels enabled without tokens
+
+**Capabilities section:**
+
+`autobot doctor` also prints what each bot's tools may do, computed from the tools that would register:
+
+```
+Capabilities (gateway profile; cron and subagents get the same minus spawn)
+  ✓ Workspace files  read, write · /srv/bot/workspace
+  ✓ Commands         sandboxed (bubblewrap)
+  ✓ Web              search, fetch · SSRF guard · any domain
+  ✓ Chat             message, cron, spawn
+  ! External         github (gh as @me) · mcp_garmin_* (runs on host)
+```
+
+Under `sandbox: none` the Commands line reads `! Commands  Host exec: enabled by sandbox: none`. Under `external` it reads `! Commands  external (not verified; no container marker found)` or `(not verified; container marker found)`, depending on whether `/.dockerenv` or `/run/.containerenv` exists.
 
 **Example output:**
 ```
@@ -324,9 +358,13 @@ A bot with transcription off never hears a voice note. The note is saved to the 
 - **Mitigation:** Only run bridge on localhost
 - **TODO:** HMAC/JWT authentication in future release
 
+**MCP servers and the github plugin run on the host.** The sandbox does not cover them; they act with the credentials in their env or in your `gh` login.
+
+- **Mitigation:** give MCP servers scoped tokens, and omit `external_api` from `tools.capabilities` on bots that do not need them
+
 **`sandbox: external` is not verified.** Autobot trusts your declaration that it runs inside a container or VM.
 
-- **Mitigation:** keep the file tools' real-path confinement in mind as the only in-process guard
+- **Mitigation:** check the container marker line in `autobot doctor`, and keep the file tools' real-path confinement in mind as the only in-process guard
 
 **Host-mode path confinement is application-level.** In `external` and `none` mode the file tools are confined by real path, but `exec` can do whatever the autobot user can.
 
