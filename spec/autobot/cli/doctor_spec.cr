@@ -15,6 +15,37 @@ private def make_config(yaml : String) : Autobot::Config::Config
   Autobot::Config::Config.from_yaml(yaml)
 end
 
+private def with_capability_probes(login : String? = nil, markers = [] of String, &)
+  Autobot::Plugins::Builtin::GhCli.override = {Autobot::Plugins::Builtin::GhCli::Status.new(true, !login.nil?), login}
+  Autobot::CLI::CapabilityReport.container_marker_paths = markers
+  Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+  yield
+ensure
+  Autobot::Plugins::Builtin::GhCli.override = nil
+  Autobot::CLI::CapabilityReport.container_marker_paths = ["/.dockerenv", "/run/.containerenv"]
+  Autobot::Tools::Sandbox.detect_override = nil
+end
+
+private def capability_config(workspace : Path, extra : String = "") : Autobot::Config::Config
+  make_config(<<-YAML
+  agents:
+    defaults:
+      workspace: "#{workspace}"
+  providers:
+    anthropic:
+      api_key: "real-key-here"
+  #{extra}
+  YAML
+  )
+end
+
+private def capability_output(config : Autobot::Config::Config) : {String, Int32, Int32}
+  with_doctor_io do |io|
+    errors, warnings = Autobot::CLI::Doctor.check_capabilities(config, 0, 0)
+    {io.to_s, errors, warnings}
+  end
+end
+
 describe Autobot::CLI::Doctor do
   describe ".check_env_file" do
     it "warns when .env file is missing" do
@@ -270,6 +301,163 @@ describe Autobot::CLI::Doctor do
       end
     ensure
       Autobot::Tools::Sandbox.detect_override = nil
+    end
+  end
+
+  describe ".check_capabilities" do
+    it "reports the gateway capabilities from the real registry" do
+      tmp = TestHelper.tmp_dir
+      config = capability_config(tmp, <<-YAML
+      tools:
+        sandbox: "bubblewrap"
+      mcp:
+        servers:
+          garmin:
+            command: "garmin-mcp"
+      plugins:
+        github:
+          enabled: false
+      YAML
+      )
+
+      with_capability_probes do
+        output, errors, warnings = capability_output(config)
+
+        errors.should eq(0)
+        warnings.should eq(1)
+        output.should contain("Capabilities (gateway profile; cron and subagents get the same minus spawn)")
+        output.should contain("✓ Workspace files  read, write · #{tmp}")
+        output.should contain("✓ Commands         sandboxed (bubblewrap)")
+        output.should contain("✓ Web              fetch · SSRF guard · any domain")
+        output.should contain("✓ Chat             message, cron, spawn")
+        output.should contain("! External         mcp_garmin_* (runs on host)")
+        output.should_not contain("github")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "shows host exec under sandbox: none" do
+      tmp = TestHelper.tmp_dir
+      config = capability_config(tmp, <<-YAML
+      tools:
+        sandbox: "none"
+      YAML
+      )
+
+      with_capability_probes do
+        output, _errors, warnings = capability_output(config)
+
+        warnings.should be >= 1
+        output.should contain("! Commands         Host exec: enabled by sandbox: none")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "shows the container marker probe under sandbox: external" do
+      tmp = TestHelper.tmp_dir
+      config = capability_config(tmp, <<-YAML
+      tools:
+        sandbox: "external"
+      YAML
+      )
+
+      with_capability_probes do
+        output, _errors, _warnings = capability_output(config)
+
+        output.should contain("! Commands         external (not verified; no container marker found)")
+      end
+
+      with_capability_probes(markers: [tmp.to_s]) do
+        output, _errors, _warnings = capability_output(config)
+
+        output.should contain("external (not verified; container marker found)")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails when auto finds no sandbox backend" do
+      tmp = TestHelper.tmp_dir
+      config = capability_config(tmp, <<-YAML
+      tools:
+        sandbox: "auto"
+      YAML
+      )
+
+      with_capability_probes do
+        Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::None
+        output, errors, _warnings = capability_output(config)
+
+        errors.should eq(1)
+        output.should contain("✗ Commands         unavailable (no sandbox backend)")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "narrows the report to tools.capabilities" do
+      tmp = TestHelper.tmp_dir
+      config = capability_config(tmp, <<-YAML
+      tools:
+        sandbox: "bubblewrap"
+        capabilities: ["workspace_read"]
+      YAML
+      )
+
+      with_capability_probes do
+        output, errors, _warnings = capability_output(config)
+
+        errors.should eq(0)
+        output.should contain("✓ Workspace files  read · #{tmp}")
+        output.should_not contain("read, write")
+        output.should contain("✓ Commands         disabled")
+        output.should contain("✓ Chat             none")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "fails on an invalid tools.capabilities entry" do
+      tmp = TestHelper.tmp_dir
+      config = capability_config(tmp, <<-YAML
+      tools:
+        capabilities: ["host_exec"]
+      YAML
+      )
+
+      with_capability_probes do
+        output, errors, _warnings = capability_output(config)
+
+        errors.should eq(1)
+        output.should contain("✗ tools.capabilities:")
+        output.should contain("tools.sandbox: none")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
+
+    it "shows the github plugin account" do
+      tmp = TestHelper.tmp_dir
+      config = capability_config(tmp, <<-YAML
+      tools:
+        sandbox: "bubblewrap"
+      YAML
+      )
+
+      with_capability_probes(login: "me") do
+        output, _errors, warnings = capability_output(config)
+        warnings.should eq(1)
+        output.should contain("! External         github (gh as @me)")
+      end
+
+      with_capability_probes(login: nil) do
+        output, _errors, _warnings = capability_output(config)
+        output.should contain("github (gh not logged in)")
+      end
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
     end
   end
 

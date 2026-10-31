@@ -2,6 +2,7 @@ require "../config/validator"
 require "../tools/sandbox"
 require "../tools/bash_tool"
 require "../mcp/proxy_tool"
+require "./capability_report"
 
 module Autobot
   module CLI
@@ -32,6 +33,7 @@ module Autobot
       end
 
       def self.run(config_path : String?, strict : Bool) : Nil
+        ::Log.setup(:none)
         errors = 0
         warnings = 0
 
@@ -78,6 +80,9 @@ module Autobot
 
         # Tools
         warnings = check_tools(config, warnings)
+
+        # Capabilities
+        errors, warnings = check_capabilities(config, errors, warnings)
 
         # Workspace
         errors, warnings = check_workspace(config, config_file, errors, warnings)
@@ -268,6 +273,25 @@ module Autobot
         Tools::Sandbox::Assessment::Level::Warn  => Status::Warn,
         Tools::Sandbox::Assessment::Level::Error => Status::Fail,
       }
+
+      def self.check_capabilities(config : Config::Config, errors : Int32, warnings : Int32) : Tuple(Int32, Int32)
+        assessment = Tools::Sandbox.assess(config.sandbox_config)
+        registry = SetupHelper.create_tool_registry(config, assessment.type || Tools::Sandbox::Type::None)
+
+        io.puts ""
+        io.puts CapabilityReport::HEADER
+        CapabilityReport.build(config, registry, assessment).each do |line|
+          report(line.status, line.to_s)
+          errors += 1 if line.status.fail?
+          warnings += 1 if line.status.warn?
+        end
+        io.puts ""
+
+        {errors, warnings}
+      rescue ex : ArgumentError
+        report(Status::Fail, "tools.capabilities: #{ex.message}")
+        {errors + 1, warnings}
+      end
 
       def self.check_docker_image(
         config : Config::Config,
