@@ -1,6 +1,7 @@
 require "./schema"
 require "./validator_common"
 require "../tools/sandbox"
+require "../tools/capability"
 
 module Autobot::Config
   # Security-focused configuration validator
@@ -28,6 +29,7 @@ module Autobot::Config
       issues.concat(check_plaintext_secrets(config_path))
       issues.concat(check_env_file_security(config_path))
       issues.concat(check_sandbox_mode(config))
+      issues.concat(check_tool_policy(config))
 
       issues
     end
@@ -91,6 +93,13 @@ module Autobot::Config
       in .warn?  then [warning(assessment.message)]
       in .error? then [error(assessment.message)]
       end
+    end
+
+    private def self.check_tool_policy(config : Config) : Array(Issue)
+      Tools::Capability.from_config(config.tools.try(&.capabilities) || [] of String)
+      [] of Issue
+    rescue ex : ArgumentError
+      [error("tools.capabilities: #{ex.message}")]
     end
 
     private def self.error(message : String) : Issue

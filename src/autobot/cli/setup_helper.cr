@@ -102,15 +102,31 @@ module Autobot
           Tools::Sandbox.resolve_sandbox_image(Config::Loader.config_dir)
         end
 
-        deny_patterns, allow_patterns = load_exec_patterns(config)
         rate_limiter = Tools::RateLimiter.from_config(config.tools.try(&.rate_limit))
+        tool_registry = create_tool_registry(config, sandbox, rate_limiter)
 
-        tool_registry = Tools.create_registry(
+        # MCP servers (started in background, tools register as they connect)
+        mcp_clients = Mcp.setup(config, tool_registry)
+
+        {tool_registry, mcp_clients, rate_limiter}
+      end
+
+      # Builds the built-in tool registry for a bot config without starting
+      # MCP servers or plugins, so doctor can inspect the same registry the gateway runs.
+      def self.create_tool_registry(
+        config : Config::Config,
+        sandbox : Tools::Sandbox::Type,
+        rate_limiter : Tools::RateLimiter? = nil,
+      ) : Tools::Registry
+        deny_patterns, allow_patterns = load_exec_patterns(config)
+
+        registry = Tools.create_registry(
           workspace: config.workspace_path,
           exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
           exec_deny_patterns: deny_patterns,
           exec_allow_patterns: allow_patterns,
           sandbox: sandbox,
+          policy: tool_policy_for(config, sandbox),
           brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
           skills_dirs: [
             (config.workspace_path / "skills").to_s,
@@ -122,12 +138,15 @@ module Autobot
           web_allowed_domains: config.tools.try(&.web.try(&.allowed_domains)) || [] of String,
         )
 
-        register_image_tool(config, tool_registry)
+        register_image_tool(config, registry)
+        registry
+      end
 
-        # MCP servers (started in background, tools register as they connect)
-        mcp_clients = Mcp.setup(config, tool_registry)
-
-        {tool_registry, mcp_clients, rate_limiter}
+      def self.tool_policy_for(config : Config::Config, sandbox : Tools::Sandbox::Type) : Tools::ToolPolicy
+        Tools::ToolPolicy.gateway(
+          host_exec: sandbox.host_exec?,
+          capabilities: Tools::Capability.from_config(config.tools.try(&.capabilities) || [] of String),
+        )
       end
 
       # Load and start plugins. Call after gateway is ready to avoid

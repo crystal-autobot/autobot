@@ -88,4 +88,22 @@ describe Autobot::Config::SecurityValidator do
       message.should contain("sandbox: none")
     end
   end
+
+  describe "tool policy" do
+    it "rejects host_exec and points to sandbox: none" do
+      issues = validate_security("tools:\n  capabilities: [host_exec]\n", TestHelper.tmp_dir)
+      message = errors_of(issues).find(&.starts_with?("tools.capabilities:")).should_not be_nil
+      message.should contain("tools.sandbox: none")
+    end
+
+    it "rejects an unknown capability" do
+      issues = validate_security("tools:\n  capabilities: [nope]\n", TestHelper.tmp_dir)
+      errors_of(issues).any?(&.includes?("unknown capability 'nope'")).should be_true
+    end
+
+    it "accepts a narrowing list" do
+      issues = validate_security("tools:\n  capabilities: [workspace_read]\n", TestHelper.tmp_dir)
+      errors_of(issues).should be_empty
+    end
+  end
 end
