@@ -53,6 +53,10 @@ module Autobot
         "generate_image"
       end
 
+      def capabilities : Capability
+        Capability::ExternalApi
+      end
+
       def description : String
         "Generate an image from a text description and send it to the user. " \
         "Use this when the user asks you to create, draw, or generate an image."

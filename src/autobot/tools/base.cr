@@ -1,3 +1,4 @@
+require "./capability"
 require "./result"
 
 module Autobot
@@ -14,6 +15,7 @@ module Autobot
       abstract def name : String
       abstract def description : String
       abstract def parameters : ToolSchema
+      abstract def capabilities : Capability
       abstract def execute(params : Hash(String, JSON::Any)) : ToolResult
 
       # Convert tool to OpenAI function-calling schema format.

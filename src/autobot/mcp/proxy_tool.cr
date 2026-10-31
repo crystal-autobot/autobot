@@ -31,6 +31,10 @@ module Autobot
       )
       end
 
+      def capabilities : Tools::Capability
+        Tools::Capability::ExternalApi
+      end
+
       def execute(params : Hash(String, JSON::Any)) : Tools::ToolResult
         unless @client.alive?
           return Tools::ToolResult.error("MCP server '#{@client.server_name}' is not running")

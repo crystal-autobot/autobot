@@ -54,6 +54,10 @@ module Autobot
         "message"
       end
 
+      def capabilities : Capability
+        Capability::Messaging
+      end
+
       def description : String
         "Send a message to the user. Use this when you want to communicate something. " \
         "Supports optional file attachments (images, GIFs, documents) via file_path."

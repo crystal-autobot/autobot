@@ -2,6 +2,7 @@ require "base64"
 require "../config/env"
 require "./command_runner"
 require "./result"
+require "./capability"
 require "./paths"
 require "./sandbox"
 
@@ -39,6 +40,10 @@ module Autobot
 
       def host_exec? : Bool
         @mode.host_exec?
+      end
+
+      def exec_capability : Capability
+        host_exec? ? Capability::HostExec : Capability::SandboxedExec
       end
 
       def read_file(path : String) : ToolResult

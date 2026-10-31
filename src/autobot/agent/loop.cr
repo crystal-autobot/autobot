@@ -334,6 +334,7 @@ module Autobot::Agent
         exec_deny_patterns: exec_deny_patterns,
         exec_allow_patterns: exec_allow_patterns,
         sandbox: sandbox,
+        policy: @tools.policy.background,
         rate_limiter: rate_limiter,
         enabled_tools: enabled_tools,
         filesystem_roots: filesystem_roots,

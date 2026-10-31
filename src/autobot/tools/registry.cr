@@ -2,6 +2,7 @@ require "./allowlist"
 require "./base"
 require "./rate_limiter"
 require "./sandbox_executor"
+require "./tool_policy"
 
 module Autobot::Tools
   # Registry for agent tools with rate limiting
@@ -14,10 +15,16 @@ module Autobot::Tools
     @sandbox_executor : SandboxExecutor?
 
     getter allowlist : Allowlist
+    getter policy : ToolPolicy
     @matched_patterns = Set(String).new
     @warned_unmatched = false
 
-    def initialize(@session_key : String = "default", rate_limiter : RateLimiter? = nil, @allowlist : Allowlist = Allowlist.all)
+    def initialize(
+      @session_key : String = "default",
+      rate_limiter : RateLimiter? = nil,
+      @allowlist : Allowlist = Allowlist.all,
+      @policy : ToolPolicy = ToolPolicy.gateway,
+    )
       @tools = {} of String => Tool
       @rate_limiter = rate_limiter || RateLimiter.new
       @sandbox_executor = nil
@@ -32,7 +39,15 @@ module Autobot::Tools
         end
         @matched_patterns << pattern
       end
+      unless @policy.permits?(tool.capabilities)
+        Log.warn { "Tool not registered (needs #{describe(tool.capabilities)}, policy grants #{describe(@policy.granted)}): #{tool.name}" }
+        return
+      end
       @tools[tool.name] = tool
+    end
+
+    private def describe(capabilities : Capability) : String
+      capabilities.none? ? "nothing" : capabilities.config_names.join(", ")
     end
 
     def unmatched_patterns : Array(String)
@@ -77,6 +92,11 @@ module Autobot::Tools
 
       unless tool
         return ToolResult.error("Error: Tool '#{name}' not found")
+      end
+
+      unless @policy.permits?(tool.capabilities)
+        Log.warn { "Tool #{name} ACCESS DENIED: not permitted by the tool policy" }
+        return ToolResult.access_denied("Tool '#{name}' is not permitted by the tool policy")
       end
 
       # Use provided session key or fall back to instance default

@@ -44,6 +44,10 @@ module Autobot
         @tool_name
       end
 
+      def capabilities : Capability
+        @executor.exec_capability
+      end
+
       def description : String
         @tool_description
       end

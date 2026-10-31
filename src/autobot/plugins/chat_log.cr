@@ -37,6 +37,10 @@ module Autobot
         "get_recent_chat_log"
       end
 
+      def capabilities : Tools::Capability
+        Tools::Capability::None
+      end
+
       def description : String
         "Retrieves the recent rolling chat logs for a group chat. Use this tool when you need to consult the context of recent discussions in the group. Pass the chat_id from the Current Session block in your system prompt."
       end

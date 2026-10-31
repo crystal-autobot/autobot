@@ -28,6 +28,10 @@ module Autobot
         "web_search"
       end
 
+      def capabilities : Capability
+        Capability::WebRead
+      end
+
       def description : String
         "Search the web. Returns titles, URLs, and snippets."
       end
@@ -109,6 +113,10 @@ module Autobot
 
       def name : String
         "web_fetch"
+      end
+
+      def capabilities : Capability
+        Capability::WebRead
       end
 
       def description : String

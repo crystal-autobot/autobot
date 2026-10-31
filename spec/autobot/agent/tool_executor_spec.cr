@@ -38,6 +38,10 @@ class EchoTool < Autobot::Tools::Tool
     "echo"
   end
 
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
+  end
+
   def description : String
     "Echoes input back"
   end
@@ -61,6 +65,10 @@ class RefusingTool < Autobot::Tools::Tool
     "refusing"
   end
 
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
+  end
+
   def description : String
     "Refuses every call"
   end
@@ -80,6 +88,10 @@ class LargeOutputTool < Autobot::Tools::Tool
 
   def name : String
     "read_file"
+  end
+
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
   end
 
   def description : String
@@ -106,6 +118,10 @@ class MessageMockTool < Autobot::Tools::Tool
 
   def name : String
     "message"
+  end
+
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
   end
 
   def description : String

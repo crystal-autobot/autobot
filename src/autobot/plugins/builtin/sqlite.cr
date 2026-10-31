@@ -59,6 +59,10 @@ module Autobot
           "sqlite"
         end
 
+        def capabilities : Tools::Capability
+          Tools::Capability::WorkspaceRead | Tools::Capability::WorkspaceWrite
+        end
+
         def description : String
           "Manage SQLite databases for structured data storage. " \
           "Databases are stored as data/{name}.db. " \

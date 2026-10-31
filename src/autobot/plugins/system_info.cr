@@ -33,6 +33,10 @@ module Autobot
         "get_system_info"
       end
 
+      def capabilities : Tools::Capability
+        Tools::Capability::None
+      end
+
       def description : String
         "Returns CPU info, free RAM, uptime, and disk usage for the workspace mount of the host system."
       end

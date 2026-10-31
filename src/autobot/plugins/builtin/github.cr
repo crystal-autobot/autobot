@@ -12,6 +12,10 @@ module Autobot
           "github"
         end
 
+        def capabilities : Tools::Capability
+          Tools::Capability::ExternalApi
+        end
+
         def description : String
           "Interact with GitHub using the gh CLI (issues, PRs, runs)"
         end
@@ -40,6 +44,10 @@ module Autobot
 
         def name : String
           "github"
+        end
+
+        def capabilities : Tools::Capability
+          Tools::Capability::ExternalApi
         end
 
         def description : String

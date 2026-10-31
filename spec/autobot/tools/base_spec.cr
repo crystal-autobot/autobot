@@ -64,6 +64,10 @@ class SchemaDemoTool < Autobot::Tools::Tool
     "demo"
   end
 
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
+  end
+
   def description : String
     "A demo tool for testing schema output"
   end

@@ -50,12 +50,17 @@ describe "Security Tests" do
     end
 
     it "reports host exec only under an explicit sandbox: none" do
-      host = Autobot::Tools::SandboxExecutor.new(Path["/tmp"], Autobot::Tools::Sandbox::Type::None)
-      host.host_exec?.should be_true
+      host = Autobot::Tools::ExecTool.new(
+        executor: Autobot::Tools::SandboxExecutor.new(Path["/tmp"], Autobot::Tools::Sandbox::Type::None),
+        working_dir: "/tmp",
+      )
+      host.capabilities.should eq(Autobot::Tools::Capability::HostExec)
 
-      external = Autobot::Tools::SandboxExecutor.new(Path["/tmp"], Autobot::Tools::Sandbox::Type::External)
-      external.host_exec?.should be_false
-      external.sandboxed?.should be_false
+      external = Autobot::Tools::ExecTool.new(
+        executor: Autobot::Tools::SandboxExecutor.new(Path["/tmp"], Autobot::Tools::Sandbox::Type::External),
+        working_dir: "/tmp",
+      )
+      external.capabilities.should eq(Autobot::Tools::Capability::SandboxedExec)
     end
 
     it "blocks working_dir bypass attempts" do
@@ -330,5 +335,106 @@ describe "Security Tests" do
         Dir.delete(outside) if Dir.exists?(outside)
       end
     end
+  end
+end
+
+private class FakeHostTool < Autobot::Tools::Tool
+  def name : String
+    "fake_host"
+  end
+
+  def description : String
+    "Pretends to need host exec"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::HostExec
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.success("ran on host")
+  end
+end
+
+private def build_gateway_registries(workspace : Path, sandbox_config : String)
+  sandbox = Autobot::Tools::Sandbox.configure(sandbox_config)
+  policy = Autobot::Tools::ToolPolicy.gateway(host_exec: sandbox.host_exec?)
+  gateway = Autobot::Tools.create_registry(
+    workspace: workspace,
+    sandbox: sandbox,
+    policy: policy,
+    skills_dirs: [(workspace / "skills").to_s],
+    filesystem_roots: [] of String,
+  )
+  background = Autobot::Tools.create_subagent_registry(
+    workspace: workspace,
+    sandbox: sandbox,
+    policy: policy.background,
+  )
+  {gateway, background}
+end
+
+private def tools_with(registry : Autobot::Tools::Registry, capability : Autobot::Tools::Capability) : Array(String)
+  registry.tool_names.select { |name| registry.get(name).try(&.capabilities.includes?(capability)) }.sort!
+end
+
+describe "Gateway tool policy" do
+  around_each do |example|
+    Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::Bubblewrap
+    example.run
+  ensure
+    Autobot::Tools::Sandbox.detect_override = nil
+  end
+
+  it "grants host exec only under an explicit sandbox: none, and only to exec and skill scripts" do
+    workspace = TestHelper.tmp_dir("policy")
+    Dir.mkdir_p(workspace / "skills")
+    File.write(workspace / "skills" / "hello.sh", "#!/bin/sh\necho hi\n")
+    File.chmod(workspace / "skills" / "hello.sh", 0o755)
+
+    gateway, background = build_gateway_registries(workspace, "none")
+    tools_with(gateway, Autobot::Tools::Capability::HostExec).should eq(["bash_hello", "exec"])
+    tools_with(gateway, Autobot::Tools::Capability::SandboxedExec).should be_empty
+    tools_with(background, Autobot::Tools::Capability::HostExec).should eq(["exec"])
+
+    {"external", "auto"}.each do |mode|
+      gateway, background = build_gateway_registries(workspace, mode)
+      tools_with(gateway, Autobot::Tools::Capability::HostExec).should be_empty
+      tools_with(gateway, Autobot::Tools::Capability::SandboxedExec).should eq(["bash_hello", "exec"])
+      tools_with(background, Autobot::Tools::Capability::SandboxedExec).should eq(["exec"])
+    end
+  ensure
+    FileUtils.rm_rf(workspace) if workspace
+  end
+
+  it "keeps delegation, messaging and scheduling out of background registries" do
+    workspace = TestHelper.tmp_dir("policy")
+    gateway, background = build_gateway_registries(workspace, "auto")
+
+    gateway.policy.granted.delegation?.should be_true
+    background.policy.granted.delegation?.should be_false
+    background.tool_names.should_not contain("message")
+    background.tool_names.should_not contain("spawn")
+    background.tool_names.should_not contain("cron")
+  ensure
+    FileUtils.rm_rf(workspace) if workspace
+  end
+
+  it "rejects a tool that needs host exec unless sandbox is none" do
+    workspace = TestHelper.tmp_dir("policy")
+    gateway, _background = build_gateway_registries(workspace, "auto")
+    gateway.register(FakeHostTool.new)
+    gateway.has?("fake_host").should be_false
+    gateway.execute("fake_host", {} of String => JSON::Any).error?.should be_true
+
+    host, _background = build_gateway_registries(workspace, "none")
+    host.register(FakeHostTool.new)
+    host.has?("fake_host").should be_true
+  ensure
+    FileUtils.rm_rf(workspace) if workspace
   end
 end

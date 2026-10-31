@@ -26,6 +26,10 @@ module Autobot
         "spawn"
       end
 
+      def capabilities : Capability
+        Capability::Delegation
+      end
+
       def description : String
         "Spawn a subagent to handle a task in the background. " \
         "Use this for complex or time-consuming tasks that can run independently. " \

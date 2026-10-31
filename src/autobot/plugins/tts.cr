@@ -33,6 +33,10 @@ module Autobot
         "text_to_speech"
       end
 
+      def capabilities : Tools::Capability
+        Tools::Capability::ExternalApi | Tools::Capability::WorkspaceWrite
+      end
+
       def description : String
         "Converts written text into a spoken voice file with a unique filename. The tool will return the filename of the generated OGG file, which you should pass to the message tool via its file_path parameter."
       end

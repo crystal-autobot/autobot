@@ -18,6 +18,7 @@ module Autobot
     #   - `workspace` restricts filesystem tools to a directory
     #   - `exec_timeout` sets shell command timeout (seconds)
     #   - `sandbox` is the resolved sandbox type (see `Sandbox.configure`)
+    #   - `policy` is the capability ceiling every tool is checked against
     #   - `brave_api_key` enables web search
     #   - `skills_dirs` adds extra directories for bash tool discovery
     def self.create_registry(
@@ -26,6 +27,7 @@ module Autobot
       exec_deny_patterns : Array(Regex) = ExecTool::DEFAULT_DENY_PATTERNS,
       exec_allow_patterns : Array(Regex) = [] of Regex,
       sandbox : Sandbox::Type = Sandbox::Type::None,
+      policy : ToolPolicy = ToolPolicy.gateway,
       brave_api_key : String? = nil,
       web_fetch_max_chars : Int32 = WebFetchTool::DEFAULT_MAX_CHARS,
       skills_dirs : Array(String) = [] of String,
@@ -34,7 +36,7 @@ module Autobot
       filesystem_roots : Array(String) = [] of String,
       web_allowed_domains : Array(String) = [] of String,
     ) : Registry
-      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
+      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools), policy: policy)
 
       log_sandbox_configuration(sandbox)
 
@@ -61,13 +63,14 @@ module Autobot
       exec_deny_patterns : Array(Regex) = ExecTool::DEFAULT_DENY_PATTERNS,
       exec_allow_patterns : Array(Regex) = [] of Regex,
       sandbox : Sandbox::Type = Sandbox::Type::None,
+      policy : ToolPolicy = ToolPolicy.gateway.background,
       brave_api_key : String? = nil,
       rate_limiter : RateLimiter? = nil,
       enabled_tools : Array(String) = [] of String,
       filesystem_roots : Array(String) = [] of String,
       web_allowed_domains : Array(String) = [] of String,
     ) : Registry
-      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools))
+      registry = Registry.new(rate_limiter: rate_limiter, allowlist: Allowlist.new(enabled_tools), policy: policy)
       executor = SandboxExecutor.new(workspace, sandbox, resolve_roots(filesystem_roots, workspace))
 
       register_filesystem_tools(registry, executor)

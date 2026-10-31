@@ -108,9 +108,11 @@ describe Autobot::Tools::ExecTool do
 
   describe "sandbox integration" do
     it "follows the executor sandbox decision" do
-      Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::None).host_exec?.should be_true
-      Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::External).sandboxed?.should be_false
-      Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::Docker).sandboxed?.should be_true
+      executor = Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::None)
+      Autobot::Tools::ExecTool.new(executor: executor).capabilities.should eq(Autobot::Tools::Capability::HostExec)
+
+      executor = Autobot::Tools::SandboxExecutor.new(nil, Autobot::Tools::Sandbox::Type::Docker)
+      Autobot::Tools::ExecTool.new(executor: executor).capabilities.should eq(Autobot::Tools::Capability::SandboxedExec)
     end
 
     it "returns an error and runs nothing when the sandbox backend is missing" do

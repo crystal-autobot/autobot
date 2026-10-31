@@ -88,6 +88,10 @@ module Autobot
         "exec"
       end
 
+      def capabilities : Capability
+        @executor.exec_capability
+      end
+
       def description : String
         "Execute a shell command and return its output. Use with caution."
       end

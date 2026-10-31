@@ -27,6 +27,10 @@ module Autobot
         "cron"
       end
 
+      def capabilities : Capability
+        Capability::Scheduling
+      end
+
       def description : String
         "Schedule tasks: one-time (at), recurring (every_seconds/cron_expr). " \
         "Each firing triggers a background agent turn — the `message` is the turn's prompt. " \

@@ -40,6 +40,7 @@ module Autobot
       @exec_deny_patterns : Array(Regex)
       @exec_allow_patterns : Array(Regex)
       @sandbox : Tools::Sandbox::Type
+      @policy : Tools::ToolPolicy
       @rate_limiter : Tools::RateLimiter?
       @running_tasks : Hash(String, Bool) = {} of String => Bool
       @tasks_mutex : Mutex = Mutex.new
@@ -54,6 +55,7 @@ module Autobot
         @exec_deny_patterns : Array(Regex) = Tools::ExecTool::DEFAULT_DENY_PATTERNS,
         @exec_allow_patterns : Array(Regex) = [] of Regex,
         @sandbox : Tools::Sandbox::Type = Tools::Sandbox::Type::None,
+        @policy : Tools::ToolPolicy = Tools::ToolPolicy.gateway.background,
         @rate_limiter : Tools::RateLimiter? = nil,
         @enabled_tools : Array(String) = [] of String,
         @filesystem_roots : Array(String) = [] of String,
@@ -123,6 +125,7 @@ module Autobot
             exec_deny_patterns: @exec_deny_patterns,
             exec_allow_patterns: @exec_allow_patterns,
             sandbox: @sandbox,
+            policy: @policy,
             brave_api_key: @brave_api_key,
             rate_limiter: @rate_limiter,
             enabled_tools: @enabled_tools,

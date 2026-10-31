@@ -74,7 +74,7 @@ module Autobot
         "host exec enabled (sandbox: none): commands and skill scripts run on this host as #{ENV["USER"]? || "unknown"}"
       end
 
-      # One judgement of a `tools.sandbox` setting, rendered by the validator and doctor.
+      # One judgement of a `tools.sandbox` setting, rendered by the validator, doctor and capability report.
       def self.assess(config : String) : Assessment
         type = resolve_type?(config)
         return invalid_assessment(config) unless type

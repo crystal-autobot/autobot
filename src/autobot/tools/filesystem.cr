@@ -15,6 +15,10 @@ module Autobot
         "read_file"
       end
 
+      def capabilities : Capability
+        Capability::WorkspaceRead
+      end
+
       def description : String
         "Read the contents of a file at the given path."
       end
@@ -42,6 +46,10 @@ module Autobot
 
       def name : String
         "write_file"
+      end
+
+      def capabilities : Capability
+        Capability::WorkspaceWrite
       end
 
       def description : String
@@ -73,6 +81,10 @@ module Autobot
 
       def name : String
         "edit_file"
+      end
+
+      def capabilities : Capability
+        Capability::WorkspaceWrite
       end
 
       def description : String
@@ -144,6 +156,10 @@ module Autobot
 
       def name : String
         "list_dir"
+      end
+
+      def capabilities : Capability
+        Capability::WorkspaceRead
       end
 
       def description : String

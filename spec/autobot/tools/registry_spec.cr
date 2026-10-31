@@ -6,6 +6,10 @@ class DummyTool < Autobot::Tools::Tool
     "dummy"
   end
 
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
+  end
+
   def description : String
     "A dummy tool for testing"
   end
@@ -27,6 +31,10 @@ end
 class LeakyTool < Autobot::Tools::Tool
   def name : String
     "leaky"
+  end
+
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
   end
 
   def description : String
@@ -53,6 +61,10 @@ class FailingTool < Autobot::Tools::Tool
 
   def name : String
     "failing"
+  end
+
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
   end
 
   def description : String
@@ -234,6 +246,62 @@ describe Autobot::Tools::Registry do
       content = "commit 3f2a9c1d8e7b6a5f4c3d2e1f0a9b8c7d6e5f4a3b\naW1hZ2VieXRlc2FyZWxvbmdlcnRoYW50d2VudHk="
 
       registry.execute("leaky", {"text" => JSON::Any.new(content)}).content.should eq(content)
+    end
+  end
+end
+
+class PrivilegedTool < Autobot::Tools::Tool
+  property capabilities : Autobot::Tools::Capability = Autobot::Tools::Capability::WorkspaceRead
+
+  def name : String
+    "privileged"
+  end
+
+  def description : String
+    "Changes its capabilities between register and execute"
+  end
+
+  def parameters : Autobot::Tools::ToolSchema
+    Autobot::Tools::ToolSchema.new
+  end
+
+  def execute(params : Hash(String, JSON::Any)) : Autobot::Tools::ToolResult
+    Autobot::Tools::ToolResult.success("ran")
+  end
+end
+
+describe Autobot::Tools::Registry do
+  describe "tool policy" do
+    it "refuses tools outside the policy at register" do
+      tool = PrivilegedTool.new
+      tool.capabilities = Autobot::Tools::Capability::HostExec
+
+      registry = Autobot::Tools::Registry.new
+      registry.register(tool)
+      registry.has?("privileged").should be_false
+
+      permissive = Autobot::Tools::Registry.new(policy: Autobot::Tools::ToolPolicy.gateway(host_exec: true))
+      permissive.register(tool)
+      permissive.has?("privileged").should be_true
+    end
+
+    it "refuses tools outside the policy at execute" do
+      tool = PrivilegedTool.new
+      registry = Autobot::Tools::Registry.new
+      registry.register(tool)
+      registry.execute("privileged", {} of String => JSON::Any).success?.should be_true
+
+      tool.capabilities = Autobot::Tools::Capability::HostExec
+      result = registry.execute("privileged", {} of String => JSON::Any)
+      result.access_denied?.should be_true
+      result.content.should contain("not permitted by the tool policy")
+    end
+
+    it "checks the allowlist before the policy and exposes the policy" do
+      registry = Autobot::Tools::Registry.new(allowlist: Autobot::Tools::Allowlist.new(["dummy"]))
+      registry.register(DummyTool.new)
+      registry.policy.should eq(Autobot::Tools::ToolPolicy.gateway)
+      registry.tool_names.should eq(["dummy"])
     end
   end
 end

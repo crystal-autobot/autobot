@@ -37,6 +37,10 @@ module Autobot
           "get_weather"
         end
 
+        def capabilities : Tools::Capability
+          Tools::Capability::WebRead
+        end
+
         def description : String
           "Get current weather for a location using wttr.in. Returns temperature, conditions, humidity, and wind."
         end

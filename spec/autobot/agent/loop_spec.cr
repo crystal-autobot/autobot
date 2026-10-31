@@ -31,6 +31,10 @@ class SelfDeliveringTool < Autobot::Tools::Tool
     "deliver"
   end
 
+  def capabilities : Autobot::Tools::Capability
+    Autobot::Tools::Capability::None
+  end
+
   def description : String
     "Delivers its own output"
   end
