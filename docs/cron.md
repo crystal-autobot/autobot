@@ -312,7 +312,7 @@ autobot cron run <job_id>          # Run if enabled
 autobot cron run <job_id> --force  # Run even if disabled
 ```
 
-`autobot cron run` loads your configuration (`config.yml` or `-c <path>`), executes the job using the configured workspace, sandbox, and timeout settings, prints any command or agent output to stdout, and delivers messages to the job's target channel when `deliver` and `to` are configured. If the job fails, the command exits with status `1` and disables one-time (`--at`) jobs instead of deleting them so they can be inspected and retried.
+`autobot cron run` loads your configuration (`config.yml` or `-c <path>`), runs the job with the configured sandbox, workspace, and timeout settings (exec commands run inside the sandbox with the workspace mounted, or in the current directory with `sandbox: none`), prints any command or agent output to stdout, and delivers messages to the job's target channel when `deliver` and `to` are configured. If the job fails, the command exits with status `1` and disables one-time (`--at`) jobs instead of deleting them so they can be inspected and retried.
 
 ---
 
