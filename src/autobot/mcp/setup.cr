@@ -37,14 +37,10 @@ module Autobot
       servers = mcp_config.servers
       return clients if servers.empty?
 
+      Log.info { "Starting #{servers.size} MCP server(s)#{" in background" if background}" }
       if background
-        Log.info { "Starting #{servers.size} MCP server(s) in background" }
-
-        spawn(name: "mcp-setup") do
-          start_all(servers, clients, tool_registry, client_factory)
-        end
+        spawn(name: "mcp-setup") { start_all(servers, clients, tool_registry, client_factory) }
       else
-        Log.info { "Starting #{servers.size} MCP server(s)" }
         start_all(servers, clients, tool_registry, client_factory)
       end
 
