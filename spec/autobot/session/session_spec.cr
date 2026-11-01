@@ -179,4 +179,99 @@ describe Autobot::Session::Manager do
   ensure
     FileUtils.rm_rf(tmp) if tmp
   end
+
+  it "preserves messages written by an external process when saving or reloading" do
+    tmp = TestHelper.tmp_dir
+    gateway_manager = Autobot::Session::Manager.new(workspace: tmp)
+    cli_manager = Autobot::Session::Manager.new(workspace: tmp)
+
+    gw_session = gateway_manager.get_or_create("telegram:123")
+    gw_session.add_message("user", "first")
+    gateway_manager.save(gw_session)
+
+    cli_session = cli_manager.get_or_create("telegram:123")
+    cli_session.add_message("assistant", "[Scheduled task] report")
+    cli_manager.save(cli_session)
+
+    gw_next = gateway_manager.get_or_create("telegram:123")
+    gw_next.messages.map(&.content).should eq(["first", "[Scheduled task] report"])
+    gw_next.add_message("user", "followup")
+    gateway_manager.save(gw_next)
+
+    reloaded = Autobot::Session::Manager.new(workspace: tmp).get_or_create("telegram:123")
+    reloaded.messages.map(&.content).should eq(["first", "[Scheduled task] report", "followup"])
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "merges concurrent disk appends with new in-memory messages on save" do
+    tmp = TestHelper.tmp_dir
+    gateway_manager = Autobot::Session::Manager.new(workspace: tmp)
+    cli_manager = Autobot::Session::Manager.new(workspace: tmp)
+
+    gw_session = gateway_manager.get_or_create("telegram:123")
+    gw_session.add_message("user", "m1")
+    gw_session.add_message("assistant", "m2")
+    gateway_manager.save(gw_session)
+
+    # CLI appends 2 messages while gateway holds gw_session mid-turn
+    cli_session = cli_manager.get_or_create("telegram:123")
+    cli_session.add_message("user", "c1")
+    cli_session.add_message("assistant", "c2")
+    cli_manager.save(cli_session)
+
+    # Gateway finishes its turn and saves without re-calling get_or_create
+    gw_session.add_message("user", "g1")
+    gw_session.add_message("assistant", "g2")
+    gateway_manager.save(gw_session)
+
+    reloaded = Autobot::Session::Manager.new(workspace: tmp).get_or_create("telegram:123")
+    reloaded.messages.map(&.content).should eq(["m1", "m2", "c1", "c2", "g1", "g2"])
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "does not undo an in-memory clear when an external process appended to disk" do
+    tmp = TestHelper.tmp_dir
+    gateway_manager = Autobot::Session::Manager.new(workspace: tmp)
+    cli_manager = Autobot::Session::Manager.new(workspace: tmp)
+
+    gw_session = gateway_manager.get_or_create("telegram:123")
+    6.times { |idx| gw_session.add_message("user", "m#{idx + 1}") }
+    gateway_manager.save(gw_session)
+
+    cli_session = cli_manager.get_or_create("telegram:123")
+    cli_session.add_message("assistant", "c1")
+    cli_manager.save(cli_session)
+
+    gw_session.clear
+    gateway_manager.save(gw_session)
+
+    cleared = Autobot::Session::Manager.new(workspace: tmp).get_or_create("telegram:123")
+    cleared.messages.should be_empty
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "does not undo an in-memory trim when an external process appended to disk" do
+    tmp = TestHelper.tmp_dir
+    gateway_manager = Autobot::Session::Manager.new(workspace: tmp)
+    cli_manager = Autobot::Session::Manager.new(workspace: tmp)
+
+    gw_session = gateway_manager.get_or_create("telegram:123")
+    6.times { |idx| gw_session.add_message("user", "t#{idx + 1}") }
+    gateway_manager.save(gw_session)
+
+    cli_session = cli_manager.get_or_create("telegram:123")
+    cli_session.add_message("assistant", "c2")
+    cli_manager.save(cli_session)
+
+    gw_session.messages = gw_session.messages[-2..]
+    gateway_manager.save(gw_session)
+
+    trimmed = Autobot::Session::Manager.new(workspace: tmp).get_or_create("telegram:123")
+    trimmed.messages.map(&.content).should eq(["t5", "t6"])
+  ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
 end

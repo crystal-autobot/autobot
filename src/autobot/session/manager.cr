@@ -6,7 +6,16 @@ module Autobot
     # Manages conversation sessions with JSONL file persistence.
     class Manager
       getter sessions_dir : Path
+      record FileState, modified_at : Time, size : Int64 do
+        def self.of(path : String) : FileState?
+          File.info?(path).try { |info| new(info.modification_time, info.size) }
+        end
+      end
+
+      record Tracked, file : FileState?, count : Int32
+
       @cache : Hash(String, Session) = {} of String => Session
+      @tracked : Hash(String, Tracked) = {} of String => Tracked
 
       def initialize(workspace : Path)
         @sessions_dir = workspace / "sessions"
@@ -14,19 +23,23 @@ module Autobot
       end
 
       # Get an existing session or create a new one.
+      # Reloads from disk if the session file was modified externally (e.g. by CLI).
       def get_or_create(key : String) : Session
-        if session = @cache[key]?
+        if (session = @cache[key]?) && !changed_on_disk?(key)
           return session
         end
 
         session = load(key) || Session.new(key: key)
+        track(key, session.messages.size)
         @cache[key] = session
         session
       end
 
       # Save a session to disk as JSONL.
       def save(session : Session) : Nil
-        path = session_path(session.key)
+        key = session.key
+        path = session_path(key)
+        merge_disk_changes(session) if changed_on_disk?(key)
 
         # Ensure sessions directory exists with restrictive permissions
         Dir.mkdir_p(@sessions_dir) unless Dir.exists?(@sessions_dir)
@@ -48,12 +61,14 @@ module Autobot
         # Set restrictive permissions on session file (user read/write only)
         File.chmod(path, 0o600)
 
-        @cache[session.key] = session
+        track(key, session.messages.size)
+        @cache[key] = session
       end
 
       # Delete a session.
       def delete(key : String) : Bool
         @cache.delete(key)
+        @tracked.delete(key)
 
         path = session_path(key)
         if File.exists?(path)
@@ -71,6 +86,24 @@ module Autobot
 
       private def safe_filename(name : String) : String
         name.gsub(/[^\w\-.]/, "_")
+      end
+
+      private def changed_on_disk?(key : String) : Bool
+        FileState.of(session_path(key)) != @tracked[key]?.try(&.file)
+      end
+
+      private def track(key : String, count : Int32) : Nil
+        @tracked[key] = Tracked.new(FileState.of(session_path(key)), count)
+      end
+
+      # Keeps messages added in memory on top of what another process wrote.
+      # A shrunken in-memory list means a clear or trim, which wins over disk.
+      private def merge_disk_changes(session : Session) : Nil
+        base_count = @tracked[session.key]?.try(&.count) || 0
+        return if session.messages.size < base_count
+        return unless disk_session = load(session.key)
+
+        session.messages.replace(disk_session.messages + session.messages[base_count..])
       end
 
       private def load(key : String) : Session?

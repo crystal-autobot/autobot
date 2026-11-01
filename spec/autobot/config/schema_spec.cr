@@ -267,6 +267,30 @@ describe Autobot::Config::Config do
       path.to_s.should_not contain("~")
       path.to_s.should contain("autobot")
     end
+
+    it "resolves relative workspace against Loader.config_dir rather than cwd" do
+      original_config_dir = Autobot::Config::Loader.config_dir
+      Autobot::Config::Loader.config_dir = Path["/srv/bot"]
+
+      config = empty_config
+      config.workspace_path.should eq(Path["/srv/bot/workspace"])
+    ensure
+      Autobot::Config::Loader.config_dir = original_config_dir if original_config_dir
+    end
+  end
+
+  describe "#cron_store_path" do
+    it "resolves default and custom cron.store_path against Loader.config_dir" do
+      original_config_dir = Autobot::Config::Loader.config_dir
+      Autobot::Config::Loader.config_dir = Path["/srv/bot"]
+
+      empty_config.cron_store_path.should eq(Path["/srv/bot/cron.json"])
+
+      custom = Autobot::Config::Config.from_yaml("cron:\n  store_path: data/jobs.json\n")
+      custom.cron_store_path.should eq(Path["/srv/bot/data/jobs.json"])
+    ensure
+      Autobot::Config::Loader.config_dir = original_config_dir if original_config_dir
+    end
   end
 
   describe "#transcription_source" do

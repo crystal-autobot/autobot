@@ -159,6 +159,20 @@ module Autobot::Agent
       response.try(&.content) || ""
     end
 
+    def self.cron_message(job : Cron::CronJob) : Bus::InboundMessage
+      Bus::InboundMessage.new(
+        channel: Constants::CHANNEL_SYSTEM,
+        sender_id: "#{Constants::CRON_SENDER_PREFIX}#{job.id}",
+        chat_id: job.payload.delivery_target.try(&.join(":")) || "",
+        content: job.payload.message,
+      )
+    end
+
+    # Execute a scheduled cron job turn synchronously.
+    def run_cron_job(job : Cron::CronJob) : String?
+      cron_turn_output(run_cron_turn(Loop.cron_message(job)))
+    end
+
     # Process a single inbound message
     private def process_message(msg : Bus::InboundMessage, session_key : String? = nil) : Bus::OutboundMessage?
       return process_system_message(msg) if msg.channel == Constants::CHANNEL_SYSTEM
@@ -225,18 +239,27 @@ module Autobot::Agent
     end
 
     # Handle a cron-triggered background turn.
-    # Includes session history so the LLM has conversation context.
-    # Stops after the message tool fires.
-    # Saves the exchange to the session so followup messages have context.
     # Returns nil unless the turn was cut off before delivering any message.
     private def process_cron_message(msg : Bus::InboundMessage) : Bus::OutboundMessage?
+      result = run_cron_turn(msg)
+      return nil unless cut_off = undelivered_cut_off(result)
+
       origin_channel, origin_chat_id = msg.origin
-      session = origin_session(origin_channel, origin_chat_id)
-      update_tool_contexts(origin_channel, origin_chat_id)
+      build_response(origin_channel, origin_chat_id, cut_off)
+    end
+
+    # Run a cron turn with the origin chat's history, stopping after the message tool fires.
+    # Jobs without a delivery target run without a session.
+    private def run_cron_turn(msg : Bus::InboundMessage) : ToolExecutor::Result
+      session = unless msg.chat_id.empty?
+        origin_channel, origin_chat_id = msg.origin
+        update_tool_contexts(origin_channel, origin_chat_id)
+        origin_session(origin_channel, origin_chat_id)
+      end
       @message_tool.try(&.clear_last_sent)
 
       messages = @context.build_messages(
-        history: session.get_history,
+        history: session.try(&.get_history) || [] of Hash(String, String),
         current_message: build_cron_prompt(msg),
         channel: origin_channel,
         chat_id: origin_chat_id,
@@ -245,29 +268,29 @@ module Autobot::Agent
 
       result = @executor.execute(
         messages, @tools,
-        session_key: session.key,
+        session_key: session.try(&.key) || msg.sender_id,
         exclude_tools: BACKGROUND_EXCLUDED_TOOLS,
         stop_after: @stop_after | ["message"]
       )
 
       job_id = msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)
-      if delivered_text(result).nil? && (cut_off = result.cut_off_message)
+      if undelivered_cut_off(result)
         Log.warn { "Cron turn cut off: job=#{job_id}, finish_reason=#{result.finish_reason}" }
-        save_to_session(session, "[Scheduled task] #{msg.content}", cut_off, result.tools_used)
-        return build_response(origin_channel, origin_chat_id, cut_off)
+      else
+        Log.info { "Cron turn done: job=#{job_id}, tools=#{result.tools_used}" }
       end
-
-      save_cron_to_session(session, msg.content, result)
-      Log.info { "Cron turn done: job=#{job_id}, tools=#{result.tools_used}" }
-      nil
+      if session && (reply = cron_turn_output(result))
+        save_to_session(session, "[Scheduled task] #{msg.content}", reply, result.tools_used)
+      end
+      result
     end
 
-    # Persist the cron exchange to session so followup messages have context.
-    private def save_cron_to_session(session : Session::Session, task_content : String, result : ToolExecutor::Result) : Nil
-      delivered = delivered_text(result) || result.content.presence
-      return unless delivered
+    private def undelivered_cut_off(result : ToolExecutor::Result) : String?
+      result.cut_off_message unless delivered_text(result)
+    end
 
-      save_to_session(session, "[Scheduled task] #{task_content}", delivered, result.tools_used)
+    private def cron_turn_output(result : ToolExecutor::Result) : String?
+      delivered_text(result) || result.cut_off_message || result.content.presence
     end
 
     # Handle a subagent result announcement.

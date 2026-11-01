@@ -9,7 +9,7 @@ module Autobot
       NIL_PLACEHOLDER  = "-"
 
       def self.list(config_path : String?, include_all : Bool) : Nil
-        service = cron_service
+        service = readonly_cron_service(config_path)
         jobs = service.list_jobs(include_disabled: include_all)
 
         if jobs.empty?
@@ -31,7 +31,7 @@ module Autobot
       end
 
       def self.show(config_path : String?, job_id : String) : Nil
-        service = cron_service
+        service = readonly_cron_service(config_path)
         job = service.get_job(job_id)
         unless job
           STDERR.puts "Job #{job_id} not found"
@@ -80,7 +80,7 @@ module Autobot
 
         schedule, _ = result
 
-        job = cron_service.add_job(
+        job = cron_service(config_path).add_job(
           name: name,
           schedule: schedule,
           message: message,
@@ -96,7 +96,7 @@ module Autobot
       end
 
       def self.remove(config_path : String?, job_id : String) : Nil
-        if cron_service.remove_job(job_id)
+        if cron_service(config_path).remove_job(job_id)
           puts "✓ Removed job #{job_id}"
         else
           STDERR.puts "Job #{job_id} not found"
@@ -124,7 +124,7 @@ module Autobot
           exit 1
         end
 
-        if job = cron_service.update_job(job_id, schedule: schedule, message: message)
+        if job = cron_service(config_path).update_job(job_id, schedule: schedule, message: message)
           puts "✓ Updated job '#{job.name}' (#{job.id})"
         else
           STDERR.puts "Job #{job_id} not found"
@@ -136,7 +136,7 @@ module Autobot
       end
 
       def self.enable(config_path : String?, job_id : String, enabled : Bool) : Nil
-        if job = cron_service.enable_job(job_id, enabled: enabled)
+        if job = cron_service(config_path).enable_job(job_id, enabled: enabled)
           status = enabled ? "enabled" : "disabled"
           puts "✓ Job '#{job.name}' #{status}"
         else
@@ -146,26 +146,99 @@ module Autobot
       end
 
       def self.clear(config_path : String?) : Nil
-        count = cron_service.clear_all
+        count = cron_service(config_path).clear_all
         puts "Removed #{count} job(s)."
       end
 
       def self.run_job(config_path : String?, job_id : String, force : Bool) : Nil
-        if runnable_cron_service(config_path).run_job(job_id, force: force)
-          puts "✓ Job executed"
-        else
-          STDERR.puts "Failed to run job #{job_id}"
-          exit 1
+        exit 1 unless execute_run_job(config_path, job_id, force: force)
+      end
+
+      def self.execute_run_job(
+        config_path : String?,
+        job_id : String,
+        force : Bool = false,
+        io : IO = STDOUT,
+        err_io : IO = STDERR,
+      ) : Bool
+        service = runnable_cron_service(config_path, io: io)
+
+        unless service.run_job(job_id, force: force)
+          err_io.puts "Failed to run job #{job_id}"
+          return false
         end
+
+        if (job = service.get_job(job_id)) && job.state.last_status == Cron::JobStatus::Error
+          err_io.puts "Job #{job_id} failed: #{job.state.last_error || "unknown error"}"
+          return false
+        end
+
+        io.puts "✓ Job executed"
+        true
       end
 
-      private def self.cron_service : Cron::Service
-        Cron::Service.new(Config::Loader.cron_store_path)
+      def self.cron_service(config_path : String?) : Cron::Service
+        Cron::Service.new(Config::Loader.load(config_path, validate: false).cron_store_path)
       end
 
-      private def self.runnable_cron_service(config_path : String?) : Cron::Service
+      def self.readonly_cron_service(config_path : String?) : Cron::Service
+        Cron::Service.new(Config::Loader.load_or_default(config_path).cron_store_path)
+      end
+
+      def self.runnable_cron_service(config_path : String?, io : IO = STDOUT) : Cron::Service
         config = Config::Loader.load(config_path, validate: false)
-        Cron::Service.new(Config::Loader.cron_store_path, exec_timeout: config.cron_exec_timeout)
+        runner = JobRunner.new(config, io)
+        service = Cron::Service.from_config(
+          config,
+          sandbox: runner.sandbox,
+          on_job: ->runner.run_agent_turn(Cron::CronJob),
+          on_exec: ->runner.print_exec_output(Cron::CronJob, String),
+        )
+        runner.service = service
+        service
+      end
+
+      private class JobRunner
+        property service : Cron::Service?
+        getter sandbox : Tools::Sandbox::Type
+        @channels : Channels::Manager?
+
+        def initialize(@config : Config::Config, @io : IO)
+          @sandbox = SetupHelper.configure_sandbox(@config)
+        end
+
+        def run_agent_turn(job : Cron::CronJob) : String?
+          provider = SetupHelper.create_provider(@config)
+          bus = Bus::MessageBus.new
+          session_manager = Session::Manager.new(@config.workspace_path)
+          tool_registry, mcp_clients, rate_limiter = SetupHelper.setup_tools(@config, background_mcp: false, sandbox: @sandbox)
+          plugin_registry = SetupHelper.load_plugins(@config, tool_registry)
+          agent_loop = SetupHelper.create_agent_loop(@config, bus, provider, tool_registry, session_manager, @service, rate_limiter)
+
+          output = agent_loop.run_cron_job(job)
+          @io.puts output if output.presence
+          bus.drain_outbound { |event| channels.dispatch(event) } if job.payload.delivery_target
+          output
+        ensure
+          mcp_clients.try { |clients| Mcp.stop_all(clients) }
+          plugin_registry.try(&.stop_all)
+        end
+
+        def print_exec_output(job : Cron::CronJob, output : String) : Nil
+          @io.puts output
+          return unless target = job.payload.delivery_target
+
+          channel, chat_id = target
+          channels.dispatch(Bus::OutboundMessage.new(
+            channel: channel,
+            chat_id: chat_id,
+            content: Cron::Formatter.format_exec_output(job, output),
+          ))
+        end
+
+        private def channels : Channels::Manager
+          @channels ||= Channels::Manager.new(@config, Bus::MessageBus.new)
+        end
       end
 
       private def self.format_time_ms(time_ms : Int64?) : String

@@ -29,7 +29,7 @@ module Autobot
         plugin_registry = SetupHelper.load_plugins(config, tool_registry)
         cron_service = setup_cron(config, bus)
         channel_manager = setup_channels(config, bus, session_manager, cron_service)
-        agent_loop = create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service, rate_limiter)
+        agent_loop = SetupHelper.create_agent_loop(config, bus, provider, tool_registry, session_manager, cron_service, rate_limiter)
 
         # Handle shutdown signals
         shutdown = -> do
@@ -62,21 +62,8 @@ module Autobot
       end
 
       private def self.setup_cron(config : Config::Config, bus : Bus::MessageBus) : Cron::Service
-        cron_store_path = Config::Loader.cron_store_path
-
         on_job = ->(job : Cron::CronJob) : String? do
-          return nil unless job.payload.deliver?
-
-          channel = job.payload.channel || "system"
-          chat_id = job.payload.to || ""
-          return nil if chat_id.empty?
-
-          bus.publish_inbound(Bus::InboundMessage.new(
-            channel: Constants::CHANNEL_SYSTEM,
-            sender_id: "#{Constants::CRON_SENDER_PREFIX}#{job.id}",
-            chat_id: "#{channel}:#{chat_id}",
-            content: job.payload.message,
-          ))
+          bus.publish_inbound(Autobot::Agent::Loop.cron_message(job)) if job.payload.delivery_target
           nil
         end
 
@@ -92,13 +79,11 @@ module Autobot
           end
         end
 
-        cron_service = Cron::Service.new(
-          cron_store_path,
+        cron_service = Cron::Service.from_config(
+          config,
+          sandbox: Tools::Sandbox.type,
           on_job: on_job,
           on_exec: on_exec,
-          workspace: config.workspace_path,
-          sandbox: Tools::Sandbox.type,
-          exec_timeout: config.cron_exec_timeout,
         )
         cron_service.start
 
@@ -129,45 +114,6 @@ module Autobot
       rescue ex
         STDERR.puts "Error: #{ex.message}"
         exit 1
-      end
-
-      private def self.create_agent_loop(
-        config : Config::Config,
-        bus : Bus::MessageBus,
-        provider : Providers::Provider,
-        tool_registry : Tools::Registry,
-        session_manager : Session::Manager,
-        cron_service : Cron::Service,
-        rate_limiter : Tools::RateLimiter? = nil,
-      )
-        deny_patterns, allow_patterns = SetupHelper.load_exec_patterns(config)
-
-        agent_defaults = Config::AgentDefaults.new
-        defaults = config.agents.try(&.defaults)
-
-        Autobot::Agent::Loop.new(
-          bus: bus,
-          provider: provider,
-          workspace: config.workspace_path,
-          tools: tool_registry,
-          sessions: session_manager,
-          model: config.default_model,
-          max_iterations: defaults.try(&.max_tool_iterations) || 20,
-          memory_window: defaults.try(&.memory_window) || 50,
-          cron_service: cron_service,
-          brave_api_key: config.tools.try(&.web.try(&.search.try(&.api_key))),
-          exec_timeout: config.tools.try(&.exec.try(&.timeout)) || 60,
-          exec_deny_patterns: deny_patterns,
-          exec_allow_patterns: allow_patterns,
-          sandbox: Tools::Sandbox.type,
-          rate_limiter: rate_limiter,
-          enabled_tools: config.tools.try(&.enabled) || [] of String,
-          stop_after: config.tools.try(&.stop_after) || [] of String,
-          filesystem_roots: config.filesystem_roots,
-          web_allowed_domains: config.tools.try(&.web.try(&.allowed_domains)) || [] of String,
-          max_tokens: defaults.try(&.max_tokens) || agent_defaults.max_tokens,
-          temperature: defaults.try(&.temperature) || agent_defaults.temperature,
-        )
       end
 
       def self.log_sandbox_info(io : IO = STDOUT, err_io : IO = STDERR) : Nil

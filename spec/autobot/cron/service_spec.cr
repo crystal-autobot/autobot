@@ -540,6 +540,28 @@ describe Autobot::Cron::Service do
     ensure
       FileUtils.rm_rf(tmp) if tmp
     end
+
+    it "keeps and disables one-time delete_after_run jobs when execution fails" do
+      tmp = TestHelper.tmp_dir
+      service = Autobot::Cron::Service.new(store_path: tmp / "cron.json")
+
+      job = service.add_job(
+        name: "failing_one_shot",
+        schedule: Autobot::Cron::CronSchedule.new(kind: Autobot::Cron::ScheduleKind::At, at_ms: Time.utc.to_unix_ms + 60000),
+        kind: Autobot::Cron::PayloadKind::Exec,
+        command: "exit 1",
+        delete_after_run: true
+      )
+
+      service.run_job(job.id, force: true).should be_true
+
+      kept = service.get_job(job.id)
+      kept.should_not be_nil
+      kept.try(&.enabled?).should be_false
+      kept.try(&.state.last_status).should eq(Autobot::Cron::JobStatus::Error)
+    ensure
+      FileUtils.rm_rf(tmp) if tmp
+    end
   end
 
   describe "cron expression scheduling" do

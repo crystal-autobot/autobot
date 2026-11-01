@@ -27,6 +27,7 @@ module Autobot
       config : Config::Config,
       tool_registry : Tools::Registry,
       client_factory : ClientFactory? = nil,
+      background : Bool = true,
     ) : Array(Client)
       clients = [] of Client
 
@@ -36,9 +37,10 @@ module Autobot
       servers = mcp_config.servers
       return clients if servers.empty?
 
-      Log.info { "Starting #{servers.size} MCP server(s) in background" }
-
-      spawn(name: "mcp-setup") do
+      Log.info { "Starting #{servers.size} MCP server(s)#{" in background" if background}" }
+      if background
+        spawn(name: "mcp-setup") { start_all(servers, clients, tool_registry, client_factory) }
+      else
         start_all(servers, clients, tool_registry, client_factory)
       end
 
