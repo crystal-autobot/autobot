@@ -159,21 +159,18 @@ module Autobot::Agent
       response.try(&.content) || ""
     end
 
-    # Execute a scheduled cron job turn synchronously.
-    def run_cron_job(job : Cron::CronJob) : String?
-      target = if job.payload.deliver? && (to = job.payload.to.presence)
-                 "#{job.payload.channel.presence || Constants::CHANNEL_SYSTEM}:#{to}"
-               else
-                 ""
-               end
-
-      msg = Bus::InboundMessage.new(
+    def self.cron_message(job : Cron::CronJob) : Bus::InboundMessage
+      Bus::InboundMessage.new(
         channel: Constants::CHANNEL_SYSTEM,
         sender_id: "#{Constants::CRON_SENDER_PREFIX}#{job.id}",
-        chat_id: target,
+        chat_id: job.payload.delivery_target.try(&.join(":")) || "",
         content: job.payload.message,
       )
-      cron_turn_output(run_cron_turn(msg))
+    end
+
+    # Execute a scheduled cron job turn synchronously.
+    def run_cron_job(job : Cron::CronJob) : String?
+      cron_turn_output(run_cron_turn(Loop.cron_message(job)))
     end
 
     # Process a single inbound message
@@ -245,8 +242,7 @@ module Autobot::Agent
     # Returns nil unless the turn was cut off before delivering any message.
     private def process_cron_message(msg : Bus::InboundMessage) : Bus::OutboundMessage?
       result = run_cron_turn(msg)
-      cut_off = result.cut_off_message
-      return nil if cut_off.nil? || delivered_text(result)
+      return nil unless cut_off = undelivered_cut_off(result)
 
       origin_channel, origin_chat_id = msg.origin
       build_response(origin_channel, origin_chat_id, cut_off)
@@ -263,7 +259,7 @@ module Autobot::Agent
       @message_tool.try(&.clear_last_sent)
 
       messages = @context.build_messages(
-        history: session ? session.get_history : [] of Hash(String, String),
+        history: session.try(&.get_history) || [] of Hash(String, String),
         current_message: build_cron_prompt(msg),
         channel: origin_channel,
         chat_id: origin_chat_id,
@@ -278,24 +274,23 @@ module Autobot::Agent
       )
 
       job_id = msg.sender_id.lchop(Constants::CRON_SENDER_PREFIX)
-      if delivered_text(result).nil? && result.cut_off?
+      if undelivered_cut_off(result)
         Log.warn { "Cron turn cut off: job=#{job_id}, finish_reason=#{result.finish_reason}" }
       else
         Log.info { "Cron turn done: job=#{job_id}, tools=#{result.tools_used}" }
       end
-      save_cron_to_session(session, msg.content, result) if session
+      if session && (reply = cron_turn_output(result))
+        save_to_session(session, "[Scheduled task] #{msg.content}", reply, result.tools_used)
+      end
       result
+    end
+
+    private def undelivered_cut_off(result : ToolExecutor::Result) : String?
+      result.cut_off_message unless delivered_text(result)
     end
 
     private def cron_turn_output(result : ToolExecutor::Result) : String?
       delivered_text(result) || result.cut_off_message || result.content.presence
-    end
-
-    # Persist the cron exchange to session so followup messages have context.
-    private def save_cron_to_session(session : Session::Session, task_content : String, result : ToolExecutor::Result) : Nil
-      return unless reply = cron_turn_output(result)
-
-      save_to_session(session, "[Scheduled task] #{task_content}", reply, result.tools_used)
     end
 
     # Handle a subagent result announcement.

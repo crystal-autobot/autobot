@@ -63,18 +63,7 @@ module Autobot
 
       private def self.setup_cron(config : Config::Config, bus : Bus::MessageBus) : Cron::Service
         on_job = ->(job : Cron::CronJob) : String? do
-          return nil unless job.payload.deliver?
-
-          channel = job.payload.channel || "system"
-          chat_id = job.payload.to || ""
-          return nil if chat_id.empty?
-
-          bus.publish_inbound(Bus::InboundMessage.new(
-            channel: Constants::CHANNEL_SYSTEM,
-            sender_id: "#{Constants::CRON_SENDER_PREFIX}#{job.id}",
-            chat_id: "#{channel}:#{chat_id}",
-            content: job.payload.message,
-          ))
+          bus.publish_inbound(Autobot::Agent::Loop.cron_message(job)) if job.payload.delivery_target
           nil
         end
 

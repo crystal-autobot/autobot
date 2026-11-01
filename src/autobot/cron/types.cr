@@ -88,6 +88,11 @@ module Autobot
 
       def initialize(@kind = PayloadKind::AgentTurn, @message = "", @deliver = false, @channel = nil, @to = nil, @command = nil)
       end
+
+      def delivery_target : {String, String}?
+        return unless deliver? && (target = to.presence)
+        {channel.presence || Constants::CHANNEL_SYSTEM, target}
+      end
     end
 
     # Runtime state of a job.
