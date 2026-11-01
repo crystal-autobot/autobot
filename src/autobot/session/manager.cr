@@ -6,9 +6,16 @@ module Autobot
     # Manages conversation sessions with JSONL file persistence.
     class Manager
       getter sessions_dir : Path
+      record FileState, modified_at : Time, size : Int64 do
+        def self.of(path : String) : FileState?
+          File.info?(path).try { |info| new(info.modification_time, info.size) }
+        end
+      end
+
+      record Tracked, file : FileState?, count : Int32
+
       @cache : Hash(String, Session) = {} of String => Session
-      @file_states : Hash(String, {Time, Int64}) = {} of String => {Time, Int64}
-      @loaded_counts : Hash(String, Int32) = {} of String => Int32
+      @tracked : Hash(String, Tracked) = {} of String => Tracked
 
       def initialize(workspace : Path)
         @sessions_dir = workspace / "sessions"
@@ -22,9 +29,8 @@ module Autobot
           return session
         end
 
-        path = session_path(key)
-        session = load(key, path) || Session.new(key: key)
-        record_file_state(key, path, session.messages.size)
+        session = load(key) || Session.new(key: key)
+        track(key, session.messages.size)
         @cache[key] = session
         session
       end
@@ -33,10 +39,7 @@ module Autobot
       def save(session : Session) : Nil
         key = session.key
         path = session_path(key)
-
-        if changed_on_disk?(key)
-          merge_disk_changes(session, path)
-        end
+        merge_disk_changes(session) if changed_on_disk?(key)
 
         # Ensure sessions directory exists with restrictive permissions
         Dir.mkdir_p(@sessions_dir) unless Dir.exists?(@sessions_dir)
@@ -58,15 +61,14 @@ module Autobot
         # Set restrictive permissions on session file (user read/write only)
         File.chmod(path, 0o600)
 
-        record_file_state(key, path, session.messages.size)
+        track(key, session.messages.size)
         @cache[key] = session
       end
 
       # Delete a session.
       def delete(key : String) : Bool
         @cache.delete(key)
-        @file_states.delete(key)
-        @loaded_counts.delete(key)
+        @tracked.delete(key)
 
         path = session_path(key)
         if File.exists?(path)
@@ -86,40 +88,26 @@ module Autobot
         name.gsub(/[^\w\-.]/, "_")
       end
 
-      private def file_state(path : String) : {Time, Int64}?
-        return nil unless File.exists?(path)
-        info = File.info(path)
-        {info.modification_time, info.size}
-      rescue
-        nil
-      end
-
       private def changed_on_disk?(key : String) : Bool
-        file_state(session_path(key)) != @file_states[key]?
+        FileState.of(session_path(key)) != @tracked[key]?.try(&.file)
       end
 
-      private def record_file_state(key : String, path : String, count : Int32) : Nil
-        if state = file_state(path)
-          @file_states[key] = state
-        else
-          @file_states.delete(key)
-        end
-        @loaded_counts[key] = count
+      private def track(key : String, count : Int32) : Nil
+        @tracked[key] = Tracked.new(FileState.of(session_path(key)), count)
       end
 
-      private def merge_disk_changes(session : Session, path : String) : Nil
-        key = session.key
-        base_count = @loaded_counts[key]? || 0
+      # Keeps messages added in memory on top of what another process wrote.
+      # A shrunken in-memory list means a clear or trim, which wins over disk.
+      private def merge_disk_changes(session : Session) : Nil
+        base_count = @tracked[session.key]?.try(&.count) || 0
         return if session.messages.size < base_count
-        return unless disk_session = load(key, path)
+        return unless disk_session = load(session.key)
 
-        added = session.messages[base_count..]
-        session.messages.clear
-        session.messages.concat(disk_session.messages)
-        session.messages.concat(added)
+        session.messages.replace(disk_session.messages + session.messages[base_count..])
       end
 
-      private def load(key : String, path : String) : Session?
+      private def load(key : String) : Session?
+        path = session_path(key)
         return nil unless File.exists?(path)
 
         begin
