@@ -30,6 +30,16 @@ module Autobot::Config
       end
     end
 
+    # Load configuration, falling back to defaults rooted at the config path's directory
+    # when the file is missing or invalid.
+    def self.load_or_default(config_path : String? = nil) : Config
+      load(config_path, validate: false)
+    rescue ex
+      Log.warn { "Using default config: #{ex.message}" }
+      @@config_dir = config_path ? Path[config_path].expand(home: true).parent : Path["."]
+      Config.from_yaml("{}")
+    end
+
     # Save configuration to file
     def self.save(config : Config, path : String? = nil) : Nil
       save_path = Path[path || (@@config_dir / "config.yml").to_s]
@@ -64,11 +74,6 @@ module Autobot::Config
     # Get logs directory
     def self.logs_dir : Path
       data_dir / "logs"
-    end
-
-    # Get cron store path
-    def self.cron_store_path : Path
-      data_dir / "cron.json"
     end
 
     # Resolve config path for display purposes (doesn't raise if missing).

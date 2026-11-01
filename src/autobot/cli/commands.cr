@@ -103,6 +103,9 @@ module Autobot
         else
           handle_cron_job_command(subcommand, options)
         end
+      rescue ex
+        STDERR.puts "Error: #{ex.message}"
+        exit 1
       end
 
       private def self.handle_cron_job_command(subcommand : String, options) : Nil

@@ -42,7 +42,7 @@ describe Autobot::CLI::CronCmd do
       )
 
       missing_path = (tmp / "missing.yml").to_s
-      readonly_service = Autobot::CLI::CronCmd.cron_service(missing_path, fallback: true)
+      readonly_service = Autobot::CLI::CronCmd.readonly_cron_service(missing_path)
       readonly_service.get_job(job.id).try(&.name).should eq("fallback_job")
 
       expect_raises(Exception, /Config file not found/) do
@@ -51,7 +51,7 @@ describe Autobot::CLI::CronCmd do
 
       invalid_config = tmp / "config.yml"
       File.write(invalid_config, "invalid: [yaml\n")
-      invalid_service = Autobot::CLI::CronCmd.cron_service(invalid_config.to_s, fallback: true)
+      invalid_service = Autobot::CLI::CronCmd.readonly_cron_service(invalid_config.to_s)
       invalid_service.get_job(job.id).try(&.name).should eq("fallback_job")
 
       expect_raises(Exception, /Invalid YAML/) do
@@ -172,12 +172,9 @@ describe Autobot::CLI::CronCmd do
 
       Autobot::Tools::Sandbox.detect_override = Autobot::Tools::Sandbox::Type::None
 
-      out_io = IO::Memory.new
-      err_io = IO::Memory.new
-      result = Autobot::CLI::CronCmd.execute_run_job(config_file.to_s, job.id, force: true, io: out_io, err_io: err_io)
-
-      result.should be_false
-      err_io.to_s.should contain("No sandbox tool found")
+      expect_raises(Autobot::Tools::SandboxNotFoundError, /No sandbox tool found/) do
+        Autobot::CLI::CronCmd.execute_run_job(config_file.to_s, job.id, force: true, io: IO::Memory.new, err_io: IO::Memory.new)
+      end
 
       reloaded = Autobot::Cron::Service.new(tmp / "cron.json")
       kept = reloaded.get_job(job.id)

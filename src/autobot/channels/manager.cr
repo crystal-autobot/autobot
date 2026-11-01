@@ -172,7 +172,7 @@ module Autobot::Channels
       @bus.consume_outbound { |event| dispatch(event) }
     end
 
-    private def dispatch(event : Bus::OutboundEvent) : Nil
+    def dispatch(event : Bus::OutboundEvent) : Nil
       channel = @channels[event.channel]?
       unless channel
         Log.warn { "No channel found for: #{event.channel}" }

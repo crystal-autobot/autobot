@@ -9,7 +9,7 @@ module Autobot
       NIL_PLACEHOLDER  = "-"
 
       def self.list(config_path : String?, include_all : Bool) : Nil
-        service = cron_service(config_path, fallback: true)
+        service = readonly_cron_service(config_path)
         jobs = service.list_jobs(include_disabled: include_all)
 
         if jobs.empty?
@@ -31,7 +31,7 @@ module Autobot
       end
 
       def self.show(config_path : String?, job_id : String) : Nil
-        service = cron_service(config_path, fallback: true)
+        service = readonly_cron_service(config_path)
         job = service.get_job(job_id)
         unless job
           STDERR.puts "Job #{job_id} not found"
@@ -175,118 +175,70 @@ module Autobot
 
         io.puts "✓ Job executed"
         true
-      rescue ex
-        err_io.puts "Error: #{ex.message}"
-        false
       end
 
-      def self.cron_service(config_path : String?, fallback : Bool = false) : Cron::Service
-        config = load_store_config(config_path, fallback: fallback)
-        Cron::Service.new(config.cron_store_path)
+      def self.cron_service(config_path : String?) : Cron::Service
+        Cron::Service.new(Config::Loader.load(config_path, validate: false).cron_store_path)
+      end
+
+      def self.readonly_cron_service(config_path : String?) : Cron::Service
+        Cron::Service.new(Config::Loader.load_or_default(config_path).cron_store_path)
       end
 
       def self.runnable_cron_service(config_path : String?, io : IO = STDOUT) : Cron::Service
         config = Config::Loader.load(config_path, validate: false)
-        sandbox = SetupHelper.configure_sandbox(config)
-        service_ref : Cron::Service? = nil
-
-        on_job = ->(job : Cron::CronJob) : String? do
-          run_agent_turn(config, job, service_ref, sandbox, io)
-        end
-
-        on_exec = ->(job : Cron::CronJob, output : String) do
-          io.puts output
-          if job.payload.deliver?
-            deliver_to_channel(
-              config,
-              job.payload.channel,
-              job.payload.to,
-              Cron::Formatter.format_exec_output(job, output),
-            )
-          end
-        end
-
+        runner = JobRunner.new(config, io)
         service = Cron::Service.from_config(
           config,
-          sandbox: sandbox,
-          on_job: on_job,
-          on_exec: on_exec,
+          sandbox: runner.sandbox,
+          on_job: ->runner.run_agent_turn(Cron::CronJob),
+          on_exec: ->runner.print_exec_output(Cron::CronJob, String),
         )
-        service_ref = service
+        runner.service = service
         service
       end
 
-      private def self.load_store_config(config_path : String?, fallback : Bool) : Config::Config
-        Config::Loader.load(config_path, validate: false)
-      rescue ex
-        raise ex unless fallback
+      private class JobRunner
+        property service : Cron::Service?
+        getter sandbox : Tools::Sandbox::Type
+        @channels : Channels::Manager?
 
-        Config::Loader.config_dir = if config_path
-                                      Path[config_path].expand(home: true).parent
-                                    else
-                                      Path["."]
-                                    end
-        Config::Config.new
-      end
-
-      private def self.run_agent_turn(
-        config : Config::Config,
-        job : Cron::CronJob,
-        cron_service : Cron::Service?,
-        sandbox : Tools::Sandbox::Type,
-        io : IO,
-      ) : String?
-        provider = SetupHelper.create_provider(config)
-        bus = Bus::MessageBus.new
-        session_manager = Session::Manager.new(config.workspace_path)
-        tool_registry, mcp_clients, rate_limiter = SetupHelper.setup_tools(
-          config,
-          background_mcp: false,
-          sandbox: sandbox,
-        )
-        plugin_registry = SetupHelper.load_plugins(config, tool_registry)
-
-        agent_loop = SetupHelper.create_agent_loop(
-          config, bus, provider, tool_registry, session_manager, cron_service, rate_limiter
-        )
-
-        output = agent_loop.run_cron_job(job)
-        io.puts output if output && !output.empty?
-
-        if job.payload.deliver? && job.payload.to.presence
-          bus.drain_outbound do |event|
-            if event.is_a?(Bus::OutboundMessage)
-              deliver_to_channel(config, event.channel, event.chat_id, event.content, event.media?)
-            end
-          end
+        def initialize(@config : Config::Config, @io : IO)
+          @sandbox = SetupHelper.configure_sandbox(@config)
         end
 
-        output
-      ensure
-        mcp_clients.try { |clients| Mcp.stop_all(clients) }
-        plugin_registry.try(&.stop_all)
-      end
+        def run_agent_turn(job : Cron::CronJob) : String?
+          provider = SetupHelper.create_provider(@config)
+          bus = Bus::MessageBus.new
+          session_manager = Session::Manager.new(@config.workspace_path)
+          tool_registry, mcp_clients, rate_limiter = SetupHelper.setup_tools(@config, background_mcp: false, sandbox: @sandbox)
+          plugin_registry = SetupHelper.load_plugins(@config, tool_registry)
+          agent_loop = SetupHelper.create_agent_loop(@config, bus, provider, tool_registry, session_manager, @service, rate_limiter)
 
-      private def self.deliver_to_channel(
-        config : Config::Config,
-        channel_name : String?,
-        chat_id : String?,
-        content : String,
-        media : Array(Bus::MediaAttachment)? = nil,
-      ) : Nil
-        return unless (name = channel_name.presence) && (target = chat_id.presence)
+          output = agent_loop.run_cron_job(job)
+          @io.puts output if output.presence
+          bus.drain_outbound { |event| channels.dispatch(event) } if job.payload.delivery_target
+          output
+        ensure
+          mcp_clients.try { |clients| Mcp.stop_all(clients) }
+          plugin_registry.try(&.stop_all)
+        end
 
-        manager = Channels::Manager.new(config, Bus::MessageBus.new)
-        if channel = manager.channel(name)
-          channel.send_message(Bus::OutboundMessage.new(
-            channel: name,
-            chat_id: target,
-            content: content,
-            media: media,
+        def print_exec_output(job : Cron::CronJob, output : String) : Nil
+          @io.puts output
+          return unless target = job.payload.delivery_target
+
+          channel, chat_id = target
+          channels.dispatch(Bus::OutboundMessage.new(
+            channel: channel,
+            chat_id: chat_id,
+            content: Cron::Formatter.format_exec_output(job, output),
           ))
         end
-      rescue ex
-        Log.warn(exception: ex) { "Failed to deliver cron output to #{channel_name}: #{ex.message}" }
+
+        private def channels : Channels::Manager
+          @channels ||= Channels::Manager.new(@config, Bus::MessageBus.new)
+        end
       end
 
       private def self.format_time_ms(time_ms : Int64?) : String
