@@ -436,13 +436,15 @@ module Autobot::Config
     end
 
     def workspace_path : Path
-      workspace_str = agents.try(&.defaults.try(&.workspace)) || "./workspace"
-      Path[workspace_str].expand(base: Loader.config_dir, home: true)
+      resolve_path(agents.try(&.defaults.try(&.workspace)) || "./workspace")
     end
 
     def cron_store_path : Path
-      store_str = cron.try(&.store_path) || "./cron.json"
-      Path[store_str].expand(base: Loader.config_dir, home: true)
+      resolve_path(cron.try(&.store_path) || "./cron.json")
+    end
+
+    private def resolve_path(value : String) : Path
+      Path[value].expand(base: Loader.config_dir, home: true)
     end
 
     def inbox_path : Path
