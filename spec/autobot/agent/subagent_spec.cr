@@ -3,13 +3,14 @@ require "../../spec_helper"
 private class MockSubagentProvider < Autobot::Providers::HttpProvider
   getter sent_bodies = [] of String
 
-  def initialize
+  def initialize(@response_body : String? = nil)
     super(api_key: "test-key", model: "mock-model")
   end
 
   private def http_post(url : String, headers : HTTP::Headers, body : String) : HTTP::Client::Response
     @sent_bodies << body
-    HTTP::Client::Response.new(200, body: %({"choices":[{"message":{"content":"Subagent finished"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}))
+    default_body = %({"choices":[{"message":{"content":"Subagent finished"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}})
+    HTTP::Client::Response.new(200, body: @response_body || default_body)
   end
 end
 
@@ -177,6 +178,43 @@ describe Autobot::Agent::SubagentManager do
 
     manager.running_count.should eq(0)
   ensure
+    FileUtils.rm_rf(tmp) if tmp
+  end
+
+  it "announces failure when subagent output is cut off by token limit" do
+    tmp = TestHelper.tmp_dir
+    bus = Autobot::Bus::MessageBus.new(capacity: 10)
+    cut_off = %({"choices":[{"message":{"content":null,"reasoning_content":"Thinking..."},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":100,"total_tokens":110}})
+    provider = MockSubagentProvider.new(cut_off)
+    manager = TrackingSubagentManager.new(
+      provider: provider,
+      workspace: tmp,
+      bus: bus,
+      sandbox: Autobot::Tools::Sandbox::Type::None,
+    )
+
+    announced = Channel(Autobot::Bus::InboundMessage).new(1)
+    spawn do
+      bus.consume_inbound do |msg|
+        announced.send(msg)
+        bus.stop
+      end
+    end
+
+    manager.spawn("Analyze large dataset", label: "Dataset Worker")
+    manager.completed.receive
+
+    msg = select
+    when received = announced.receive
+      received
+    when timeout(2.seconds)
+      raise "Timed out waiting for subagent announcement"
+    end
+
+    msg.content.should contain("[Subagent 'Dataset Worker' failed]")
+    msg.content.should contain(Autobot::Agent::ToolExecutor::LENGTH_CUT_OFF_MESSAGE)
+  ensure
+    bus.try(&.stop)
     FileUtils.rm_rf(tmp) if tmp
   end
 end

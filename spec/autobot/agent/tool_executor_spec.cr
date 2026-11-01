@@ -227,6 +227,8 @@ describe Autobot::Agent::ToolExecutor do
       result = executor.execute(build_messages, tools)
 
       result.content.should be_nil
+      result.finish_reason.should be_nil
+      result.cut_off?.should be_false
       result.tools_used.should eq(["echo"])
       provider.call_count.should eq(2)
     end
@@ -239,8 +241,28 @@ describe Autobot::Agent::ToolExecutor do
       result = executor.execute(build_messages, tools)
 
       result.content.should eq("Blocked.")
+      result.finish_reason.should eq(Autobot::Providers::FINISH_GUARDRAIL)
+      result.cut_off?.should be_false
       result.tools_used.should be_empty
       provider.call_count.should eq(1)
+    end
+
+    it "reports cut-off finish reasons and messages for length and content_filtered exits" do
+      length_body = %({"choices":[{"message":{"content":null,"reasoning_content":"Thinking..."},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}})
+      length_result = build_executor(SequenceMockProvider.new([length_body])).execute(build_messages, Autobot::Tools::Registry.new)
+
+      length_result.finish_reason.should eq(Autobot::Providers::FINISH_LENGTH)
+      length_result.truncated?.should be_true
+      length_result.cut_off?.should be_true
+      length_result.cut_off_message.should eq(Autobot::Agent::ToolExecutor::LENGTH_CUT_OFF_MESSAGE)
+
+      filtered_body = %({"choices":[{"message":{"content":null},"finish_reason":"content_filter"}],"usage":{"prompt_tokens":10,"completion_tokens":0,"total_tokens":10}})
+      filtered_result = build_executor(SequenceMockProvider.new([filtered_body])).execute(build_messages, Autobot::Tools::Registry.new)
+
+      filtered_result.finish_reason.should eq(Autobot::Providers::FINISH_CONTENT_FILTERED)
+      filtered_result.content_filtered?.should be_true
+      filtered_result.cut_off?.should be_true
+      filtered_result.cut_off_message.should eq(Autobot::Agent::ToolExecutor::CONTENT_FILTERED_MESSAGE)
     end
 
     it "excludes tools from LLM definitions" do
@@ -273,6 +295,8 @@ describe Autobot::Agent::ToolExecutor do
       message_tool.called?.should be_true
       result.tools_used.should eq(["message"])
       result.stop_output.should_not be_nil
+      result.finish_reason.should be_nil
+      result.cut_off?.should be_false
       provider.call_count.should eq(1)
       result.content.should be_nil
     end

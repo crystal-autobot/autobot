@@ -27,6 +27,20 @@ module Autobot
       SERVER_ERROR_MIN    = 500
       SERVER_ERROR_MAX    = 599
 
+      ANTHROPIC_STOP_REASON_MAP = {
+        "end_turn"                      => FINISH_STOP,
+        "stop_sequence"                 => FINISH_STOP,
+        "pause_turn"                    => FINISH_STOP,
+        "tool_use"                      => FINISH_TOOL_CALLS,
+        "max_tokens"                    => FINISH_LENGTH,
+        "model_context_window_exceeded" => FINISH_LENGTH,
+        "refusal"                       => FINISH_CONTENT_FILTERED,
+      }
+
+      COMPATIBLE_FINISH_REASON_MAP = {
+        "content_filter" => FINISH_CONTENT_FILTERED,
+      }
+
       getter model : String
       getter extra_headers : Hash(String, String)
 
@@ -134,18 +148,18 @@ module Autobot
       private def parse_compatible_response(response : HTTP::Client::Response) : Response
         json = resolve_json(response) do |body|
           if error = extract_error(body)
-            Response.new(content: "API error (HTTP #{response.status_code}): #{error}", finish_reason: "error")
+            Response.new(content: "API error (HTTP #{response.status_code}): #{error}", finish_reason: FINISH_ERROR)
           end
         end
         return json if json.is_a?(Response)
 
         if error = extract_error(json)
-          return Response.new(content: "API error: #{error}", finish_reason: "error")
+          return Response.new(content: "API error: #{error}", finish_reason: FINISH_ERROR)
         end
 
         choice = json["choices"][0]
         message = choice["message"]
-        finish = choice["finish_reason"]?.try(&.as_s?) || "stop"
+        finish = map_compatible_finish_reason(choice["finish_reason"]?.try(&.as_s?))
 
         content = message["content"]?.try(&.as_s?)
         reasoning = message["reasoning_content"]?.try(&.as_s?)
@@ -160,6 +174,11 @@ module Autobot
           usage: usage,
           reasoning_content: reasoning,
         )
+      end
+
+      private def map_compatible_finish_reason(reason : String?) : String
+        return FINISH_STOP unless reason
+        COMPATIBLE_FINISH_REASON_MAP[reason]? || reason
       end
 
       # -----------------------------------------------------------------
@@ -407,7 +426,7 @@ module Autobot
       private def parse_anthropic_error(json : JSON::Any, body : String) : Response?
         return nil unless json["type"]?.try(&.as_s?) == "error"
         msg = json["error"]?.try { |error| error["message"]?.try(&.as_s?) } || body
-        Response.new(content: "API error: #{msg}", finish_reason: "error")
+        Response.new(content: "API error: #{msg}", finish_reason: FINISH_ERROR)
       end
 
       # Parses the response body into JSON, or returns an error Response when
@@ -440,14 +459,14 @@ module Autobot
       private def http_failure_response(response : HTTP::Client::Response) : Response
         Response.new(
           content: "HTTP request failed with status #{response.status_code}: #{response.body}",
-          finish_reason: "error",
+          finish_reason: FINISH_ERROR,
         )
       end
 
       private def json_parse_error_response(response : HTTP::Client::Response, error : Exception) : Response
         Response.new(
           content: "Failed to parse API response as JSON (HTTP #{response.status_code}): #{error.message}. Body: #{response.body}",
-          finish_reason: "error",
+          finish_reason: FINISH_ERROR,
         )
       end
 
@@ -492,8 +511,7 @@ module Autobot
       end
 
       private def build_anthropic_response(json : JSON::Any, text_parts : Array(String), tool_calls : Array(ToolCall)) : Response
-        stop_reason = json["stop_reason"]?.try(&.as_s?) || "end_turn"
-        finish = stop_reason == "tool_use" ? "tool_calls" : "stop"
+        finish = map_anthropic_stop_reason(json["stop_reason"]?.try(&.as_s?))
         usage = parse_anthropic_usage(json["usage"]?)
 
         Response.new(
@@ -502,6 +520,11 @@ module Autobot
           finish_reason: finish,
           usage: usage,
         )
+      end
+
+      private def map_anthropic_stop_reason(reason : String?) : String
+        return FINISH_STOP unless reason
+        ANTHROPIC_STOP_REASON_MAP[reason]? || reason
       end
 
       # -----------------------------------------------------------------
