@@ -422,7 +422,7 @@ module Autobot
           last_run_at_ms: start_ms,
           last_status: JobStatus::Ok,
           last_error: nil,
-          last_output: output || job.state.last_output,
+          last_output: output,
         )
         Log.debug { "Cron: job '#{job.name}' completed" }
       rescue ex
