@@ -59,6 +59,55 @@ module Autobot::Config
         )
       end
 
+      issues.concat(check_thinking_config(providers))
+      issues
+    end
+
+    private def self.check_thinking_config(providers : ProvidersConfig) : Array(Issue)
+      issues = [] of Issue
+
+      {% for provider in %w[anthropic openai openrouter deepseek groq kimi vllm duckai] %}
+        if providers.{{ provider.id }}.try(&.thinking)
+          issues << Issue.new(
+            severity: Severity::Warning,
+            message: "providers.{{ provider.id }}.thinking is only supported for gemini and will be ignored."
+          )
+        end
+      {% end %}
+
+      if thinking = providers.gemini.try(&.thinking)
+        issues.concat(check_gemini_thinking(thinking))
+      end
+
+      issues
+    end
+
+    private def self.check_gemini_thinking(thinking : ThinkingConfig) : Array(Issue)
+      issues = [] of Issue
+      level = thinking.level
+      budget = thinking.budget
+
+      if level && budget
+        issues << Issue.new(
+          severity: Severity::Error,
+          message: "providers.gemini.thinking cannot set both 'level' and 'budget'."
+        )
+      end
+
+      if level && !Providers::GeminiProvider::THINKING_LEVELS.includes?(level.downcase)
+        issues << Issue.new(
+          severity: Severity::Error,
+          message: "Unknown Gemini thinking level '#{level}'. Use one of: #{Providers::GeminiProvider::THINKING_LEVELS.join(", ")}."
+        )
+      end
+
+      if budget && budget < -1
+        issues << Issue.new(
+          severity: Severity::Error,
+          message: "Invalid Gemini thinking budget '#{budget}'. Must be -1 or greater."
+        )
+      end
+
       issues
     end
 

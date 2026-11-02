@@ -164,6 +164,15 @@ module Autobot::Config
     end
   end
 
+  class ThinkingConfig
+    include YAML::Serializable
+    property level : String? = nil
+    property budget : Int32? = nil
+
+    def initialize(@level : String? = nil, @budget : Int32? = nil)
+    end
+  end
+
   class ProviderConfig
     include YAML::Serializable
     property api_key : String = ""
@@ -172,6 +181,7 @@ module Autobot::Config
     property? client_id : String? = nil
     property? client_secret : String? = nil
     property? refresh_token : String? = nil
+    property thinking : ThinkingConfig? = nil
 
     def initialize
     end

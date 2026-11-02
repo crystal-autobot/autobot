@@ -83,12 +83,25 @@ No extra provider configuration is required. See [Media support](media.md#vision
 
 Gemini thinking models (such as Gemini 2.5 and Gemini 3) return internal chain-of-thought parts marked with `"thought": true` alongside the final answer. Autobot extracts these parts into `reasoning_content` and preserves them (along with `thoughtSignature` tokens) across multi-turn tool calls so internal reasoning traces are never sent as user-facing channel replies. If a turn hits the output token limit or content filter while thinking before producing a text reply, Autobot reports an explicit cut-off message rather than failing silently.
 
+Tune reasoning depth under `providers.gemini.thinking` with either `level` for Gemini 3 and newer or `budget` for Gemini 2.5, not both:
+
+```yaml
+providers:
+  gemini:
+    api_key: "${GEMINI_API_KEY}"
+    thinking:
+      level: "low"    # minimal, low, medium, high (Gemini 3+)
+      # budget: 4096  # token budget (Gemini 2.5)
+```
+
 ## Configuration reference
 
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `api_key` | Yes | — | Google AI API key |
 | `api_base` | No | `https://generativelanguage.googleapis.com/v1beta` | Custom API endpoint |
+| `thinking.level` | No | Model default | Thinking depth for Gemini 3+ (`minimal`, `low`, `medium`, `high`) |
+| `thinking.budget` | No | Model default | Thinking token budget for Gemini 2.5 (`>= -1`) |
 
 ## Troubleshooting
 

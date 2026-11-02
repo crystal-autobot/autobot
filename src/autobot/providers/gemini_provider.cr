@@ -43,6 +43,8 @@ module Autobot
       # JSON-Schema keywords Gemini's functionDeclarations rejects
       UNSUPPORTED_SCHEMA_KEYS = ["additionalProperties", "$schema", "$ref", "$defs", "definitions"]
 
+      THINKING_LEVELS = %w[minimal low medium high]
+
       FINISH_REASON_MAP = {
         "STOP"                    => FINISH_STOP,
         "MAX_TOKENS"              => FINISH_LENGTH,
@@ -76,6 +78,8 @@ module Autobot
         client_secret : String? = nil,
         refresh_token : String? = nil,
         api_base : String? = nil,
+        @thinking_level : String? = nil,
+        @thinking_budget : Int32? = nil,
       )
         super(api_key, api_base)
         @client_id = client_id.presence || ENV["GOOGLE_CLIENT_ID"]? || ENV["GEMINI_CLIENT_ID"]?
@@ -221,7 +225,7 @@ module Autobot
             if use_oauth?
               project_id = ensure_project_id(headers)
               url = "#{CODE_ASSIST_BASE}:generateContent"
-              body = build_code_assist_payload(messages, tools, bare_model, project_id)
+              body = build_code_assist_payload(messages, tools, bare_model, project_id, max_tokens, temperature)
               response = HTTP::Client.post(url, headers: headers, body: body)
               if response.success?
                 return parse_native_response(response.body)
@@ -366,10 +370,24 @@ module Autobot
       end
 
       private def generation_config(max_tokens : Int32, temperature : Float64) : JSON::Any
-        JSON::Any.new({
+        config = {
           "maxOutputTokens" => JSON::Any.new(max_tokens.to_i64),
           "temperature"     => JSON::Any.new(temperature),
-        } of String => JSON::Any)
+        } of String => JSON::Any
+
+        if thinking = build_thinking_config
+          config["thinkingConfig"] = thinking
+        end
+
+        JSON::Any.new(config)
+      end
+
+      private def build_thinking_config : JSON::Any?
+        if level = @thinking_level.presence
+          JSON::Any.new({"thinkingLevel" => JSON::Any.new(level.upcase)} of String => JSON::Any)
+        elsif budget = @thinking_budget
+          JSON::Any.new({"thinkingBudget" => JSON::Any.new(budget.to_i64)} of String => JSON::Any)
+        end
       end
 
       private def native_contents(contents : Array(Hash(String, JSON::Any))) : JSON::Any
@@ -408,13 +426,21 @@ module Autobot
         raise "Gemini API request failed: #{status} - #{response.body}"
       end
 
-      private def build_code_assist_payload(messages, tools, model, project_id) : String
+      private def build_code_assist_payload(
+        messages,
+        tools,
+        model,
+        project_id,
+        max_tokens : Int32 = DEFAULT_MAX_TOKENS,
+        temperature : Float64 = DEFAULT_TEMPERATURE,
+      ) : String
         contents = map_messages_to_native(messages)
         system_instr = extract_system_instruction(messages)
         native_tools = map_tools_to_native(tools)
 
         inner = {
           "contents"          => native_contents(contents),
+          "generationConfig"  => generation_config(max_tokens, temperature),
           "systemInstruction" => system_instr ? JSON::Any.new(system_instr) : nil,
           "tools"             => native_tools ? build_tools_field(native_tools) : nil,
         }.compact

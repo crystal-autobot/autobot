@@ -76,6 +76,8 @@ module Autobot
               client_secret: provider_config.client_secret?,
               refresh_token: provider_config.refresh_token?,
               api_base: provider_config.api_base?,
+              thinking_level: provider_config.thinking.try(&.level),
+              thinking_budget: provider_config.thinking.try(&.budget),
             )
           else
             Providers::HttpProvider.new(

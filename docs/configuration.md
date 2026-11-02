@@ -284,6 +284,9 @@ providers:
     api_key: "..."
   gemini:
     api_key: "..."
+    # thinking:
+    #   level: "low"    # minimal, low, medium, high (Gemini 3+)
+    #   budget: 4096    # token budget (Gemini 2.5)
   openrouter:
     api_key: "..."
   vllm:

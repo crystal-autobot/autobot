@@ -287,6 +287,91 @@ describe Autobot::Config::ConfigValidator do
     end
   end
 
+  describe "thinking validation" do
+    it "accepts valid Gemini thinking level or budget" do
+      level_cfg = Autobot::Config::Config.from_yaml(<<-YAML
+      providers:
+        gemini:
+          api_key: "test-key"
+          thinking:
+            level: "Low"
+      YAML
+      )
+      Autobot::Config::ConfigValidator.validate(level_cfg).should be_empty
+
+      budget_cfg = Autobot::Config::Config.from_yaml(<<-YAML
+      providers:
+        gemini:
+          api_key: "test-key"
+          thinking:
+            budget: 0
+      YAML
+      )
+      Autobot::Config::ConfigValidator.validate(budget_cfg).should be_empty
+    end
+
+    it "rejects setting both level and budget under providers.gemini.thinking" do
+      config = Autobot::Config::Config.from_yaml(<<-YAML
+      providers:
+        gemini:
+          api_key: "test-key"
+          thinking:
+            level: "low"
+            budget: 1024
+      YAML
+      )
+      issues = Autobot::Config::ConfigValidator.validate(config)
+
+      errors = issues.select { |i| i.severity == Autobot::Config::ValidatorCommon::Severity::Error }
+      errors.any?(&.message.includes?("cannot set both 'level' and 'budget'")).should be_true
+    end
+
+    it "rejects an unknown Gemini thinking level" do
+      config = Autobot::Config::Config.from_yaml(<<-YAML
+      providers:
+        gemini:
+          api_key: "test-key"
+          thinking:
+            level: "turbo"
+      YAML
+      )
+      issues = Autobot::Config::ConfigValidator.validate(config)
+
+      errors = issues.select { |i| i.severity == Autobot::Config::ValidatorCommon::Severity::Error }
+      errors.any?(&.message.includes?("Unknown Gemini thinking level 'turbo'")).should be_true
+    end
+
+    it "rejects a Gemini thinking budget below -1" do
+      config = Autobot::Config::Config.from_yaml(<<-YAML
+      providers:
+        gemini:
+          api_key: "test-key"
+          thinking:
+            budget: -2
+      YAML
+      )
+      issues = Autobot::Config::ConfigValidator.validate(config)
+
+      errors = issues.select { |i| i.severity == Autobot::Config::ValidatorCommon::Severity::Error }
+      errors.any?(&.message.includes?("Invalid Gemini thinking budget '-2'")).should be_true
+    end
+
+    it "warns when thinking is configured on a non-Gemini provider" do
+      config = Autobot::Config::Config.from_yaml(<<-YAML
+      providers:
+        openai:
+          api_key: "test-key"
+          thinking:
+            level: "low"
+      YAML
+      )
+      issues = Autobot::Config::ConfigValidator.validate(config)
+
+      warnings = issues.select { |i| i.severity == Autobot::Config::ValidatorCommon::Severity::Warning }
+      warnings.any?(&.message.includes?("providers.openai.thinking is only supported for gemini")).should be_true
+    end
+  end
+
   describe "channel validation" do
     it "detects Telegram with empty allow_from" do
       config_yaml = <<-YAML
