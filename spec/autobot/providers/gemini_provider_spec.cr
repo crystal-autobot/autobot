@@ -8,6 +8,17 @@ class TestableGeminiProvider < Autobot::Providers::GeminiProvider
   def test_parse_native_response(body : String)
     parse_native_response(body)
   end
+
+  def test_build_code_assist_payload(
+    messages,
+    tools = nil,
+    model = "gemini-3-flash",
+    project_id = "proj-1",
+    max_tokens : Int32 = 4096,
+    temperature : Float64 = 0.5,
+  ) : String
+    build_code_assist_payload(messages, tools, model, project_id, max_tokens, temperature)
+  end
 end
 
 describe Autobot::Providers::GeminiProvider do
@@ -191,5 +202,97 @@ describe Autobot::Providers::GeminiProvider do
     thought_parts = tool_call.extra_content.try(&.["thought_parts"]?.try(&.as_a?))
     thought_parts.try(&.size).should eq(1)
     thought_parts.try(&.first["thought"].as_bool).should be_true
+  end
+
+  it "omits thinkingConfig from generationConfig when thinking is not configured" do
+    captured_body = Channel(JSON::Any).new(1)
+    server = HTTP::Server.new do |ctx|
+      body = ctx.request.body.try(&.gets_to_end) || "{}"
+      captured_body.send(JSON.parse(body))
+      ctx.response.content_type = "application/json"
+      ctx.response.print(%({"candidates":[{"content":{"role":"model","parts":[{"text":"ok"}]},"finishReason":"STOP"}]}))
+    end
+    address = server.bind_tcp("127.0.0.1", 0)
+    spawn { server.listen }
+
+    provider = Autobot::Providers::GeminiProvider.new(
+      api_key: "test_key",
+      model: "gemini/gemini-3.5-flash",
+      api_base: "http://127.0.0.1:#{address.port}/v1beta",
+    )
+    provider.chat([{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}], max_tokens: 2048, temperature: 0.3)
+
+    payload = captured_body.receive
+    gen_cfg = payload["generationConfig"].as_h
+    gen_cfg["maxOutputTokens"].as_i.should eq(2048)
+    gen_cfg["temperature"].as_f.should eq(0.3)
+    gen_cfg.has_key?("thinkingConfig").should be_false
+  ensure
+    server.try(&.close)
+  end
+
+  it "wires providers.gemini.thinking level and budget into generateContent and Code Assist payloads" do
+    captured = Channel(JSON::Any).new(2)
+    server = HTTP::Server.new do |ctx|
+      body = ctx.request.body.try(&.gets_to_end) || "{}"
+      captured.send(JSON.parse(body))
+      ctx.response.content_type = "application/json"
+      ctx.response.print(%({"candidates":[{"content":{"role":"model","parts":[{"text":"ok"}]},"finishReason":"STOP"}]}))
+    end
+    address = server.bind_tcp("127.0.0.1", 0)
+    spawn { server.listen }
+
+    level_config = Autobot::Config::Config.from_yaml(<<-YAML
+    agents:
+      defaults:
+        model: "gemini/gemini-3.5-flash"
+    providers:
+      gemini:
+        api_key: "test_key"
+        api_base: "http://127.0.0.1:#{address.port}/v1beta"
+        thinking:
+          level: "low"
+    YAML
+    )
+    level_provider = Autobot::CLI::SetupHelper.create_provider(level_config)
+    level_provider.chat([{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}])
+    level_payload = captured.receive
+    level_payload["generationConfig"]["thinkingConfig"]["thinkingLevel"].as_s.should eq("LOW")
+
+    budget_config = Autobot::Config::Config.from_yaml(<<-YAML
+    agents:
+      defaults:
+        model: "gemini/gemini-2.5-flash"
+    providers:
+      gemini:
+        api_key: "test_key"
+        api_base: "http://127.0.0.1:#{address.port}/v1beta"
+        thinking:
+          budget: 0
+    YAML
+    )
+    budget_provider = Autobot::CLI::SetupHelper.create_provider(budget_config)
+    budget_provider.chat([{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}])
+    budget_payload = captured.receive
+    budget_payload["generationConfig"]["thinkingConfig"]["thinkingBudget"].as_i.should eq(0)
+
+    oauth_provider = TestableGeminiProvider.new(
+      api_key: "",
+      model: "gemini/gemini-3.5-flash",
+      thinking_level: "high",
+    )
+    oauth_json = JSON.parse(
+      oauth_provider.test_build_code_assist_payload(
+        [{"role" => JSON::Any.new("user"), "content" => JSON::Any.new("hi")}],
+        max_tokens: 4096,
+        temperature: 0.4,
+      )
+    )
+    oauth_gen_cfg = oauth_json["request"]["generationConfig"]
+    oauth_gen_cfg["maxOutputTokens"].as_i.should eq(4096)
+    oauth_gen_cfg["temperature"].as_f.should eq(0.4)
+    oauth_gen_cfg["thinkingConfig"]["thinkingLevel"].as_s.should eq("HIGH")
+  ensure
+    server.try(&.close)
   end
 end

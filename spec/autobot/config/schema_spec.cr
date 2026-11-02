@@ -754,6 +754,17 @@ describe Autobot::Config::ProviderConfig do
     pc = Autobot::Config::ProviderConfig.from_yaml("--- {}")
     pc.api_key.should eq("")
     pc.api_base?.should be_nil
+    pc.thinking.should be_nil
+  end
+
+  it "parses nested thinking level and budget" do
+    by_level = Autobot::Config::ProviderConfig.from_yaml("api_key: test\nthinking:\n  level: low\n")
+    by_level.thinking.try(&.level).should eq("low")
+    by_level.thinking.try(&.budget).should be_nil
+
+    by_budget = Autobot::Config::ProviderConfig.from_yaml("api_key: test\nthinking:\n  budget: 4096\n")
+    by_budget.thinking.try(&.level).should be_nil
+    by_budget.thinking.try(&.budget).should eq(4096)
   end
 end
 
